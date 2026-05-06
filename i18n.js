@@ -63,7 +63,10 @@ const resources = {
       "profile_setup_title": "Complete Your Profile",
       "full_name_label": "Your Full Name",
       "get_started_btn": "Get Started",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "pin_location": "Pin Location on Map",
+      "use_current_location": "Use My Current Location",
+      "drag_pin_hint": "Drag the red pin to the exact spot of the issue."
     }
   },
   hi: {
@@ -76,7 +79,7 @@ const resources = {
       "admin_panel": "एडमिन पैनल",
       "login": "लॉगिन",
       "logout": "लॉगआउट",
-      "welcome": "वापसी पर स्वागत है",
+      "welcome": "वापసి पर स्वागत है",
       "welcome_subtitle": "बेहतर, अधिक पारदर्शी ग्रामीण बुनियादी ढांचे के लिए नागरिकों को स्थानीय अधिकारियों से जोड़ना।",
       "register_grievance": "अपनी शिकायत दर्ज करें",
       "complaint_title": "शिकायत का शीर्षक",
@@ -127,7 +130,10 @@ const resources = {
       "profile_setup_title": "अपना प्रोफाइल पूरा करें",
       "full_name_label": "आपका पूरा नाम",
       "get_started_btn": "शुरू करें",
-      "saving": "सहेज रहे हैं..."
+      "saving": "सहेज रहे हैं...",
+      "pin_location": "नक्शे पर स्थान पिन करें",
+      "use_current_location": "मेरे वर्तमान स्थान का उपयोग करें",
+      "drag_pin_hint": "समस्या के सटीक स्थान पर लाल पिन खींचें।"
     }
   },
   te: {
@@ -191,9 +197,10 @@ const resources = {
       "profile_setup_title": "మీ ప్రొఫైల్‌ను పూర్తి చేయండి",
       "full_name_label": "మీ పూర్తి పేరు",
       "get_started_btn": "ప్రారంభించండి",
-      "saving": "సేవ్ అవుతోంది..."
-    }
-  }
+      "saving": "సేవ్ అవుతోంది...",
+      "pin_location": "మ్యాప్‌లో స్థానాన్ని పిన్ చేయండి",
+      "use_current_location": "నా ప్రస్తుత స్థానాన్ని ఉపయోగించండి",
+      "drag_pin_hint": "సమస్య ఉన్న ఖచ్చితమైన ప్రదేశానికి ఎరుపు పిన్‌ను లాగండి."
 };
 
 i18n

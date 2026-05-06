@@ -153,6 +153,10 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
         {["home", "submit", "track"].map(v => (
           <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? "#047857" : "transparent", color: view === v ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
         ))}
+        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>Govt Links</button>
+        {session && (
+          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? "#047857" : "transparent", color: view === "profile" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>My Account</button>
+        )}
         <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: "#374151", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>{i18n.language.toUpperCase()}</button>
         {session ? (
           <Btn variant="outline" style={{ padding: "6px 12px", fontSize: 12, borderColor: "#EF4444", color: "#EF4444" }} onClick={handleLogout}>{t('logout')}</Btn>
@@ -442,6 +446,90 @@ const TrackView = ({ t, notify, session }) => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const ProfileView = ({ t, session, profile, notify }) => {
+  const [count, setCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (session) fetchStats();
+  }, [session]);
+
+  const fetchStats = async () => {
+    const { count, error } = await supabase.from("complaints").select("*", { count: "exact", head: true }).eq("citizen_id", session.user.id);
+    if (!error) setCount(count || 0);
+    setLoading(false);
+  };
+
+  if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: SANS, fontWeight: 700 }}>{t("login_to_track")}</div>;
+
+  return (
+    <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 600, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>My Account</h2>
+      
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
+          <div style={{ width: 64, height: 64, background: "#F0FDF4", color: "#047857", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800 }}>
+            {profile.name?.charAt(0).toUpperCase() || "U"}
+          </div>
+          <div>
+            <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{profile.name || "User"}</h3>
+            <p style={{ color: "#6B7280", margin: "4px 0 0", fontSize: 14 }}>{session.user.email || profile.phone}</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#FAFAFA", border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>Total Grievances Submitted</h4>
+            <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>Number of issues you have reported.</p>
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#047857" }}>
+            {loading ? "..." : count}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: 20 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 700, color: "#991B1B", margin: "0 0 8px" }}>Account Security</h4>
+        <p style={{ fontSize: 13, color: "#991B1B", margin: 0, lineHeight: 1.5 }}>
+          Your account is securely authenticated via <strong>{session.user.app_metadata.provider === 'google' ? 'Google' : 'Phone OTP'}</strong>.
+          No local password is required or stored in our system.
+        </p>
+      </div>
+    </div>
+  );
+};
+
+const GovLinksView = () => {
+  const links = [
+    { title: "CPGRAMS", desc: "Centralized Public Grievance Redress and Monitoring System for submitting grievances directly to the Govt of India.", url: "https://pgportal.gov.in/" },
+    { title: "MyGov", desc: "Citizen engagement platform for participatory governance.", url: "https://www.mygov.in/" },
+    { title: "National Portal of India", desc: "Single-window access to information and services provided by the Indian Government.", url: "https://www.india.gov.in/" },
+    { title: "RTI Online", desc: "Portal to file RTI applications online.", url: "https://rtionline.gov.in/" }
+  ];
+
+  return (
+    <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 800, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Official Government Resources</h2>
+      <p style={{ color: "#6B7280", marginBottom: 24 }}>Explore these official portals for further assistance or to submit grievances at a national level.</p>
+      
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+        {links.map((link, i) => (
+          <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+            <div style={{ padding: 20, borderRadius: 12, border: "1px solid #E5E7EB", background: "#FAFAFA", transition: "all 0.2s", cursor: "pointer", height: "100%", boxSizing: "border-box" }}
+                 onMouseOver={e => e.currentTarget.style.borderColor = "#047857"}
+                 onMouseOut={e => e.currentTarget.style.borderColor = "#E5E7EB"}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: "#047857", marginBottom: 8 }}>{link.title} ↗</h3>
+              <p style={{ fontSize: 13, color: "#4B5563", margin: 0, lineHeight: 1.5 }}>{link.desc}</p>
+            </div>
+          </a>
+        ))}
+      </div>
     </div>
   );
 };
@@ -803,6 +891,8 @@ export default function App() {
     switch(view) {
       case "submit": return <SubmitView {...shared} />;
       case "track":  return <TrackView {...shared} />;
+      case "profile": return <ProfileView {...shared} />;
+      case "gov-links": return <GovLinksView />;
       default:       return <HomeView {...shared} />;
     }
   };
