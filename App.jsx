@@ -820,13 +820,17 @@ export default function App() {
           .select()
           .single();
           
-        if (insertError) throw insertError;
+        if (insertError) {
+          notify("Insert error: " + insertError.message, "err");
+          throw insertError;
+        }
         
         setProfile(newProfile);
         setRole(newProfile.role);
         setShowProfileSetup(true);
         return;
       } else if (error) {
+        notify("Select error: " + error.message, "err");
         throw error;
       }
 
@@ -837,6 +841,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
+      notify("Profile fetch error: " + err.message, "err");
     }
   };
 
