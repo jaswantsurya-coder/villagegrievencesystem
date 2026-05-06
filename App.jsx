@@ -425,6 +425,18 @@ const TrackView = ({ t, notify, session }) => {
     setLoading(false);
   };
 
+  const deleteGrievance = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this grievance? This action cannot be undone.")) return;
+    
+    const { error } = await supabase.from("complaints").delete().eq("id", id);
+    if (error) {
+      notify(error.message, "err");
+    } else {
+      notify("Grievance deleted successfully");
+      setItems(items.filter(it => it.id !== id));
+    }
+  };
+
   if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: SANS, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
   return (
@@ -439,7 +451,10 @@ const TrackView = ({ t, notify, session }) => {
                   <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 700 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
                   <h3 style={{ fontSize: 18, fontWeight: 800 }}>{it.title}</h3>
                 </div>
-                <Badge status={it.status} priority={it.priority} />
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                  <Badge status={it.status} priority={it.priority} />
+                  <button onClick={() => deleteGrievance(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626", cursor: "pointer", padding: "4px 8px", borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: SANS }} title="Delete grievance">Delete</button>
+                </div>
               </div>
               <p style={{ fontSize: 14, color: "#4B5563", marginBottom: 16 }}>{it.description}</p>
               <Timeline status={it.status} />
