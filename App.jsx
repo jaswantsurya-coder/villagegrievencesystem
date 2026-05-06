@@ -468,7 +468,7 @@ const ProfileView = ({ t, session, profile, notify }) => {
 
   return (
     <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 600, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>My Account</h2>
+      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>{t('my_account')}</h2>
       
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
@@ -485,8 +485,8 @@ const ProfileView = ({ t, session, profile, notify }) => {
       <div style={{ background: "#FAFAFA", border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>Total Grievances Submitted</h4>
-            <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>Number of issues you have reported.</p>
+            <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{t('total_grievances')}</h4>
+            <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>{t('grievances_reported_desc')}</p>
           </div>
           <div style={{ fontSize: 28, fontWeight: 900, color: "#047857" }}>
             {loading ? "..." : count}
@@ -494,11 +494,11 @@ const ProfileView = ({ t, session, profile, notify }) => {
         </div>
       </div>
 
-      <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: 20 }}>
-        <h4 style={{ fontSize: 14, fontWeight: 700, color: "#991B1B", margin: "0 0 8px" }}>Account Security</h4>
-        <p style={{ fontSize: 13, color: "#991B1B", margin: 0, lineHeight: 1.5 }}>
-          Your account is securely authenticated via <strong>{session.user.app_metadata.provider === 'google' ? 'Google' : 'Phone OTP'}</strong>.
-          No local password is required or stored in our system.
+      <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 12, padding: 20 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 700, color: "#16A34A", margin: "0 0 8px" }}>{t('account_security')}</h4>
+        <p style={{ fontSize: 13, color: "#15803D", margin: 0, lineHeight: 1.5 }}>
+          {t('auth_desc')} <strong>{session.user.app_metadata.provider === 'google' ? t('auth_method_google') : t('auth_method_email')}</strong>.
+          {session.user.app_metadata.provider === 'google' ? ` ${t('auth_no_password')}` : ''}
         </p>
       </div>
     </div>
@@ -735,16 +735,16 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(2px)" }}>
       <div style={{ background: "#fff", padding: 32, borderRadius: 24, width: 360, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{isSignUp ? 'Sign Up' : 'Login'}</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{isSignUp ? t('sign_up') : t('login')}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
         </div>
 
         <form onSubmit={handleAuth}>
           <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
-            {isSignUp ? 'Create a new account' : 'Log in to your account'}
+            {isSignUp ? t('create_account') : t('login_to_account')}
           </p>
           <Input 
-            label="Email" 
+            label={t('email_label')} 
             type="email"
             placeholder="you@example.com" 
             value={email} 
@@ -752,7 +752,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
             required
           />
           <Input 
-            label="Password" 
+            label={t('password_label')} 
             type="password"
             placeholder="••••••••" 
             value={password} 
@@ -761,7 +761,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
             style={{ marginTop: 12 }}
           />
           <Btn type="submit" full disabled={loading} style={{ marginTop: 20 }}>
-            {loading ? t('loading') : (isSignUp ? 'Sign Up' : 'Login')}
+            {loading ? t('loading') : (isSignUp ? t('sign_up') : t('login'))}
           </Btn>
         </form>
 
@@ -771,7 +771,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
             onClick={() => setIsSignUp(!isSignUp)} 
             style={{ background: "none", border: "none", color: "#047857", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
           >
-            {isSignUp ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+            {isSignUp ? t('already_have_account') : t('dont_have_account')}
           </button>
         </div>
       </div>
