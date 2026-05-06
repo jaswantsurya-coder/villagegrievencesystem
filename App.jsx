@@ -312,7 +312,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
       // Append extra questions to description safely
       const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
       
-      const { data, error } = await supabase.from("complaints").insert([{
+      const { error } = await supabase.from("complaints").insert([{
         citizen_id: session.user.id,
         ticket_id: ticketId,
         title: form.title,
@@ -322,7 +322,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
         latitude: form.latitude,
         longitude: form.longitude,
         status: "Open"
-      }]).select().single();
+      }]);
 
       if (error) throw error;
       notify(`${t("success_submit")} Ticket: ${ticketId}`);
