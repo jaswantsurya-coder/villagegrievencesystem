@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
@@ -181,10 +181,100 @@ const HomeView = ({ navigate, t }) => (
   </div>
 );
 
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import L from 'leaflet';
+import "leaflet/dist/leaflet.css";
+
+// Fix Leaflet icon issue in Vite/React
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
+let DefaultIcon = L.icon({
+    iconUrl: markerIcon,
+    shadowUrl: markerShadow,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41]
+});
+L.Marker.prototype.options.icon = DefaultIcon;
+
+const MapEvents = ({ onLocationSelect }) => {
+  useMapEvents({
+    click(e) {
+      onLocationSelect(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+};
+
+const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
+  const [pos, setPos] = useState(initialCoords || [17.3850, 78.4867]);
+  const markerRef = useRef(null);
+
+  const eventHandlers = useMemo(() => ({
+    dragend() {
+      const marker = markerRef.current;
+      if (marker != null) {
+        const newPos = marker.getLatLng();
+        setPos([newPos.lat, newPos.lng]);
+        onLocationSelect(newPos.lat, newPos.lng);
+      }
+    },
+  }), []);
+
+  const RecenterMap = ({ position }) => {
+    const map = useMap();
+    useEffect(() => {
+      map.setView(position, map.getZoom());
+    }, [position]);
+    return null;
+  };
+
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((p) => {
+        const newPos = [p.coords.latitude, p.coords.longitude];
+        setPos(newPos);
+        onLocationSelect(newPos[0], newPos[1]);
+      });
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <label style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>
+          {t('pin_location')}
+        </label>
+        <button type="button" onClick={handleGetLocation} style={{ background: "#F3F4F6", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, color: "#047857", cursor: "pointer" }}>
+          📍 {t('use_current_location')}
+        </button>
+      </div>
+      <div style={{ height: 250, borderRadius: 12, overflow: "hidden", border: "1.5px solid #E5E7EB" }}>
+        <MapContainer center={pos} zoom={13} style={{ height: "100%", width: "100%" }}>
+          <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
+          <Marker position={pos} draggable={true} eventHandlers={eventHandlers} ref={markerRef} />
+          <RecenterMap position={pos} />
+          <MapEvents onLocationSelect={(lat, lng) => {
+            setPos([lat, lng]);
+            onLocationSelect(lat, lng);
+          }} />
+        </MapContainer>
+      </div>
+      <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>{t('drag_pin_hint')}</p>
+    </div>
+  );
+};
+
 const SubmitView = ({ t, notify, navigate, session }) => {
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ category: "", title: "", description: "", location: "" });
+  const [form, setForm] = useState({ category: "", title: "", description: "", location: "", latitude: 17.3850, longitude: 78.4867 });
   const [photos, setPhotos] = useState([]);
+
+  const generateTicketId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'VGS-';
+    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return result;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -193,16 +283,26 @@ const SubmitView = ({ t, notify, navigate, session }) => {
     
     setLoading(true);
     try {
+      const ticketId = generateTicketId();
       const { data, error } = await supabase.from("complaints").insert([{
-        user_id: session.user.id,
-        phone: session.user.phone,
-        ...form,
+        citizen_id: session.user.id,
+        ticket_id: ticketId,
+        title: form.title,
+        description: form.description,
+        category: form.category,
+        location: form.location,
+        latitude: form.latitude,
+        longitude: form.longitude,
         status: "Open"
       }]).select().single();
+
       if (error) throw error;
-      notify(t("success_submit"));
+      notify(`${t("success_submit")} Ticket: ${ticketId}`);
       navigate("track");
-    } catch (err) { notify(err.message, "err"); }
+    } catch (err) { 
+      console.error("Submission error:", err);
+      notify(err.message, "err"); 
+    }
     setLoading(false);
   };
 
@@ -224,7 +324,10 @@ const SubmitView = ({ t, notify, navigate, session }) => {
         </div>
         <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
         <Textarea label={t("description")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
-        <Input label={t("location_landmark")} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+        
+        <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
+        
+        <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
         <PhotoUpload photos={photos} setPhotos={setPhotos} />
         <Btn full type="submit" disabled={loading}>{loading ? t("submitting") : t("submit_btn")}</Btn>
       </form>
@@ -502,6 +605,30 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
           <h2 style={{ fontSize: 22, fontWeight: 800 }}>{step === 1 ? t('login_title') : t('verify_otp')}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
         </div>
+
+        {step === 1 && (
+          <div style={{ marginBottom: 24 }}>
+            <Btn full variant="outline" onClick={async () => {
+              const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                  queryParams: {
+                    prompt: 'select_account',
+                  },
+                },
+              });
+              if (error) notify(error.message, "err");
+            }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#374151", borderColor: "#E5E7EB" }}>
+              <img src="https://www.google.com/favicon.ico" style={{ width: 16, height: 16 }} alt="Google" />
+              Continue with Google
+            </Btn>
+            <div style={{ display: "flex", alignItems: "center", margin: "20px 0", gap: 10 }}>
+              <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase" }}>or</div>
+              <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
+            </div>
+          </div>
+        )}
 
         {step === 1 ? (
           <>
