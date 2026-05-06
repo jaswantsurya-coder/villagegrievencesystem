@@ -811,7 +811,25 @@ export default function App() {
   const fetchProfile = async (id) => {
     try {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
-      if (error) throw error;
+      
+      if (error && error.code === 'PGRST116') {
+        // Profile not found, let's create it manually (self-healing)
+        const { data: newProfile, error: insertError } = await supabase
+          .from("profiles")
+          .insert([{ id }])
+          .select()
+          .single();
+          
+        if (insertError) throw insertError;
+        
+        setProfile(newProfile);
+        setRole(newProfile.role);
+        setShowProfileSetup(true);
+        return;
+      } else if (error) {
+        throw error;
+      }
+
       if (data) { 
         setProfile(data); 
         setRole(data.role); 
