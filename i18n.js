@@ -70,7 +70,20 @@ const resources = {
       "govt_links": "Govt Links",
       "my_account": "My Account",
       "official_resources": "Official Government Resources",
-      "explore_portals": "Explore these official portals for further assistance or to submit grievances at a national level."
+      "explore_portals": "Explore these official portals for further assistance or to submit grievances at a national level.",
+      "additional_details": "Additional Details",
+      "how_long_problem": "How long has this problem existed?",
+      "just_started": "Just started (today/yesterday)",
+      "one_to_three_days": "1 to 3 days",
+      "over_a_week": "Over a week",
+      "persistent_long_term": "Persistent / Long-term",
+      "estimated_people": "Estimated number of people affected",
+      "eg_50": "e.g. 50",
+      "is_emergency": "Is this an emergency?",
+      "photo_evidence": "Photo Evidence",
+      "optional_up_to_5": "— optional, up to 5",
+      "click_to_upload": "Click to upload or drag & drop",
+      "back_btn": "Back"
     }
   },
   hi: {
@@ -155,7 +168,20 @@ const resources = {
       "create_account": "नया खाता बनाएं",
       "login_to_account": "अपने खाते में लॉगिन करें",
       "already_have_account": "पहले से ही एक खाता है? लॉगिन करें",
-      "dont_have_account": "खाता नहीं है? साइन अप करें"
+      "dont_have_account": "खाता नहीं है? साइन अप करें",
+      "additional_details": "अतिरिक्त विवरण",
+      "how_long_problem": "यह समस्या कब से मौजूद है?",
+      "just_started": "अभी शुरू हुआ (आज/कल)",
+      "one_to_three_days": "1 से 3 दिन",
+      "over_a_week": "एक सप्ताह से अधिक",
+      "persistent_long_term": "लगातार / दीर्घकालिक",
+      "estimated_people": "प्रभावित लोगों की अनुमानित संख्या",
+      "eg_50": "उदा. 50",
+      "is_emergency": "क्या यह आपात स्थिति है?",
+      "photo_evidence": "तस्वीर के रूप में सबूत",
+      "optional_up_to_5": "— वैकल्पिक, 5 तक",
+      "click_to_upload": "अपलोड करने के लिए क्लिक करें या ड्रैग और ड्रॉप करें",
+      "back_btn": "पीछे"
     }
   },
   te: {
@@ -240,7 +266,20 @@ const resources = {
       "create_account": "కొత్త ఖాతాను సృష్టించండి",
       "login_to_account": "మీ ఖాతాలోకి లాగిన్ అవ్వండి",
       "already_have_account": "ఇప్పటికే ఖాతా ఉందా? లాగిన్ అవ్వండి",
-      "dont_have_account": "ఖాతా లేదా? సైన్ అప్ చేయండి"
+      "dont_have_account": "ఖాతా లేదా? సైన్ అప్ చేయండి",
+      "additional_details": "అదనపు వివరాలు",
+      "how_long_problem": "ఈ సమస్య ఎంతకాలంగా ఉంది?",
+      "just_started": "ఇప్పుడే ప్రారంభమైంది (ఈరోజు/నిన్న)",
+      "one_to_three_days": "1 నుండి 3 రోజులు",
+      "over_a_week": "ఒక వారానికి పైగా",
+      "persistent_long_term": "దీర్ఘకాలికమైన",
+      "estimated_people": "ప్రభావితమైన వ్యక్తుల అంచనా సంఖ్య",
+      "eg_50": "ఉదా. 50",
+      "is_emergency": "ఇది అత్యవసరమా?",
+      "photo_evidence": "ఫోటో సాక్ష్యం",
+      "optional_up_to_5": "— ఐచ్ఛికం, 5 వరకు",
+      "click_to_upload": "అప్‌లోడ్ చేయడానికి క్లిక్ చేయండి లేదా లాగండి",
+      "back_btn": "వెనుకకు"
     }
   }
 };

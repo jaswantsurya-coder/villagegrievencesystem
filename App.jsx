@@ -81,6 +81,7 @@ const Btn = ({ children, variant = "primary", full, style: s, ...props }) => {
 };
 
 const PhotoUpload = ({ photos, setPhotos }) => {
+  const { t } = useTranslation();
   const fileRef = useRef();
   const [dragging, setDragging] = useState(false);
 
@@ -98,13 +99,13 @@ const PhotoUpload = ({ photos, setPhotos }) => {
   return (
     <div style={{ marginBottom: 20 }}>
       <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700, color: "#6B7280", fontFamily: SANS, letterSpacing: 0.9, textTransform: "uppercase" }}>
-        Photo Evidence <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#9CA3AF" }}>— optional, up to 5</span>
+        {t('photo_evidence')} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#9CA3AF" }}>{t('optional_up_to_5')}</span>
       </label>
       {photos.length < 5 && (
         <div onClick={() => fileRef.current.click()} onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
              style={{ border: `2px dashed ${dragging ? "#047857" : "#D1D5DB"}`, borderRadius: 14, padding: "30px 20px", textAlign: "center", cursor: "pointer", background: dragging ? "#F0FDF4" : "#FAFAFA", transition: "all 0.2s" }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-          <div style={{ fontWeight: 700, color: "#374151", fontSize: 14 }}>Click to upload or drag & drop</div>
+          <div style={{ fontWeight: 700, color: "#374151", fontSize: 14 }}>{t('click_to_upload')}</div>
           <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => processFiles(e.target.files)} />
         </div>
       )}
@@ -371,26 +372,26 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           
           {/* Extra Questions */}
           <div style={{ background: "#FAFAFA", padding: 16, borderRadius: 12, border: "1px solid #E5E7EB", marginBottom: 18 }}>
-            <label style={{ display: "block", marginBottom: 12, fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>Additional Details</label>
+            <label style={{ display: "block", marginBottom: 12, fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>{t('additional_details')}</label>
             
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>How long has this problem existed?</label>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{t('how_long_problem')}</label>
               <select value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS }}>
-                <option value="Just started">Just started (today/yesterday)</option>
-                <option value="1-3 days">1 to 3 days</option>
-                <option value="Over a week">Over a week</option>
-                <option value="Persistent/Long-term">Persistent / Long-term</option>
+                <option value="Just started">{t('just_started')}</option>
+                <option value="1-3 days">{t('one_to_three_days')}</option>
+                <option value="Over a week">{t('over_a_week')}</option>
+                <option value="Persistent/Long-term">{t('persistent_long_term')}</option>
               </select>
             </div>
             
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>Estimated number of people affected</label>
-              <input type="number" value={form.peopleAffected} onChange={e => setForm({...form, peopleAffected: e.target.value})} placeholder="e.g. 50" style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS, boxSizing: "border-box" }} />
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{t('estimated_people')}</label>
+              <input type="number" value={form.peopleAffected} onChange={e => setForm({...form, peopleAffected: e.target.value})} placeholder={t('eg_50')} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS, boxSizing: "border-box" }} />
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, color: form.isEmergency ? "#DC2626" : "#374151" }}>
               <input type="checkbox" checked={form.isEmergency} onChange={e => setForm({...form, isEmergency: e.target.checked})} style={{ width: 16, height: 16 }} />
-              Is this an emergency?
+              {t('is_emergency')}
             </label>
           </div>
 
@@ -400,7 +401,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           <PhotoUpload photos={photos} setPhotos={setPhotos} />
           
           <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1 }}>Back</Btn>
+            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1 }}>{t('back_btn')}</Btn>
             <Btn type="submit" disabled={loading} style={{ flex: 2 }}>{loading ? t("submitting") : t("submit_btn")}</Btn>
           </div>
         </form>
