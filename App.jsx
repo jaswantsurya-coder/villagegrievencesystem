@@ -703,53 +703,28 @@ const ProfileSetupModal = ({ session, onComplete, notify, t }) => {
 };
 
 const LoginModal = ({ onLogin, onClose, notify, t }) => {
-  const [step, setStep] = useState(1);
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [timer, setTimer] = useState(0);
 
-  useEffect(() => {
-    let interval;
-    if (timer > 0) {
-      interval = setInterval(() => setTimer(t => t - 1), 1000);
-    }
-    return () => clearInterval(interval);
-  }, [timer]);
-
-  const handleSendOtp = async () => {
-    let cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length === 12 && cleanPhone.startsWith('91')) {
-      cleanPhone = cleanPhone.slice(2);
-    }
-    
-    if (cleanPhone.length !== 10) return notify("Enter exactly 10 digits", "err");
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    if (!email || !password) return notify("Please fill all fields", "err");
     
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: `+91${cleanPhone}` });
-      if (error) throw error;
-      setStep(2);
-      setTimer(30);
-      notify("OTP sent successfully");
-    } catch (err) {
-      notify(err.message, "err");
-    }
-    setLoading(false);
-  };
-
-  const handleVerify = async () => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (otp.length < 6) return notify("Enter 6-digit OTP", "err");
-    setLoading(true);
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({ 
-        phone: `+91${cleanPhone}`, 
-        token: otp, 
-        type: 'sms' 
-      });
-      if (error) throw error;
-      if (data.session) onLogin(data.session);
+      let data, error;
+      if (isSignUp) {
+        ({ data, error } = await supabase.auth.signUp({ email, password }));
+        if (error) throw error;
+        notify("Signup successful! You can now log in.");
+        setIsSignUp(false);
+      } else {
+        ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
+        if (error) throw error;
+        if (data.session) onLogin(data.session);
+      }
     } catch (err) {
       notify(err.message, "err");
     }
@@ -760,73 +735,45 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(2px)" }}>
       <div style={{ background: "#fff", padding: 32, borderRadius: 24, width: 360, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{step === 1 ? t('login_title') : t('verify_otp')}</h2>
+          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{isSignUp ? 'Sign Up' : 'Login'}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
         </div>
 
-        {step === 1 && (
-          <div style={{ marginBottom: 24 }}>
-            <Btn full variant="outline" onClick={async () => {
-              const { error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                  queryParams: {
-                    prompt: 'select_account',
-                  },
-                },
-              });
-              if (error) notify(error.message, "err");
-            }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, background: "#fff", color: "#374151", borderColor: "#E5E7EB" }}>
-              <img src="https://www.google.com/favicon.ico" style={{ width: 16, height: 16 }} alt="Google" />
-              Continue with Google
-            </Btn>
-            <div style={{ display: "flex", alignItems: "center", margin: "20px 0", gap: 10 }}>
-              <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", textTransform: "uppercase" }}>or</div>
-              <div style={{ flex: 1, height: 1, background: "#E5E7EB" }} />
-            </div>
-          </div>
-        )}
+        <form onSubmit={handleAuth}>
+          <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
+            {isSignUp ? 'Create a new account' : 'Log in to your account'}
+          </p>
+          <Input 
+            label="Email" 
+            type="email"
+            placeholder="you@example.com" 
+            value={email} 
+            onChange={e => setEmail(e.target.value)}
+            required
+          />
+          <Input 
+            label="Password" 
+            type="password"
+            placeholder="••••••••" 
+            value={password} 
+            onChange={e => setPassword(e.target.value)}
+            required
+            style={{ marginTop: 12 }}
+          />
+          <Btn type="submit" full disabled={loading} style={{ marginTop: 20 }}>
+            {loading ? t('loading') : (isSignUp ? 'Sign Up' : 'Login')}
+          </Btn>
+        </form>
 
-        {step === 1 ? (
-          <>
-            <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>{t('phone_placeholder')}</p>
-            <Input 
-              label={t('phone_label')} 
-              prefix="+91"
-              placeholder="00000 00000" 
-              value={phone} 
-              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            />
-            <Btn full onClick={handleSendOtp} disabled={loading} style={{ marginTop: 8 }}>
-              {loading ? t('loading') : t('send_otp')}
-            </Btn>
-          </>
-        ) : (
-          <>
-            <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
-              Sent to <span style={{ fontWeight: 700, color: "#111827" }}>+91 {phone}</span>
-              <button onClick={() => setStep(1)} style={{ marginLeft: 8, color: "#047857", border: "none", background: "none", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>Edit</button>
-            </p>
-            <Input 
-              label={t('enter_otp')} 
-              placeholder="000000" 
-              value={otp} 
-              onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              autoFocus
-            />
-            <Btn full onClick={handleVerify} disabled={loading} style={{ marginTop: 8 }}>
-              {loading ? t('loading') : t('verify_otp')}
-            </Btn>
-            <div style={{ textAlign: "center", marginTop: 20 }}>
-              {timer > 0 ? (
-                <span style={{ fontSize: 12, color: "#9CA3AF" }}>{t('resend_in', { seconds: timer })}</span>
-              ) : (
-                <button onClick={handleSendOtp} style={{ background: "none", border: "none", color: "#047857", fontWeight: 700, cursor: "pointer", fontSize: 12 }}>{t('resend_btn')}</button>
-              )}
-            </div>
-          </>
-        )}
+        <div style={{ textAlign: "center", marginTop: 20 }}>
+          <button 
+            type="button"
+            onClick={() => setIsSignUp(!isSignUp)} 
+            style={{ background: "none", border: "none", color: "#047857", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+          >
+            {isSignUp ? 'Already have an account? Login' : "Don't have an account? Sign Up"}
+          </button>
+        </div>
       </div>
     </div>
   );
