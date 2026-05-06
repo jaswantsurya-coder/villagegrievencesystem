@@ -265,8 +265,19 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
 };
 
 const SubmitView = ({ t, notify, navigate, session }) => {
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ category: "", title: "", description: "", location: "", latitude: 17.3850, longitude: 78.4867 });
+  const [form, setForm] = useState({ 
+    categories: [], 
+    title: "", 
+    description: "", 
+    location: "", 
+    latitude: 17.3850, 
+    longitude: 78.4867,
+    duration: "Just started",
+    isEmergency: false,
+    peopleAffected: ""
+  });
   const [photos, setPhotos] = useState([]);
 
   const generateTicketId = () => {
@@ -276,20 +287,32 @@ const SubmitView = ({ t, notify, navigate, session }) => {
     return result;
   };
 
+  const toggleCategory = (id) => {
+    setForm(prev => {
+      const cats = prev.categories;
+      if (cats.includes(id)) return { ...prev, categories: cats.filter(c => c !== id) };
+      return { ...prev, categories: [...cats, id] };
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!session) return notify(t("login_to_track"), "err");
-    if (!form.category) return notify("Please select a category", "err");
+    if (form.categories.length === 0) return notify("Please select at least one category", "err");
     
     setLoading(true);
     try {
       const ticketId = generateTicketId();
+      
+      // Append extra questions to description safely
+      const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
+      
       const { data, error } = await supabase.from("complaints").insert([{
         citizen_id: session.user.id,
         ticket_id: ticketId,
         title: form.title,
-        description: form.description,
-        category: form.category,
+        description: fullDescription,
+        category: form.categories.join(", "),
         location: form.location,
         latitude: form.latitude,
         longitude: form.longitude,
@@ -308,29 +331,76 @@ const SubmitView = ({ t, notify, navigate, session }) => {
 
   return (
     <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 600, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>{t('register_grievance')}</h2>
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>{t('category')}</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-            {CATEGORIES.map(c => (
-              <div key={c.id} onClick={() => setForm({ ...form, category: c.id })}
-                   style={{ padding: 10, borderRadius: 10, border: `1.5px solid ${form.category === c.id ? "#047857" : "#E5E7EB"}`, background: form.category === c.id ? "#F0FDF4" : "#fff", cursor: "pointer", textAlign: "center", transition: "0.2s" }}>
-                <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
-                <div style={{ fontSize: 9, fontWeight: 700 }}>{t(c.key)}</div>
-              </div>
-            ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800 }}>{t('register_grievance')}</h2>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", background: "#F3F4F6", padding: "4px 10px", borderRadius: 12 }}>Step {step} of 2</span>
+      </div>
+      
+      {step === 1 ? (
+        <div>
+          <label style={{ display: "block", marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#374151" }}>Select Problem Categories (Multiple allowed)</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+            {CATEGORIES.map(c => {
+              const isSelected = form.categories.includes(c.id);
+              return (
+                <div key={c.id} onClick={() => toggleCategory(c.id)}
+                     style={{ padding: 10, borderRadius: 10, border: `1.5px solid ${isSelected ? "#047857" : "#E5E7EB"}`, background: isSelected ? "#F0FDF4" : "#fff", cursor: "pointer", textAlign: "center", transition: "0.2s" }}>
+                  <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700 }}>{t(c.key)}</div>
+                </div>
+              );
+            })}
           </div>
+          <Btn full onClick={() => {
+            if (form.categories.length === 0) notify("Please select at least one category", "err");
+            else setStep(2);
+          }}>Select & Continue</Btn>
         </div>
-        <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
-        <Textarea label={t("description")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
-        
-        <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
-        
-        <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
-        <PhotoUpload photos={photos} setPhotos={setPhotos} />
-        <Btn full type="submit" disabled={loading}>{loading ? t("submitting") : t("submit_btn")}</Btn>
-      </form>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 20, padding: 12, background: "#F0FDF4", borderRadius: 8, fontSize: 12, color: "#047857", fontWeight: 700 }}>
+            Selected: {form.categories.join(", ")}
+          </div>
+          
+          <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+          <Textarea label={t("description")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
+          
+          {/* Extra Questions */}
+          <div style={{ background: "#FAFAFA", padding: 16, borderRadius: 12, border: "1px solid #E5E7EB", marginBottom: 18 }}>
+            <label style={{ display: "block", marginBottom: 12, fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>Additional Details</label>
+            
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>How long has this problem existed?</label>
+              <select value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS }}>
+                <option value="Just started">Just started (today/yesterday)</option>
+                <option value="1-3 days">1 to 3 days</option>
+                <option value="Over a week">Over a week</option>
+                <option value="Persistent/Long-term">Persistent / Long-term</option>
+              </select>
+            </div>
+            
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>Estimated number of people affected</label>
+              <input type="number" value={form.peopleAffected} onChange={e => setForm({...form, peopleAffected: e.target.value})} placeholder="e.g. 50" style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS, boxSizing: "border-box" }} />
+            </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, color: form.isEmergency ? "#DC2626" : "#374151" }}>
+              <input type="checkbox" checked={form.isEmergency} onChange={e => setForm({...form, isEmergency: e.target.checked})} style={{ width: 16, height: 16 }} />
+              Is this an emergency?
+            </label>
+          </div>
+
+          <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
+          
+          <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+          <PhotoUpload photos={photos} setPhotos={setPhotos} />
+          
+          <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1 }}>Back</Btn>
+            <Btn type="submit" disabled={loading} style={{ flex: 2 }}>{loading ? t("submitting") : t("submit_btn")}</Btn>
+          </div>
+        </form>
+      )}
     </div>
   );
 };
