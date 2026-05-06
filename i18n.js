@@ -66,7 +66,11 @@ const resources = {
       "saving": "Saving...",
       "pin_location": "Pin Location on Map",
       "use_current_location": "Use My Current Location",
-      "drag_pin_hint": "Drag the red pin to the exact spot of the issue."
+      "drag_pin_hint": "Drag the red pin to the exact spot of the issue.",
+      "govt_links": "Govt Links",
+      "my_account": "My Account",
+      "official_resources": "Official Government Resources",
+      "explore_portals": "Explore these official portals for further assistance or to submit grievances at a national level."
     }
   },
   hi: {
@@ -133,7 +137,11 @@ const resources = {
       "saving": "सहेज रहे हैं...",
       "pin_location": "नक्शे पर स्थान पिन करें",
       "use_current_location": "मेरे वर्तमान स्थान का उपयोग करें",
-      "drag_pin_hint": "समस्या के सटीक स्थान पर लाल पिन खींचें।"
+      "drag_pin_hint": "समस्या के सटीक स्थान पर लाल पिन खींचें।",
+      "govt_links": "सरकारी लिंक",
+      "my_account": "मेरा खाता",
+      "official_resources": "आधिकारिक सरकारी संसाधन",
+      "explore_portals": "राष्ट्रीय स्तर पर सहायता प्राप्त करने या शिकायत दर्ज करने के लिए इन आधिकारिक पोर्टलों का अन्वेषण करें।"
     }
   },
   te: {
@@ -200,7 +208,11 @@ const resources = {
       "saving": "సేవ్ అవుతోంది...",
       "pin_location": "మ్యాప్‌లో స్థానాన్ని పిన్ చేయండి",
       "use_current_location": "నా ప్రస్తుత స్థానాన్ని ఉపయోగించండి",
-      "drag_pin_hint": "సమస్య ఉన్న ఖచ్చితమైన ప్రదేశానికి ఎరుపు పిన్‌ను లాగండి."
+      "drag_pin_hint": "సమస్య ఉన్న ఖచ్చితమైన ప్రదేశానికి ఎరుపు పిన్‌ను లాగండి.",
+      "govt_links": "ప్రభుత్వ లింకులు",
+      "my_account": "నా ఖాతా",
+      "official_resources": "అధికారిక ప్రభుత్వ వనరులు",
+      "explore_portals": "జాతీయ స్థాయిలో సహాయం పొందడానికి లేదా ఫిర్యాదులను సమర్పించడానికి ఈ అధికారిక పోర్టల్‌లను అన్వేషించండి."
     }
   }
 };

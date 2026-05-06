@@ -153,9 +153,9 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
         {["home", "submit", "track"].map(v => (
           <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? "#047857" : "transparent", color: view === v ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
         ))}
-        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>Govt Links</button>
+        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('govt_links')}</button>
         {session && (
-          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? "#047857" : "transparent", color: view === "profile" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>My Account</button>
+          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? "#047857" : "transparent", color: view === "profile" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('my_account')}</button>
         )}
         <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: "#374151", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>{i18n.language.toUpperCase()}</button>
         {session ? (
@@ -505,7 +505,7 @@ const ProfileView = ({ t, session, profile, notify }) => {
   );
 };
 
-const GovLinksView = () => {
+const GovLinksView = ({ t }) => {
   const links = [
     { title: "CPGRAMS", desc: "Centralized Public Grievance Redress and Monitoring System for submitting grievances directly to the Govt of India.", url: "https://pgportal.gov.in/" },
     { title: "MyGov", desc: "Citizen engagement platform for participatory governance.", url: "https://www.mygov.in/" },
@@ -515,8 +515,8 @@ const GovLinksView = () => {
 
   return (
     <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 800, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Official Government Resources</h2>
-      <p style={{ color: "#6B7280", marginBottom: 24 }}>Explore these official portals for further assistance or to submit grievances at a national level.</p>
+      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>{t('official_resources')}</h2>
+      <p style={{ color: "#6B7280", marginBottom: 24 }}>{t('explore_portals')}</p>
       
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
         {links.map((link, i) => (
@@ -857,7 +857,7 @@ export default function App() {
       case "submit": return <SubmitView {...shared} />;
       case "track":  return <TrackView {...shared} />;
       case "profile": return <ProfileView {...shared} />;
-      case "gov-links": return <GovLinksView />;
+      case "gov-links": return <GovLinksView {...shared} />;
       default:       return <HomeView {...shared} />;
     }
   };
