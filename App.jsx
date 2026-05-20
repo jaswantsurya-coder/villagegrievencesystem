@@ -3,7 +3,37 @@ import { supabase } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
 
-const SANS = "'Trebuchet MS', 'Lucida Sans', sans-serif";
+const THEME = {
+  colors: {
+    primary: "#0284c7", 
+    primaryHover: "#0369a1",
+    primaryLight: "#e0f2fe",
+    surface: "#ffffff",
+    background: "#f8fafc",
+    text: "#0f172a",
+    textMuted: "#64748b",
+    border: "#e2e8f0",
+    danger: "#dc2626",
+    dangerBg: "#fef2f2",
+    success: "#16a34a",
+    successBg: "#f0fdf4",
+    warning: "#d97706",
+    warningBg: "#fffbeb",
+    dark: "#0f172a"
+  },
+  radius: {
+    sm: "8px",
+    md: "12px",
+    lg: "16px",
+    full: "9999px"
+  },
+  shadow: {
+    sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+    md: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+    lg: "0 10px 25px -5px rgba(0, 0, 0, 0.05)"
+  },
+  font: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+};
 
 const CATEGORIES = [
   { id: "Road & Infrastructure", key: "cat_road", icon: "🛣" },
@@ -18,13 +48,13 @@ const CATEGORIES = [
 
 const STATUS_FLOW = ["Open", "Assigned", "In Progress", "Resolved", "Closed", "Escalated"];
 const STATUS_META = {
-  Open:          { color: "#DC2626", bg: "#FEF2F2", border: "#FCA5A5", icon: "🔴" },
-  Assigned:      { color: "#D97706", bg: "#FFFBEB", border: "#FCD34D", icon: "🟡" },
-  "In Progress": { color: "#2563EB", bg: "#EFF6FF", border: "#93C5FD", icon: "🔵" },
-  Resolved:      { color: "#16A34A", bg: "#F0FDF4", border: "#86EFAC", icon: "🟢" },
-  Closed:        { color: "#6B7280", bg: "#F9FAFB", border: "#D1D5DB", icon: "⚫" },
-  Escalated:     { color: "#991B1B", bg: "#FEF2F2", border: "#F87171", icon: "⚠️" },
-  Urgent:        { color: "#FFFFFF", bg: "#EF4444", border: "#DC2626", icon: "🔥" },
+  Open:          { color: THEME.colors.danger, bg: THEME.colors.dangerBg, border: "#fca5a5", icon: "🔴" },
+  Assigned:      { color: THEME.colors.warning, bg: THEME.colors.warningBg, border: "#fcd34d", icon: "🟡" },
+  "In Progress": { color: THEME.colors.primary, bg: THEME.colors.primaryLight, border: "#7dd3fc", icon: "🔵" },
+  Resolved:      { color: THEME.colors.success, bg: THEME.colors.successBg, border: "#86efac", icon: "🟢" },
+  Closed:        { color: THEME.colors.textMuted, bg: "#f1f5f9", border: "#cbd5e1", icon: "⚫" },
+  Escalated:     { color: "#991b1b", bg: THEME.colors.dangerBg, border: "#f87171", icon: "⚠️" },
+  Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥" },
 };
 
 // ─── Helper Components ────────────────────────────────────────────────────────
@@ -38,11 +68,11 @@ const Badge = ({ status, priority }) => {
   return (
     <div style={{ display: "flex", gap: 6 }}>
       {priority === "Urgent" && (
-        <span style={{ background: p.bg, color: p.color, border: `1px solid ${p.border}`, padding: "4px 12px", borderRadius: 99, fontSize: 10, fontWeight: 800, fontFamily: SANS, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+        <span style={{ background: p.bg, color: p.color, border: `1px solid ${p.border}`, padding: "4px 12px", borderRadius: THEME.radius.full, fontSize: 11, fontWeight: 700, fontFamily: THEME.font, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
           {p.icon} {t('priority_urgent').toUpperCase()}
         </span>
       )}
-      <span style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}`, padding: "4px 12px", borderRadius: 99, fontSize: 11, fontWeight: 700, fontFamily: SANS, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
+      <span style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}`, padding: "4px 12px", borderRadius: THEME.radius.full, fontSize: 11, fontWeight: 600, fontFamily: THEME.font, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
         {m.icon} {t(statusKey)}
       </span>
     </div>
@@ -51,30 +81,30 @@ const Badge = ({ status, priority }) => {
 
 const Input = ({ label, prefix, style: s, ...props }) => (
   <div style={{ marginBottom: 18 }}>
-    {label && <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700, color: "#6B7280", fontFamily: SANS, letterSpacing: 0.9, textTransform: "uppercase" }}>{label}</label>}
+    {label && <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{label}</label>}
     <div style={{ position: "relative" }}>
-      {prefix && <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 14, fontWeight: 700, color: "#374151", fontFamily: SANS }}>{prefix}</span>}
-      <input style={{ width: "100%", padding: "11px 14px", paddingLeft: prefix ? 45 : 14, border: "1.5px solid #E5E7EB", borderRadius: 10, fontSize: 14, fontFamily: SANS, outline: "none", boxSizing: "border-box", background: "#FAFAFA", color: "#111827", ...s }} {...props} />
+      {prefix && <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 14, fontWeight: 600, color: THEME.colors.text, fontFamily: THEME.font }}>{prefix}</span>}
+      <input style={{ width: "100%", padding: "12px 14px", paddingLeft: prefix ? 45 : 14, border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, color: THEME.colors.text, transition: "border-color 0.2s", minHeight: 44, ...s }} {...props} />
     </div>
   </div>
 );
 
 const Textarea = ({ label, ...props }) => (
   <div style={{ marginBottom: 18 }}>
-    {label && <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700, color: "#6B7280", fontFamily: SANS, letterSpacing: 0.9, textTransform: "uppercase" }}>{label}</label>}
-    <textarea style={{ width: "100%", padding: "11px 14px", border: "1.5px solid #E5E7EB", borderRadius: 10, fontSize: 14, fontFamily: SANS, outline: "none", boxSizing: "border-box", background: "#FAFAFA", color: "#111827", resize: "vertical", minHeight: 110 }} {...props} />
+    {label && <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{label}</label>}
+    <textarea style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, color: THEME.colors.text, resize: "vertical", minHeight: 110, transition: "border-color 0.2s" }} {...props} />
   </div>
 );
 
 const Btn = ({ children, variant = "primary", full, style: s, ...props }) => {
   const V = {
-    primary: { background: "linear-gradient(135deg,#047857,#059669)", color: "#fff", border: "none" },
-    outline:  { background: "transparent", color: "#047857", border: "1.5px solid #047857" },
-    ghost:    { background: "#F3F4F6", color: "#374151", border: "none" },
-    dark:     { background: "#111827", color: "#fff", border: "none" },
+    primary: { background: THEME.colors.primary, color: THEME.colors.surface, border: "none" },
+    outline:  { background: "transparent", color: THEME.colors.primary, border: `1.5px solid ${THEME.colors.primary}` },
+    ghost:    { background: "transparent", color: THEME.colors.textMuted, border: "none" },
+    dark:     { background: THEME.colors.dark, color: THEME.colors.surface, border: "none" },
   };
   return (
-    <button style={{ ...V[variant], padding: "10px 20px", borderRadius: 10, fontFamily: SANS, fontWeight: 700, fontSize: 13, cursor: "pointer", width: full ? "100%" : undefined, transition: "all 0.2s", ...s }} {...props}>
+    <button style={{ ...V[variant], padding: "10px 20px", borderRadius: THEME.radius.sm, fontFamily: THEME.font, fontWeight: 600, fontSize: 14, cursor: "pointer", width: full ? "100%" : undefined, transition: "all 0.2s", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, ...s }} {...props}>
       {children}
     </button>
   );
@@ -98,22 +128,22 @@ const PhotoUpload = ({ photos, setPhotos }) => {
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 11, fontWeight: 700, color: "#6B7280", fontFamily: SANS, letterSpacing: 0.9, textTransform: "uppercase" }}>
-        {t('photo_evidence')} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "#9CA3AF" }}>{t('optional_up_to_5')}</span>
+      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
+        {t('photo_evidence')} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>{t('optional_up_to_5')}</span>
       </label>
       {photos.length < 5 && (
         <div onClick={() => fileRef.current.click()} onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
-             style={{ border: `2px dashed ${dragging ? "#047857" : "#D1D5DB"}`, borderRadius: 14, padding: "30px 20px", textAlign: "center", cursor: "pointer", background: dragging ? "#F0FDF4" : "#FAFAFA", transition: "all 0.2s" }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📷</div>
-          <div style={{ fontWeight: 700, color: "#374151", fontSize: 14 }}>{t('click_to_upload')}</div>
+             style={{ border: `2px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "30px 20px", textAlign: "center", cursor: "pointer", background: dragging ? THEME.colors.primaryLight : THEME.colors.surface, transition: "all 0.2s" }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
+          <div style={{ fontWeight: 600, color: THEME.colors.text, fontSize: 14 }}>{t('click_to_upload')}</div>
           <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => processFiles(e.target.files)} />
         </div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px,1fr))", gap: 10, marginTop: 12 }}>
         {photos.map((p, i) => (
-          <div key={i} style={{ position: "relative", borderRadius: 8, overflow: "hidden", border: "1px solid #E5E7EB" }}>
+          <div key={i} style={{ position: "relative", borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${THEME.colors.border}` }}>
             <img src={p.url} style={{ width: "100%", height: 80, objectFit: "cover" }} />
-            <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.5)", border: "none", borderRadius: "50%", color: "#fff", width: 20, height: 20, cursor: "pointer" }}>✕</button>
+            <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 4, right: 4, background: "rgba(15,23,42,0.6)", border: "none", borderRadius: "50%", color: "#fff", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           </div>
         ))}
       </div>
@@ -125,14 +155,14 @@ const Timeline = ({ status }) => {
   const { t } = useTranslation();
   const idx = STATUS_FLOW.indexOf(status);
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", margin: "20px 0" }}>
+    <div style={{ display: "flex", alignItems: "flex-start", margin: "24px 0 8px" }}>
       {STATUS_FLOW.map((s, i) => {
         const statusKey = `status_${s.toLowerCase().replace(" ", "_")}`;
         return (
           <div key={s} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
-            {i < STATUS_FLOW.length - 1 && <div style={{ position: "absolute", top: 13, left: "50%", width: "100%", height: 3, background: i < idx ? STATUS_META[s].color : "#E5E7EB" }} />}
-            <div style={{ width: 26, height: 26, borderRadius: "50%", background: i <= idx ? STATUS_META[s].color : "#E5E7EB", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 800, zIndex: 1 }}>{i <= idx ? "✓" : i + 1}</div>
-            <div style={{ fontSize: 9, fontWeight: i === idx ? 800 : 500, color: i === idx ? STATUS_META[s].color : "#9CA3AF", marginTop: 6, textAlign: "center" }}>{t(statusKey)}</div>
+            {i < STATUS_FLOW.length - 1 && <div style={{ position: "absolute", top: 13, left: "50%", width: "100%", height: 3, background: i < idx ? STATUS_META[s].color : THEME.colors.border }} />}
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: i <= idx ? STATUS_META[s].color : THEME.colors.surface, border: i <= idx ? "none" : `2px solid ${THEME.colors.border}`, color: i <= idx ? THEME.colors.surface : THEME.colors.textMuted, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, zIndex: 1, boxSizing: "border-box" }}>{i <= idx ? "✓" : i + 1}</div>
+            <div style={{ fontSize: 10, fontWeight: i === idx ? 700 : 500, color: i === idx ? STATUS_META[s].color : THEME.colors.textMuted, marginTop: 8, textAlign: "center", fontFamily: THEME.font }}>{t(statusKey)}</div>
           </div>
         );
       })}
@@ -141,50 +171,51 @@ const Timeline = ({ status }) => {
 };
 
 const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n }) => (
-  <div style={{ fontFamily: SANS, minHeight: "100vh", background: "#F3F4F6", color: "#111827" }}>
-    <nav style={{ background: "#111827", padding: "0 20px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 58, position: "sticky", top: 0, zIndex: 100 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }} onClick={() => navigate("home")}>
-        <div style={{ width: 32, height: 32, background: "linear-gradient(135deg,#047857,#10B981)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🏘</div>
+  <div style={{ fontFamily: THEME.font, minHeight: "100vh", background: THEME.colors.background, color: THEME.colors.text }}>
+    <nav style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
+        <div style={{ width: 36, height: 36, background: THEME.colors.primary, color: THEME.colors.surface, borderRadius: THEME.radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏘</div>
         <div>
-          <div style={{ color: "#F9FAFB", fontWeight: 800, fontSize: 14 }}>{t('app_title')}</div>
-          <div style={{ color: "#6B7280", fontSize: 10 }}>{t('subtitle')}</div>
+          <div style={{ color: THEME.colors.text, fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>{t('app_title')}</div>
+          <div style={{ color: THEME.colors.textMuted, fontSize: 11, fontWeight: 500 }}>{t('subtitle')}</div>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         {["home", "submit", "track"].map(v => (
-          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? "#047857" : "transparent", color: view === v ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
+          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
         ))}
-        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('govt_links')}</button>
+        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? THEME.colors.primaryLight : "transparent", color: view === "gov-links" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('govt_links')}</button>
         {session && (
-          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? "linear-gradient(135deg,#047857,#059669)" : "#1F2937", color: view === "admin" ? "#fff" : "#10B981", border: view === "admin" ? "none" : "1px solid #374151", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 800, fontSize: 12 }}>🛡 {t('admin_nav')}</button>
+          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? THEME.colors.surface : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s" }}>🛡 {t('admin_nav')}</button>
         )}
         {session && (
-          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? "#047857" : "transparent", color: view === "profile" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('my_account')}</button>
+          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? THEME.colors.primaryLight : "transparent", color: view === "profile" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('my_account')}</button>
         )}
-        <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: "#374151", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer" }}>{i18n.language.toUpperCase()}</button>
+        <div style={{ width: 1, height: 24, background: THEME.colors.border, margin: "0 4px" }} />
+        <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: THEME.colors.background, color: THEME.colors.text, border: `1px solid ${THEME.colors.border}`, padding: "8px 12px", borderRadius: THEME.radius.sm, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>{i18n.language.toUpperCase()}</button>
         {session ? (
-          <Btn variant="outline" style={{ padding: "6px 12px", fontSize: 12, borderColor: "#EF4444", color: "#EF4444" }} onClick={handleLogout}>{t('logout')}</Btn>
+          <Btn variant="outline" style={{ padding: "8px 16px", fontSize: 13, minHeight: 36, borderColor: THEME.colors.danger, color: THEME.colors.danger, borderWidth: 1 }} onClick={handleLogout}>{t('logout')}</Btn>
         ) : (
-          <Btn style={{ padding: "6px 12px", fontSize: 12 }} onClick={() => setShowLogin(true)}>{t('login')}</Btn>
+          <Btn style={{ padding: "8px 16px", fontSize: 13, minHeight: 36 }} onClick={() => setShowLogin(true)}>{t('login')}</Btn>
         )}
       </div>
     </nav>
     {toast && (
-      <div style={{ position: "fixed", top: 70, right: 20, zIndex: 1000, background: toast.type === "err" ? "#FEF2F2" : "#F0FDF4", color: toast.type === "err" ? "#DC2626" : "#15803D", padding: "12px 20px", borderRadius: 10, border: "1px solid", fontWeight: 700, boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>{toast.msg}</div>
+      <div style={{ position: "fixed", top: 84, right: 24, zIndex: 1000, background: toast.type === "err" ? THEME.colors.dangerBg : THEME.colors.successBg, color: toast.type === "err" ? THEME.colors.danger : THEME.colors.success, padding: "14px 20px", borderRadius: THEME.radius.md, border: `1px solid ${toast.type === "err" ? '#fca5a5' : '#86efac'}`, fontWeight: 600, boxShadow: THEME.shadow.md, display: "flex", alignItems: "center", gap: 10 }}>{toast.type === "err" ? "⚠️" : "✅"} {toast.msg}</div>
     )}
-    <div style={{ maxWidth: 1000, margin: "0 auto", padding: "20px" }}>{children}</div>
+    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px" }}>{children}</div>
   </div>
 );
 
 // ─── Sub-Views ────────────────────────────────────────────────────────────────
 
 const HomeView = ({ navigate, t }) => (
-  <div style={{ textAlign: "center", padding: "40px 0" }}>
-    <h1 style={{ fontSize: 36, fontWeight: 900, color: "#111827", marginBottom: 12 }}>{t('welcome')}</h1>
-    <p style={{ fontSize: 18, color: "#4B5563", marginBottom: 32, maxWidth: 600, margin: "0 auto 32px" }}>{t('welcome_subtitle')}</p>
-    <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
-      <Btn style={{ padding: "14px 28px", fontSize: 16 }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
-      <Btn variant="outline" style={{ padding: "14px 28px", fontSize: 16 }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
+  <div style={{ textAlign: "center", padding: "80px 20px" }}>
+    <h1 style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)", fontWeight: 900, color: THEME.colors.text, marginBottom: 24, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{t('welcome')}</h1>
+    <p style={{ fontSize: "clamp(1.125rem, 2vw, 1.25rem)", color: THEME.colors.textMuted, marginBottom: 48, maxWidth: 680, margin: "0 auto 48px", lineHeight: 1.6 }}>{t('welcome_subtitle')}</p>
+    <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+      <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
+      <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
     </div>
   </div>
 );
@@ -247,16 +278,16 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
   };
 
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <label style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
           {t('pin_location')}
         </label>
-        <button type="button" onClick={handleGetLocation} style={{ background: "#F3F4F6", border: "none", padding: "4px 10px", borderRadius: 6, fontSize: 11, fontWeight: 700, color: "#047857", cursor: "pointer" }}>
+        <button type="button" onClick={handleGetLocation} style={{ background: THEME.colors.primaryLight, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 600, color: THEME.colors.primaryHover, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s" }}>
           📍 {t('use_current_location')}
         </button>
       </div>
-      <div style={{ height: 250, borderRadius: 12, overflow: "hidden", border: "1.5px solid #E5E7EB" }}>
+      <div style={{ height: 280, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
         <MapContainer center={pos} zoom={13} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
           <Marker position={pos} draggable={true} eventHandlers={eventHandlers} ref={markerRef} />
@@ -267,7 +298,7 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
           }} />
         </MapContainer>
       </div>
-      <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6 }}>{t('drag_pin_hint')}</p>
+      <p style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 8 }}>{t('drag_pin_hint')}</p>
     </div>
   );
 };
@@ -338,23 +369,23 @@ const SubmitView = ({ t, notify, navigate, session }) => {
   };
 
   return (
-    <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 600, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 800 }}>{t('register_grievance')}</h2>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#9CA3AF", background: "#F3F4F6", padding: "4px 10px", borderRadius: 12 }}>Step {step} of 2</span>
+    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+        <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>{t('register_grievance')}</h2>
+        <span style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, background: THEME.colors.background, padding: "6px 14px", borderRadius: THEME.radius.full }}>Step {step} of 2</span>
       </div>
       
       {step === 1 ? (
         <div>
-          <label style={{ display: "block", marginBottom: 12, fontSize: 13, fontWeight: 700, color: "#374151" }}>Select Problem Categories (Multiple allowed)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 24 }}>
+          <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Select Problem Categories (Multiple allowed)</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
             {CATEGORIES.map(c => {
               const isSelected = form.categories.includes(c.id);
               return (
                 <div key={c.id} onClick={() => toggleCategory(c.id)}
-                     style={{ padding: 10, borderRadius: 10, border: `1.5px solid ${isSelected ? "#047857" : "#E5E7EB"}`, background: isSelected ? "#F0FDF4" : "#fff", cursor: "pointer", textAlign: "center", transition: "0.2s" }}>
-                  <div style={{ fontSize: 20, marginBottom: 4 }}>{c.icon}</div>
-                  <div style={{ fontSize: 9, fontWeight: 700 }}>{t(c.key)}</div>
+                     style={{ padding: "16px 10px", borderRadius: THEME.radius.md, border: `2px solid ${isSelected ? THEME.colors.primary : THEME.colors.border}`, background: isSelected ? THEME.colors.primaryLight : THEME.colors.surface, cursor: "pointer", textAlign: "center", transition: "all 0.2s", transform: isSelected ? "scale(0.98)" : "scale(1)" }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? THEME.colors.primaryHover : THEME.colors.text }}>{t(c.key)}</div>
                 </div>
               );
             })}
@@ -366,7 +397,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 20, padding: 12, background: "#F0FDF4", borderRadius: 8, fontSize: 12, color: "#047857", fontWeight: 700 }}>
+          <div style={{ marginBottom: 24, padding: 14, background: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, fontSize: 13, color: THEME.colors.primaryHover, fontWeight: 600, border: `1px solid ${THEME.colors.primary}` }}>
             Selected: {form.categories.join(", ")}
           </div>
           
@@ -374,12 +405,12 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           <Textarea label={t("description")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
           
           {/* Extra Questions */}
-          <div style={{ background: "#FAFAFA", padding: 16, borderRadius: 12, border: "1px solid #E5E7EB", marginBottom: 18 }}>
-            <label style={{ display: "block", marginBottom: 12, fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.9, textTransform: "uppercase" }}>{t('additional_details')}</label>
+          <div style={{ background: THEME.colors.background, padding: 20, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 16, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>{t('additional_details')}</label>
             
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{t('how_long_problem')}</label>
-              <select value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS }}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: THEME.colors.text, marginBottom: 8 }}>{t('how_long_problem')}</label>
+              <select value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, outline: "none", fontFamily: THEME.font, fontSize: 14, background: THEME.colors.surface }}>
                 <option value="Just started">{t('just_started')}</option>
                 <option value="1-3 days">{t('one_to_three_days')}</option>
                 <option value="Over a week">{t('over_a_week')}</option>
@@ -387,13 +418,13 @@ const SubmitView = ({ t, notify, navigate, session }) => {
               </select>
             </div>
             
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{t('estimated_people')}</label>
-              <input type="number" value={form.peopleAffected} onChange={e => setForm({...form, peopleAffected: e.target.value})} placeholder={t('eg_50')} style={{ width: "100%", padding: "10px", borderRadius: 8, border: "1px solid #E5E7EB", outline: "none", fontFamily: SANS, boxSizing: "border-box" }} />
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: THEME.colors.text, marginBottom: 8 }}>{t('estimated_people')}</label>
+              <input type="number" value={form.peopleAffected} onChange={e => setForm({...form, peopleAffected: e.target.value})} placeholder={t('eg_50')} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, outline: "none", fontFamily: THEME.font, fontSize: 14, boxSizing: "border-box", background: THEME.colors.surface }} />
             </div>
 
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, color: form.isEmergency ? "#DC2626" : "#374151" }}>
-              <input type="checkbox" checked={form.isEmergency} onChange={e => setForm({...form, isEmergency: e.target.checked})} style={{ width: 16, height: 16 }} />
+            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 14, fontWeight: 600, color: form.isEmergency ? THEME.colors.danger : THEME.colors.text }}>
+              <input type="checkbox" checked={form.isEmergency} onChange={e => setForm({...form, isEmergency: e.target.checked})} style={{ width: 20, height: 20, accentColor: THEME.colors.danger }} />
               {t('is_emergency')}
             </label>
           </div>
@@ -403,8 +434,8 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
           <PhotoUpload photos={photos} setPhotos={setPhotos} />
           
-          <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
-            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1 }}>{t('back_btn')}</Btn>
+          <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
+            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1, background: THEME.colors.background }}>{t('back_btn')}</Btn>
             <Btn type="submit" disabled={loading} style={{ flex: 2 }}>{loading ? t("submitting") : t("submit_btn")}</Btn>
           </div>
         </form>
@@ -440,26 +471,26 @@ const TrackView = ({ t, notify, session }) => {
     }
   };
 
-  if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: SANS, fontWeight: 700 }}>{t("login_to_track")}</div>;
+  if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
   return (
     <div>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>{t("your_grievances")}</h2>
-      {loading ? <div>{t("loading")}</div> : items.length === 0 ? <div style={{ textAlign: "center", padding: 40, background: "#fff", borderRadius: 16 }}>{t("no_complaints")}</div> : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 32, letterSpacing: "-0.01em" }}>{t("your_grievances")}</h2>
+      {loading ? <div>{t("loading")}</div> : items.length === 0 ? <div style={{ textAlign: "center", padding: 40, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>{t("no_complaints")}</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
           {items.map(it => (
-            <div key={it.id} style={{ background: "#fff", padding: 20, borderRadius: 16, border: "1px solid #E5E7EB" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+            <div key={it.id} style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                 <div>
-                  <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 700 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
-                  <h3 style={{ fontSize: 18, fontWeight: 800 }}>{it.title}</h3>
+                  <div style={{ fontSize: 13, color: THEME.colors.textMuted, fontWeight: 700, marginBottom: 4 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
+                  <h3 style={{ fontSize: 20, fontWeight: 800 }}>{it.title}</h3>
                 </div>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                   <Badge status={it.status} priority={it.priority} />
-                  <button onClick={() => deleteGrievance(it.id)} style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", color: "#DC2626", cursor: "pointer", padding: "4px 8px", borderRadius: 8, fontSize: 12, fontWeight: 700, fontFamily: SANS }} title="Delete grievance">Delete</button>
+                  <button onClick={() => deleteGrievance(it.id)} style={{ background: THEME.colors.dangerBg, border: `1px solid ${THEME.colors.danger}`, color: THEME.colors.danger, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Delete grievance">Delete</button>
                 </div>
               </div>
-              <p style={{ fontSize: 14, color: "#4B5563", marginBottom: 16 }}>{it.description}</p>
+              <p style={{ fontSize: 15, color: THEME.colors.textMuted, marginBottom: 24, lineHeight: 1.5 }}>{it.description}</p>
               <Timeline status={it.status} />
             </div>
           ))}
@@ -483,39 +514,39 @@ const ProfileView = ({ t, session, profile, notify }) => {
     setLoading(false);
   };
 
-  if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: SANS, fontWeight: 700 }}>{t("login_to_track")}</div>;
+  if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
   return (
-    <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 600, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 24 }}>{t('my_account')}</h2>
+    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 32, letterSpacing: "-0.01em" }}>{t('my_account')}</h2>
       
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-          <div style={{ width: 64, height: 64, background: "#F0FDF4", color: "#047857", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 800 }}>
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 24 }}>
+          <div style={{ width: 80, height: 80, background: THEME.colors.primaryLight, color: THEME.colors.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800 }}>
             {profile.name?.charAt(0).toUpperCase() || "U"}
           </div>
           <div>
-            <h3 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{profile.name || "User"}</h3>
-            <p style={{ color: "#6B7280", margin: "4px 0 0", fontSize: 14 }}>{session.user.email || profile.phone}</p>
+            <h3 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px" }}>{profile.name || "User"}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: 0, fontSize: 15 }}>{session.user.email || profile.phone}</p>
           </div>
         </div>
       </div>
 
-      <div style={{ background: "#FAFAFA", border: "1px solid #E5E7EB", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+      <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 4px" }}>{t('total_grievances')}</h4>
-            <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>{t('grievances_reported_desc')}</p>
+            <h4 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: THEME.colors.text }}>{t('total_grievances')}</h4>
+            <p style={{ fontSize: 13, color: THEME.colors.textMuted, margin: 0 }}>{t('grievances_reported_desc')}</p>
           </div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#047857" }}>
+          <div style={{ fontSize: 36, fontWeight: 900, color: THEME.colors.primary }}>
             {loading ? "..." : count}
           </div>
         </div>
       </div>
 
-      <div style={{ background: "#F0FDF4", border: "1px solid #86EFAC", borderRadius: 12, padding: 20 }}>
-        <h4 style={{ fontSize: 14, fontWeight: 700, color: "#16A34A", margin: "0 0 8px" }}>{t('account_security')}</h4>
-        <p style={{ fontSize: 13, color: "#15803D", margin: 0, lineHeight: 1.5 }}>
+      <div style={{ background: THEME.colors.successBg, border: `1px solid #86efac`, borderRadius: THEME.radius.md, padding: 24 }}>
+        <h4 style={{ fontSize: 15, fontWeight: 700, color: THEME.colors.success, margin: "0 0 8px" }}>{t('account_security')}</h4>
+        <p style={{ fontSize: 14, color: "#15803d", margin: 0, lineHeight: 1.6 }}>
           {t('auth_desc')} <strong>{session.user.app_metadata.provider === 'google' ? t('auth_method_google') : t('auth_method_email')}</strong>.
           {session.user.app_metadata.provider === 'google' ? ` ${t('auth_no_password')}` : ''}
         </p>
@@ -533,18 +564,18 @@ const GovLinksView = ({ t }) => {
   ];
 
   return (
-    <div style={{ background: "#fff", padding: 32, borderRadius: 16, boxShadow: "0 4px 20px rgba(0,0,0,0.05)", maxWidth: 800, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>{t('official_resources')}</h2>
-      <p style={{ color: "#6B7280", marginBottom: 24 }}>{t('explore_portals')}</p>
+    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 880, margin: "0 auto" }}>
+      <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12, letterSpacing: "-0.01em" }}>{t('official_resources')}</h2>
+      <p style={{ color: THEME.colors.textMuted, marginBottom: 32, fontSize: 15 }}>{t('explore_portals')}</p>
       
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
         {links.map((link, i) => (
           <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
-            <div style={{ padding: 20, borderRadius: 12, border: "1px solid #E5E7EB", background: "#FAFAFA", transition: "all 0.2s", cursor: "pointer", height: "100%", boxSizing: "border-box" }}
-                 onMouseOver={e => e.currentTarget.style.borderColor = "#047857"}
-                 onMouseOut={e => e.currentTarget.style.borderColor = "#E5E7EB"}>
-              <h3 style={{ fontSize: 16, fontWeight: 800, color: "#047857", marginBottom: 8 }}>{link.title} ↗</h3>
-              <p style={{ fontSize: 13, color: "#4B5563", margin: 0, lineHeight: 1.5 }}>{link.desc}</p>
+            <div style={{ padding: 24, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.background, transition: "all 0.2s", cursor: "pointer", height: "100%", boxSizing: "border-box" }}
+                 onMouseOver={e => { e.currentTarget.style.borderColor = THEME.colors.primary; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = THEME.shadow.sm; }}
+                 onMouseOut={e => { e.currentTarget.style.borderColor = THEME.colors.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}>
+              <h3 style={{ fontSize: 16, fontWeight: 800, color: THEME.colors.primaryHover, marginBottom: 10 }}>{link.title} ↗</h3>
+              <p style={{ fontSize: 14, color: THEME.colors.textMuted, margin: 0, lineHeight: 1.6 }}>{link.desc}</p>
             </div>
           </a>
         ))}
@@ -565,7 +596,7 @@ const PhotoLightbox = ({ photos, startIndex, onClose, t }) => {
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, backdropFilter: "blur(6px)" }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
         <img src={src} alt="" style={{ maxWidth: "90vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }} />
-        <div style={{ textAlign: "center", marginTop: 12, color: "#fff", fontFamily: SANS, fontWeight: 700, fontSize: 13 }}>
+        <div style={{ textAlign: "center", marginTop: 12, color: "#fff", fontFamily: THEME.font, fontWeight: 700, fontSize: 13 }}>
           {t('photo_of', { current: idx + 1, total: photos.length })}
         </div>
         {photos.length > 1 && (
@@ -601,25 +632,25 @@ const AnalyticsTab = ({ list, t }) => {
       {/* Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
         {[
-          { label: t('total_complaints'), value: stats.total, icon: "📊", color: "#6366F1", bg: "#EEF2FF" },
-          { label: t('open_complaints'), value: stats.byStatus.Open || 0, icon: "🔴", color: "#DC2626", bg: "#FEF2F2" },
-          { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, icon: "🔵", color: "#2563EB", bg: "#EFF6FF" },
-          { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, icon: "🟢", color: "#16A34A", bg: "#F0FDF4" },
-          { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, icon: "⚠️", color: "#991B1B", bg: "#FEF2F2" },
+          { label: t('total_complaints'), value: stats.total, icon: "📊", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+          { label: t('open_complaints'), value: stats.byStatus.Open || 0, icon: "🔴", color: THEME.colors.danger, bg: THEME.colors.dangerBg },
+          { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, icon: "🔵", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+          { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, icon: "🟢", color: THEME.colors.success, bg: THEME.colors.successBg },
+          { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, icon: "⚠️", color: "#991B1B", bg: THEME.colors.dangerBg },
         ].map((card, i) => (
-          <div key={i} style={{ background: "#fff", borderRadius: 16, padding: "20px 18px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+          <div key={i} style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: "20px 18px", border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontSize: 24 }}>{card.icon}</span>
-              <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 800 }}>{stats.total > 0 ? Math.round((card.value / stats.total) * 100) : 0}%</span>
+              <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: THEME.radius.full, fontSize: 10, fontWeight: 800 }}>{stats.total > 0 ? Math.round((card.value / stats.total) * 100) : 0}%</span>
             </div>
             <div style={{ fontSize: 28, fontWeight: 900, color: card.color }}>{card.value}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", marginTop: 4 }}>{card.label}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted, marginTop: 4 }}>{card.label}</div>
           </div>
         ))}
       </div>
 
       {/* Category Distribution */}
-      <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB" }}>
+      <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
         <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📂 {t('category_distribution')}</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {CATEGORIES.map(c => {
@@ -628,11 +659,11 @@ const AnalyticsTab = ({ list, t }) => {
             return (
               <div key={c.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>{c.icon} {t(c.key)}</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#6B7280" }}>{count} ({pct}%)</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{c.icon} {t(c.key)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.textMuted }}>{count} ({pct}%)</span>
                 </div>
-                <div style={{ background: "#F3F4F6", borderRadius: 99, height: 10, overflow: "hidden" }}>
-                  <div style={{ width: `${(count / maxCat) * 100}%`, height: "100%", background: "linear-gradient(90deg, #047857, #10B981)", borderRadius: 99, transition: "width 0.6s ease" }} />
+                <div style={{ background: THEME.colors.background, borderRadius: THEME.radius.full, height: 10, overflow: "hidden" }}>
+                  <div style={{ width: `${(count / maxCat) * 100}%`, height: "100%", background: THEME.colors.primary, borderRadius: THEME.radius.full, transition: "width 0.6s ease" }} />
                 </div>
               </div>
             );
@@ -642,7 +673,7 @@ const AnalyticsTab = ({ list, t }) => {
 
       {/* Status Breakdown + Evidence */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB" }}>
+        <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
           <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📈 {t('status_breakdown')}</h3>
           {STATUS_FLOW.map(s => {
             const m = STATUS_META[s];
@@ -653,27 +684,27 @@ const AnalyticsTab = ({ list, t }) => {
               <div key={s} style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.icon} {t(sKey)}</span>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#6B7280" }}>{count} ({pct}%)</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.textMuted }}>{count} ({pct}%)</span>
                 </div>
-                <div style={{ background: m.bg, borderRadius: 99, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${pct}%`, height: "100%", background: m.color, borderRadius: 99, transition: "width 0.6s ease" }} />
+                <div style={{ background: m.bg, borderRadius: THEME.radius.full, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: m.color, borderRadius: THEME.radius.full, transition: "width 0.6s ease" }} />
                 </div>
               </div>
             );
           })}
         </div>
 
-        <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
-          <div style={{ fontSize: 42, fontWeight: 900, color: "#047857" }}>{stats.withPhotos}</div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#6B7280", marginTop: 4, textAlign: "center" }}>{t('evidence_backed')}</div>
-          <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2, textAlign: "center" }}>{t('complaints_with_photos')}</div>
-          <div style={{ marginTop: 16, width: "100%", background: "#F3F4F6", borderRadius: 99, height: 10, overflow: "hidden" }}>
-            <div style={{ width: `${stats.total > 0 ? (stats.withPhotos / stats.total) * 100 : 0}%`, height: "100%", background: "linear-gradient(90deg, #047857, #10B981)", borderRadius: 99, transition: "width 0.6s ease" }} />
+          <div style={{ fontSize: 42, fontWeight: 900, color: THEME.colors.success }}>{stats.withPhotos}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginTop: 4, textAlign: "center" }}>{t('evidence_backed')}</div>
+          <div style={{ fontSize: 11, color: THEME.colors.textMuted, marginTop: 2, textAlign: "center" }}>{t('complaints_with_photos')}</div>
+          <div style={{ marginTop: 16, width: "100%", background: THEME.colors.background, borderRadius: THEME.radius.full, height: 10, overflow: "hidden" }}>
+            <div style={{ width: `${stats.total > 0 ? (stats.withPhotos / stats.total) * 100 : 0}%`, height: "100%", background: THEME.colors.success, borderRadius: THEME.radius.full, transition: "width 0.6s ease" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", width: "100%", marginTop: 6 }}>
-            <span style={{ fontSize: 10, color: "#9CA3AF" }}>{stats.withPhotos} {t('with_evidence')}</span>
-            <span style={{ fontSize: 10, color: "#9CA3AF" }}>{stats.total - stats.withPhotos} {t('without_evidence')}</span>
+            <span style={{ fontSize: 10, color: THEME.colors.textMuted }}>{stats.withPhotos} {t('with_evidence')}</span>
+            <span style={{ fontSize: 10, color: THEME.colors.textMuted }}>{stats.total - stats.withPhotos} {t('without_evidence')}</span>
           </div>
         </div>
       </div>
@@ -749,28 +780,28 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       alignItems: "center",
       gap: 5,
       padding: "4px 10px",
-      borderRadius: 99,
+      borderRadius: THEME.radius.full,
       fontSize: 11,
       fontWeight: 800,
       textTransform: "uppercase",
-      fontFamily: SANS
+      fontFamily: THEME.font
     };
     if (role === "admin") {
-      return <span style={{ ...s, background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FCA5A5" }}>{t('badge_admin')}</span>;
+      return <span style={{ ...s, background: THEME.colors.dangerBg, color: THEME.colors.danger, border: `1.5px solid ${STATUS_META.Open.border}` }}>{t('badge_admin')}</span>;
     }
     if (role === "officer") {
-      return <span style={{ ...s, background: "#F0FDF4", color: "#16A34A", border: "1.5px solid #86EFAC" }}>{t('badge_officer')}</span>;
+      return <span style={{ ...s, background: THEME.colors.successBg, color: THEME.colors.success, border: `1.5px solid ${STATUS_META.Resolved.border}` }}>{t('badge_officer')}</span>;
     }
-    return <span style={{ ...s, background: "#F3F4F6", color: "#4B5563", border: "1.5px solid #E5E7EB" }}>{t('badge_citizen')}</span>;
+    return <span style={{ ...s, background: THEME.colors.background, color: THEME.colors.textMuted, border: `1.5px solid ${THEME.colors.border}` }}>{t('badge_citizen')}</span>;
   };
 
   return (
-    <div style={{ fontFamily: SANS }}>
+    <div style={{ fontFamily: THEME.font }}>
       {policyError && (
-        <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 20px", marginBottom: 20, color: "#991B1B", fontSize: 13, lineHeight: 1.6 }}>
+        <div style={{ background: THEME.colors.dangerBg, border: `1px solid ${STATUS_META.Open.border}`, borderRadius: THEME.radius.md, padding: "16px 20px", marginBottom: 20, color: THEME.colors.danger, fontSize: 13, lineHeight: 1.6 }}>
           <strong style={{ fontSize: 14 }}>⚠️ Row Level Security (RLS) Policy Missing</strong><br/>
           To enable role updates from the UI in a secure, production-grade manner, please execute the <code style={{ background: "#FEE2E2", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>add-admin-policy.sql</code> script in your **Supabase SQL Editor**:
-          <pre style={{ background: "#FFF", padding: 12, borderRadius: 8, marginTop: 10, fontSize: 11, overflowX: "auto", border: "1.5px solid #FCA5A5", color: "#374151" }}>
+          <pre style={{ background: THEME.colors.surface, padding: 12, borderRadius: 8, marginTop: 10, fontSize: 11, overflowX: "auto", border: `1.5px solid ${STATUS_META.Open.border}`, color: THEME.colors.text }}>
 {`CREATE POLICY "Admins can update all profiles" 
 ON profiles FOR UPDATE TO authenticated 
 USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
@@ -787,11 +818,11 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
           onChange={e => setSearch(e.target.value)}
           style={{
             padding: "10px 16px",
-            borderRadius: 10,
-            border: "1.5px solid #E5E7EB",
+            borderRadius: THEME.radius.md,
+            border: `1.5px solid ${THEME.colors.border}`,
             fontSize: 13,
             fontWeight: 700,
-            color: "#374151",
+            color: THEME.colors.text,
             flex: 1,
             minWidth: 260,
             outline: "none"
@@ -803,27 +834,27 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#6B7280" }}>
+        <div style={{ textAlign: "center", padding: "60px 0", color: THEME.colors.textMuted }}>
           <div style={{ fontSize: 32, animation: "urgentPulse 2s infinite" }}>👥</div>
           <p style={{ fontWeight: 800, marginTop: 12 }}>{t('loading_users')}</p>
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, padding: 48, textAlign: "center" }}>
+        <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 48, textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#374151" }}>{t('no_users_match')}</h3>
-          <p style={{ color: "#6B7280", margin: "6px 0 0", fontSize: 13 }}>{t('try_checking_spelling')}</p>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('no_users_match')}</h3>
+          <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('try_checking_spelling')}</p>
         </div>
       ) : (
-        <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#F9FAFB", borderBottom: "1.5px solid #E5E7EB" }}>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_full_name')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_phone_number')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_current_role')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_registered_date')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563", textAlign: "right" }}>{t('col_actions')}</th>
+                <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_current_role')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -831,22 +862,22 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
                   const isSelf = u.id === session?.user?.id;
                   const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
                   return (
-                    <tr key={u.id} style={{ borderBottom: "1px solid #E5E7EB", background: isSelf ? "#F9FAFB" : "#fff", transition: "background 0.2s" }}>
-                      <td style={{ padding: "16px 20px", fontWeight: 800, color: "#111827" }}>
-                        {u.name || t('unnamed_user')} {isSelf && <span style={{ color: "#047857", fontSize: 11, background: "#ECFDF5", padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
+                    <tr key={u.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: isSelf ? THEME.colors.background : THEME.colors.surface, transition: "background 0.2s" }}>
+                      <td style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.text }}>
+                        {u.name || t('unnamed_user')} {isSelf && <span style={{ color: THEME.colors.success, fontSize: 11, background: THEME.colors.successBg, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
                       </td>
-                      <td style={{ padding: "16px 20px", color: "#4B5563", fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
+                      <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
                       <td style={{ padding: "16px 20px" }}>{getRoleBadge(u.role)}</td>
-                      <td style={{ padding: "16px 20px", color: "#6B7280", fontWeight: 600 }}>{dateStr}</td>
+                      <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
                         {isSelf ? (
-                          <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, padding: "8px 12px", background: "#F3F4F6", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "8px 12px", background: THEME.colors.background, borderRadius: THEME.radius.sm, display: "inline-flex", alignItems: "center", gap: 4 }}>
                             {t('lock_protection')}
                           </span>
                         ) : (
                           <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                             {updatingId === u.id ? (
-                              <span style={{ fontSize: 12, color: "#047857", fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
+                              <span style={{ fontSize: 12, color: THEME.colors.success, fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
                             ) : (
                               <>
                                 <select
@@ -855,14 +886,14 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
                                   disabled={updatingId !== null}
                                   style={{
                                     padding: "6px 10px",
-                                    borderRadius: 8,
-                                    border: "1.5px solid #D1D5DB",
+                                    borderRadius: THEME.radius.sm,
+                                    border: `1.5px solid ${THEME.colors.border}`,
                                     fontSize: 12,
                                     fontWeight: 700,
-                                    color: "#374151",
+                                    color: THEME.colors.text,
                                     outline: "none",
                                     cursor: "pointer",
-                                    background: "#FFF"
+                                    background: THEME.colors.surface
                                   }}
                                 >
                                   <option value="citizen">{t('role_citizen')}</option>
@@ -963,12 +994,12 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
   // ── Tab buttons ──
   const tabStyle = (active) => ({
-    background: active ? "linear-gradient(135deg,#047857,#059669)" : "#F3F4F6",
-    color: active ? "#fff" : "#6B7280",
+    background: active ? THEME.colors.primary : THEME.colors.background,
+    color: active ? THEME.colors.surface : THEME.colors.textMuted,
     border: "none",
     padding: "10px 24px",
-    borderRadius: 10,
-    fontFamily: SANS,
+    borderRadius: THEME.radius.md,
+    fontFamily: THEME.font,
     fontWeight: 800,
     fontSize: 13,
     cursor: "pointer",
@@ -978,13 +1009,13 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   // ── Select helper for filter dropdowns ──
   const selectStyle = {
     padding: "8px 12px",
-    borderRadius: 8,
-    border: "1.5px solid #E5E7EB",
-    fontFamily: SANS,
+    borderRadius: THEME.radius.sm,
+    border: `1.5px solid ${THEME.colors.border}`,
+    fontFamily: THEME.font,
     fontWeight: 700,
     fontSize: 12,
-    background: "#fff",
-    color: "#374151",
+    background: THEME.colors.surface,
+    color: THEME.colors.text,
     outline: "none",
     minWidth: 130,
   };
@@ -993,7 +1024,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     <div>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: "#111827" }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
@@ -1011,7 +1042,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       ) : (
         <>
           {/* Filter Bar */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, padding: "14px 18px", background: "#fff", borderRadius: 14, border: "1px solid #E5E7EB", alignItems: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, padding: "14px 18px", background: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, alignItems: "center" }}>
             <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={selectStyle}>
               <option value="">{t('all_statuses')}</option>
               {STATUS_FLOW.map(s => {
@@ -1032,19 +1063,19 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
             />
             <button
               onClick={() => setFUrgent(!fUrgent)}
-              style={{ padding: "8px 16px", borderRadius: 99, border: fUrgent ? "2px solid #EF4444" : "1.5px solid #E5E7EB", background: fUrgent ? "#FEF2F2" : "#fff", color: fUrgent ? "#DC2626" : "#6B7280", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", animation: fUrgent ? "urgentPulse 2s infinite" : "none" }}
+              style={{ padding: "8px 16px", borderRadius: THEME.radius.full, border: fUrgent ? `2px solid ${THEME.colors.danger}` : `1.5px solid ${THEME.colors.border}`, background: fUrgent ? THEME.colors.dangerBg : THEME.colors.surface, color: fUrgent ? THEME.colors.danger : THEME.colors.textMuted, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", animation: fUrgent ? "urgentPulse 2s infinite" : "none" }}
             >
               🔥 {t('filter_priority')}
             </button>
-            <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginLeft: 4 }}>{filtered.length} / {list.length}</span>
+            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, marginLeft: 4 }}>{filtered.length} / {list.length}</span>
           </div>
 
           {/* Content Grid */}
           <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
             {/* Complaint List */}
             <div>
-              {loading ? <div style={{ padding: 40, textAlign: "center", color: "#6B7280", fontWeight: 700 }}>{t("loading")}</div> : filtered.length === 0 ? (
-                <div style={{ background: "#fff", padding: 50, textAlign: "center", borderRadius: 16, color: "#9CA3AF" }}>
+              {loading ? <div style={{ padding: 40, textAlign: "center", color: THEME.colors.textMuted, fontWeight: 700 }}>{t("loading")}</div> : filtered.length === 0 ? (
+                <div style={{ background: THEME.colors.surface, padding: 50, textAlign: "center", borderRadius: THEME.radius.md, color: THEME.colors.textMuted }}>
                   <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
                   <div style={{ fontWeight: 700 }}>{t("no_complaints")}</div>
                 </div>
@@ -1056,16 +1087,16 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     const photos = getPhotos(it);
                     return (
                       <div key={it.id} onClick={() => setSelected(it)}
-                           style={{ background: "#fff", padding: "16px 18px", borderRadius: 14, borderLeft: `5px solid ${sm.color}`, border: isActive ? `2px solid #047857` : undefined, borderLeftWidth: 5, borderLeftStyle: "solid", borderLeftColor: sm.color, cursor: "pointer", transition: "all 0.15s", boxShadow: isActive ? "0 4px 20px rgba(4,120,87,0.12)" : "0 1px 6px rgba(0,0,0,0.03)", position: "relative" }}>
+                           style={{ background: THEME.colors.surface, padding: "16px 18px", borderRadius: THEME.radius.md, borderLeft: `5px solid ${sm.color}`, border: isActive ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`, borderLeftWidth: 5, borderLeftStyle: "solid", borderLeftColor: sm.color, cursor: "pointer", transition: "all 0.15s", boxShadow: isActive ? THEME.shadow.md : THEME.shadow.sm, position: "relative" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", letterSpacing: 0.5, textTransform: "uppercase" }}>#{(it.ticket_id || it.id.slice(0, 8))} • {it.category}</div>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, letterSpacing: 0.5, textTransform: "uppercase" }}>#{(it.ticket_id || it.id.slice(0, 8))} • {it.category}</div>
                           <Badge status={it.status} priority={it.priority} />
                         </div>
-                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: "#111827" }}>{it.title}</h3>
-                        <div style={{ fontSize: 12, color: "#6B7280" }}>📍 {it.location}</div>
+                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{it.title}</h3>
+                        <div style={{ fontSize: 12, color: THEME.colors.textMuted }}>📍 {it.location}</div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                          <span style={{ fontSize: 11, color: "#9CA3AF" }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
-                          {photos.length > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: "#047857", background: "#F0FDF4", padding: "2px 8px", borderRadius: 99 }}>📷 {photos.length}</span>}
+                          <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
+                          {photos.length > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.success, background: THEME.colors.successBg, padding: "2px 8px", borderRadius: THEME.radius.full }}>📷 {photos.length}</span>}
                         </div>
                       </div>
                     );
@@ -1076,25 +1107,25 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
             {/* Detail Panel */}
             {selected && (
-              <div style={{ background: "#fff", padding: 24, borderRadius: 20, boxShadow: "0 10px 40px rgba(0,0,0,0.08)", position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
+              <div style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>{t("complaint_details")}</h3>
-                  <button onClick={() => setSelected(null)} style={{ background: "#F3F4F6", border: "none", width: 30, height: 30, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 700, color: "#6B7280" }}>✕</button>
+                  <button onClick={() => setSelected(null)} style={{ background: THEME.colors.background, border: "none", width: 30, height: 30, borderRadius: THEME.radius.sm, fontSize: 14, cursor: "pointer", fontWeight: 700, color: THEME.colors.textMuted }}>✕</button>
                 </div>
 
                 {/* Title & ID */}
-                <div style={{ padding: "14px 16px", background: "#FAFAFA", borderRadius: 12, marginBottom: 16, border: "1px solid #E5E7EB" }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 4 }}>#{selected.ticket_id || selected.id.slice(0, 8)}</div>
+                <div style={{ padding: "14px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, marginBottom: 16, border: `1px solid ${THEME.colors.border}` }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>#{selected.ticket_id || selected.id.slice(0, 8)}</div>
                   <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>{selected.title}</h4>
                   <Badge status={selected.status} priority={selected.priority} />
                 </div>
 
                 {/* Description */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase" }}>{t("description")}</label>
-                  <p style={{ fontSize: 13, color: "#374151", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.description}</p>
+                  <label style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase" }}>{t("description")}</label>
+                  <p style={{ fontSize: 13, color: THEME.colors.text, marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.description}</p>
                   {selected.is_escalated && (
-                    <div style={{ marginTop: 10, padding: 10, background: "#FEF2F2", border: "1px solid #FEE2E2", borderRadius: 8, color: "#991B1B", fontSize: 11, fontWeight: 700 }}>
+                    <div style={{ marginTop: 10, padding: 10, background: THEME.colors.dangerBg, border: `1px solid ${STATUS_META.Open.border}`, borderRadius: THEME.radius.sm, color: "#991B1B", fontSize: 11, fontWeight: 700 }}>
                       {t("escalation_warning")}
                     </div>
                   )}
@@ -1105,15 +1136,15 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   const photos = getPhotos(selected);
                   return (
                     <div style={{ marginBottom: 16 }}>
-                      <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{t("photo_viewer")} ({photos.length})</label>
+                      <label style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", display: "block", marginBottom: 8 }}>{t("photo_viewer")} ({photos.length})</label>
                       {photos.length === 0 ? (
-                        <div style={{ padding: 16, background: "#FAFAFA", borderRadius: 10, textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>{t('no_photos')}</div>
+                        <div style={{ padding: 16, background: THEME.colors.background, borderRadius: THEME.radius.sm, textAlign: "center", color: THEME.colors.textMuted, fontSize: 12 }}>{t('no_photos')}</div>
                       ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                           {photos.map((p, i) => (
-                            <div key={i} onClick={() => setLightbox({ photos, index: i })} style={{ cursor: "pointer", borderRadius: 8, overflow: "hidden", border: "2px solid #E5E7EB", transition: "border-color 0.2s", position: "relative" }}
-                                 onMouseOver={e => e.currentTarget.style.borderColor = '#047857'}
-                                 onMouseOut={e => e.currentTarget.style.borderColor = '#E5E7EB'}>
+                            <div key={i} onClick={() => setLightbox({ photos, index: i })} style={{ cursor: "pointer", borderRadius: THEME.radius.sm, overflow: "hidden", border: `2px solid ${THEME.colors.border}`, transition: "border-color 0.2s", position: "relative" }}
+                                 onMouseOver={e => e.currentTarget.style.borderColor = THEME.colors.primary}
+                                 onMouseOut={e => e.currentTarget.style.borderColor = THEME.colors.border}>
                               <img src={p.url || p} style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} alt="" />
                               <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
                                    onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.3)'}
@@ -1129,12 +1160,12 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                 })()}
 
                 {/* Management Controls */}
-                <div style={{ borderTop: "1.5px solid #F3F4F6", paddingTop: 18 }}>
-                  <label style={{ fontSize: 11, fontWeight: 800, color: "#374151", display: "block", marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("management_controls")}</label>
+                <div style={{ borderTop: `1.5px solid ${THEME.colors.background}`, paddingTop: 18 }}>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, display: "block", marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("management_controls")}</label>
 
                   {/* Status Update Buttons */}
                   <div style={{ marginBottom: 18 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 8, display: "block" }}>{t('change_status')}</label>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 8, display: "block" }}>{t('change_status')}</label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {STATUS_FLOW.map(s => {
                         const m = STATUS_META[s];
@@ -1143,7 +1174,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                         return (
                           <button key={s}
                             onClick={() => updateGrievance(selected.id, { status: s })}
-                            style={{ padding: "6px 14px", borderRadius: 99, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? (s === "Closed" ? "#fff" : (m.bg === m.color ? m.color : "#fff")) : m.color, fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", letterSpacing: 0.3, opacity: isActive ? 1 : 0.75 }}
+                            style={{ padding: "6px 14px", borderRadius: THEME.radius.full, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? (s === "Closed" ? "#fff" : (m.bg === m.color ? m.color : "#fff")) : m.color, fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", letterSpacing: 0.3, opacity: isActive ? 1 : 0.75 }}
                             onMouseOver={e => { if (!isActive) { e.currentTarget.style.background = m.bg; e.currentTarget.style.opacity = '1'; } }}
                             onMouseOut={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.75'; } }}
                           >
@@ -1156,10 +1187,10 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
                   {/* Priority Toggle */}
                   <div style={{ marginBottom: 18 }}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 8, display: "block" }}>{t('priority_label')}</label>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 8, display: "block" }}>{t('priority_label')}</label>
                     <button
                       onClick={() => updateGrievance(selected.id, { priority: selected.priority === "Urgent" ? null : "Urgent" })}
-                      style={{ padding: "8px 20px", borderRadius: 99, border: selected.priority === "Urgent" ? "2px solid #DC2626" : "1.5px solid #E5E7EB", background: selected.priority === "Urgent" ? "#EF4444" : "#fff", color: selected.priority === "Urgent" ? "#fff" : "#6B7280", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", animation: selected.priority === "Urgent" ? "urgentPulse 2s infinite" : "none" }}
+                      style={{ padding: "8px 20px", borderRadius: THEME.radius.full, border: selected.priority === "Urgent" ? `2px solid ${THEME.colors.danger}` : `1.5px solid ${THEME.colors.border}`, background: selected.priority === "Urgent" ? THEME.colors.danger : THEME.colors.surface, color: selected.priority === "Urgent" ? "#fff" : THEME.colors.textMuted, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", animation: selected.priority === "Urgent" ? "urgentPulse 2s infinite" : "none" }}
                     >
                       🔥 {selected.priority === "Urgent" ? t('unmark_urgent') : t('mark_urgent')}
                     </button>
@@ -1168,11 +1199,11 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   {/* Officer Assignment */}
                   {!t_officer && (
                     <div style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 6, display: "block" }}>{t('assign_officer')}</label>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6, display: "block" }}>{t('assign_officer')}</label>
                       <select
                         value={selected.assigned_officer_id || ""}
                         onChange={e => updateGrievance(selected.id, { assigned_officer_id: e.target.value || null, status: !e.target.value ? selected.status : (selected.status === "Open" ? "Assigned" : selected.status) })}
-                        style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontFamily: SANS, fontWeight: 700, fontSize: 13, background: "#FAFAFA" }}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, background: THEME.colors.background }}
                       >
                         <option value="">{t('select_officer')}</option>
                         {officers.map(o => <option key={o.id} value={o.id}>{o.name} ({o.phone})</option>)}
@@ -1223,10 +1254,10 @@ const ProfileSetupModal = ({ session, onComplete, notify, t }) => {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, backdropFilter: "blur(4px)" }}>
-      <div style={{ background: "#fff", padding: 32, borderRadius: 24, width: 380, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }}>
+      <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: 24, width: 380, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 40, marginBottom: 16, textAlign: "center" }}>👋</div>
         <h2 style={{ fontSize: 24, fontWeight: 800, textAlign: "center", marginBottom: 8 }}>{t('profile_setup_title')}</h2>
-        <p style={{ color: "#6B7280", textAlign: "center", marginBottom: 24, fontSize: 14 }}>Please tell us your name to complete your registration.</p>
+        <p style={{ color: THEME.colors.textMuted, textAlign: "center", marginBottom: 24, fontSize: 14 }}>Please tell us your name to complete your registration.</p>
         
         <Input 
           label={t('full_name_label')} 
@@ -1275,14 +1306,14 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(2px)" }}>
-      <div style={{ background: "#fff", padding: 32, borderRadius: 24, width: 360, boxShadow: "0 10px 40px rgba(0,0,0,0.1)" }}>
+      <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: 24, width: 360, boxShadow: THEME.shadow.md }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
           <h2 style={{ fontSize: 22, fontWeight: 800 }}>{isSignUp ? t('sign_up') : t('login')}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: THEME.colors.textMuted }}>✕</button>
         </div>
 
         <form onSubmit={handleAuth}>
-          <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
+          <p style={{ fontSize: 13, color: THEME.colors.textMuted, marginBottom: 20 }}>
             {isSignUp ? t('create_account') : t('login_to_account')}
           </p>
           <Input 
@@ -1311,7 +1342,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
           <button 
             type="button"
             onClick={() => setIsSignUp(!isSignUp)} 
-            style={{ background: "none", border: "none", color: "#047857", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+            style={{ background: "none", border: "none", color: THEME.colors.primary, fontWeight: 700, cursor: "pointer", fontSize: 13 }}
           >
             {isSignUp ? t('already_have_account') : t('dont_have_account')}
           </button>
