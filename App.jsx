@@ -5,21 +5,21 @@ import './i18n'; // initialize i18n
 
 const THEME = {
   colors: {
-    primary: "#0284c7", 
-    primaryHover: "#0369a1",
-    primaryLight: "#e0f2fe",
-    surface: "#ffffff",
-    background: "#f8fafc",
-    text: "#0f172a",
-    textMuted: "#64748b",
-    border: "#e2e8f0",
-    danger: "#dc2626",
-    dangerBg: "#fef2f2",
-    success: "#16a34a",
-    successBg: "#f0fdf4",
+    primary: "var(--color-primary)", 
+    primaryHover: "var(--color-primary-hover)",
+    primaryLight: "var(--color-primary-light)",
+    surface: "var(--color-surface)",
+    background: "var(--color-background)",
+    text: "var(--color-text)",
+    textMuted: "var(--color-text-muted)",
+    border: "var(--color-border)",
+    danger: "var(--color-danger)",
+    dangerBg: "var(--color-danger-bg)",
+    success: "var(--color-success)",
+    successBg: "var(--color-success-bg)",
     warning: "#d97706",
     warningBg: "#fffbeb",
-    dark: "#0f172a"
+    dark: "var(--color-surface)"
   },
   radius: {
     sm: "8px",
@@ -170,7 +170,7 @@ const Timeline = ({ status }) => {
   );
 };
 
-const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n }) => (
+const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => (
   <div style={{ fontFamily: THEME.font, minHeight: "100vh", background: THEME.colors.background, color: THEME.colors.text }}>
     <nav style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
@@ -192,6 +192,7 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
           <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? THEME.colors.primaryLight : "transparent", color: view === "profile" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('my_account')}</button>
         )}
         <div style={{ width: 1, height: 24, background: THEME.colors.border, margin: "0 4px" }} />
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} style={{ background: "transparent", color: THEME.colors.text, border: "none", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center" }}>{theme === 'light' ? '🌙' : '☀️'}</button>
         <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: THEME.colors.background, color: THEME.colors.text, border: `1px solid ${THEME.colors.border}`, padding: "8px 12px", borderRadius: THEME.radius.sm, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>{i18n.language.toUpperCase()}</button>
         {session ? (
           <Btn variant="outline" style={{ padding: "8px 16px", fontSize: 13, minHeight: 36, borderColor: THEME.colors.danger, color: THEME.colors.danger, borderWidth: 1 }} onClick={handleLogout}>{t('logout')}</Btn>
@@ -210,12 +211,17 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
 // ─── Sub-Views ────────────────────────────────────────────────────────────────
 
 const HomeView = ({ navigate, t }) => (
-  <div style={{ textAlign: "center", padding: "80px 20px" }}>
-    <h1 style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)", fontWeight: 900, color: THEME.colors.text, marginBottom: 24, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{t('welcome')}</h1>
-    <p style={{ fontSize: "clamp(1.125rem, 2vw, 1.25rem)", color: THEME.colors.textMuted, marginBottom: 48, maxWidth: 680, margin: "0 auto 48px", lineHeight: 1.6 }}>{t('welcome_subtitle')}</p>
-    <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
-      <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
-      <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
+  <div style={{ position: "relative", minHeight: "80vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "-32px -24px" }}>
+    <div style={{ position: "absolute", inset: 0, background: "url(https://images.cnippet.dev/image/upload/v1770400411/img_14002.jpg) bottom/cover no-repeat" }}>
+      <div style={{ position: "absolute", inset: 0, background: "var(--hero-overlay)" }} />
+    </div>
+    <div style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "80px 20px", color: THEME.colors.text }}>
+      <h1 style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)", fontWeight: 900, marginBottom: 24, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{t('welcome')}</h1>
+      <p style={{ fontSize: "clamp(1.125rem, 2vw, 1.25rem)", color: THEME.colors.textMuted, marginBottom: 48, maxWidth: 680, margin: "0 auto 48px", lineHeight: 1.6 }}>{t('welcome_subtitle')}</p>
+      <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+        <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
+        <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
+      </div>
     </div>
   </div>
 );
@@ -1356,6 +1362,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
 
 export default function App() {
   const { t, i18n } = useTranslation();
+  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
   const [view, setView] = useState("home");
   const [role, setRole] = useState(null);
   const [session, setSession] = useState(null);
@@ -1367,6 +1374,11 @@ export default function App() {
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   
   const navigate = (v) => { setView(v); };
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1425,7 +1437,7 @@ export default function App() {
     navigate("home");
   };
 
-  const shared = { t, notify, navigate, session, profile, role, i18n };
+  const shared = { t, notify, navigate, session, profile, role, i18n, theme, setTheme };
 
   const renderContent = () => {
     switch(view) {
