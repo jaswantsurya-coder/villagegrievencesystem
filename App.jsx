@@ -155,7 +155,7 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
           <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? "#047857" : "transparent", color: view === v ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
         ))}
         <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('govt_links')}</button>
-        {(role === "admin" || role === "officer") && (
+        {session && (
           <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? "linear-gradient(135deg,#047857,#059669)" : "#1F2937", color: view === "admin" ? "#fff" : "#10B981", border: view === "admin" ? "none" : "1px solid #374151", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 800, fontSize: 12 }}>🛡 {t('admin_nav')}</button>
         )}
         {session && (
@@ -1195,6 +1195,30 @@ export default function App() {
       case "admin":
         if (role === "admin") return <AdminView {...shared} />;
         if (role === "officer") return <AdminView {...shared} t_officer />;
+        if (session) return (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16, fontFamily: SANS }}>
+            <div style={{ fontSize: 48 }}>🔒</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>Access Restricted</div>
+            <div style={{ color: "#6B7280", fontSize: 14, textAlign: "center", maxWidth: 360 }}>
+              Your account role is <strong style={{ color: "#DC2626" }}>{role || "loading..."}</strong>.<br/>You need <strong>admin</strong> or <strong>officer</strong> role to access this dashboard.
+            </div>
+            <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: 10, padding: "16px 24px", maxWidth: 440, fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
+              <strong>To get admin access:</strong><br/>
+              1. Go to your Supabase Dashboard → SQL Editor<br/>
+              2. Run: <code style={{ background: "#FDE68A", padding: "2px 6px", borderRadius: 4 }}>UPDATE profiles SET role = 'admin' WHERE id = '{session?.user?.id}';</code><br/>
+              3. Click "Refresh Role" below
+            </div>
+            <button
+              onClick={async () => {
+                const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
+                if (data) { setRole(data.role); setProfile(data); if (data.role === "admin" || data.role === "officer") navigate("admin"); }
+              }}
+              style={{ background: "linear-gradient(135deg,#047857,#10B981)", color: "#fff", border: "none", padding: "12px 28px", borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: "pointer" }}
+            >
+              🔄 Refresh Role
+            </button>
+          </div>
+        );
         return <HomeView {...shared} />;
       default:       return <HomeView {...shared} />;
     }
