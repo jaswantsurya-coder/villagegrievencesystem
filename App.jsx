@@ -681,6 +681,211 @@ const AnalyticsTab = ({ list, t }) => {
   );
 };
 
+// ─── Staff / User Management Tab Component ──────────────────────────────────
+const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [updatingId, setUpdatingId] = useState(null);
+  const [policyError, setPolicyError] = useState(false);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      notify(error.message, "err");
+    } else {
+      setUsers(data || []);
+    }
+    setLoading(false);
+  };
+
+  const updateUserRole = async (userId, newRole) => {
+    if (userId === session?.user?.id) {
+      notify("For safety, you cannot modify your own role to prevent system lockout.", "err");
+      return;
+    }
+    
+    setUpdatingId(userId);
+    setPolicyError(false);
+    
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", userId);
+
+    if (error) {
+      console.error(error);
+      notify(error.message, "err");
+      if (error.message.includes("policy") || error.code === "42501") {
+        setPolicyError(true);
+      }
+    } else {
+      notify(t("role_changed") || "User role updated successfully! ✓");
+      fetchUsers();
+    }
+    setUpdatingId(null);
+  };
+
+  const filteredUsers = users.filter(u => {
+    const term = search.toLowerCase();
+    const nameMatch = u.name?.toLowerCase().includes(term);
+    const phoneMatch = u.phone?.toLowerCase().includes(term);
+    const roleMatch = u.role?.toLowerCase().includes(term);
+    return nameMatch || phoneMatch || roleMatch;
+  });
+
+  const getRoleBadge = (role) => {
+    const s = {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: 5,
+      padding: "4px 10px",
+      borderRadius: 99,
+      fontSize: 11,
+      fontWeight: 800,
+      textTransform: "uppercase",
+      fontFamily: SANS
+    };
+    if (role === "admin") {
+      return <span style={{ ...s, background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FCA5A5" }}>👑 Sarpanch (Admin)</span>;
+    }
+    if (role === "officer") {
+      return <span style={{ ...s, background: "#F0FDF4", color: "#16A34A", border: "1.5px solid #86EFAC" }}>🛡️ Officer (Staff)</span>;
+    }
+    return <span style={{ ...s, background: "#F3F4F6", color: "#4B5563", border: "1.5px solid #E5E7EB" }}>👥 Citizen</span>;
+  };
+
+  return (
+    <div style={{ fontFamily: SANS }}>
+      {policyError && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 20px", marginBottom: 20, color: "#991B1B", fontSize: 13, lineHeight: 1.6 }}>
+          <strong style={{ fontSize: 14 }}>⚠️ Row Level Security (RLS) Policy Missing</strong><br/>
+          To enable role updates from the UI in a secure, production-grade manner, please execute the <code style={{ background: "#FEE2E2", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>add-admin-policy.sql</code> script in your **Supabase SQL Editor**:
+          <pre style={{ background: "#FFF", padding: 12, borderRadius: 8, marginTop: 10, fontSize: 11, overflowX: "auto", border: "1.5px solid #FCA5A5", color: "#374151" }}>
+{`CREATE POLICY "Admins can update all profiles" 
+ON profiles FOR UPDATE TO authenticated 
+USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
+          </pre>
+        </div>
+      )}
+
+      {/* Control Bar */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        <input
+          type="text"
+          placeholder="Search by name, phone, or role..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{
+            padding: "10px 16px",
+            borderRadius: 10,
+            border: "1.5px solid #E5E7EB",
+            fontSize: 13,
+            fontWeight: 700,
+            color: "#374151",
+            flex: 1,
+            minWidth: 260,
+            outline: "none"
+          }}
+        />
+        <Btn variant="outline" onClick={fetchUsers} disabled={loading} style={{ padding: "10px 20px" }}>
+          {loading ? "Refreshing..." : "🔄 Reload Staff List"}
+        </Btn>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#6B7280" }}>
+          <div style={{ fontSize: 32, animation: "urgentPulse 2s infinite" }}>👥</div>
+          <p style={{ fontWeight: 800, marginTop: 12 }}>Loading Panchayat Staff and Citizens list...</p>
+        </div>
+      ) : filteredUsers.length === 0 ? (
+        <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, padding: 48, textAlign: "center" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#374151" }}>No users match your search</h3>
+          <p style={{ color: "#6B7280", margin: "6px 0 0", fontSize: 13 }}>Try checking spelling or trying another term.</p>
+        </div>
+      ) : (
+        <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#F9FAFB", borderBottom: "1.5px solid #E5E7EB" }}>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Full Name</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Phone Number</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Current Role</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Registered Date</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563", textAlign: "right" }}>Actions / Role Level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map(u => {
+                  const isSelf = u.id === session?.user?.id;
+                  const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
+                  return (
+                    <tr key={u.id} style={{ borderBottom: "1px solid #E5E7EB", background: isSelf ? "#F9FAFB" : "#fff", transition: "background 0.2s" }}>
+                      <td style={{ padding: "16px 20px", fontWeight: 800, color: "#111827" }}>
+                        {u.name || "Unnamed User"} {isSelf && <span style={{ color: "#047857", fontSize: 11, background: "#ECFDF5", padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>You</span>}
+                      </td>
+                      <td style={{ padding: "16px 20px", color: "#4B5563", fontWeight: 700 }}>{u.phone || "No phone linked"}</td>
+                      <td style={{ padding: "16px 20px" }}>{getRoleBadge(u.role)}</td>
+                      <td style={{ padding: "16px 20px", color: "#6B7280", fontWeight: 600 }}>{dateStr}</td>
+                      <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                        {isSelf ? (
+                          <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, padding: "8px 12px", background: "#F3F4F6", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            🔒 Lock Protection
+                          </span>
+                        ) : (
+                          <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                            {updatingId === u.id ? (
+                              <span style={{ fontSize: 12, color: "#047857", fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>Updating...</span>
+                            ) : (
+                              <>
+                                <select
+                                  value={u.role || "citizen"}
+                                  onChange={e => updateUserRole(u.id, e.target.value)}
+                                  disabled={updatingId !== null}
+                                  style={{
+                                    padding: "6px 10px",
+                                    borderRadius: 8,
+                                    border: "1.5px solid #D1D5DB",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    color: "#374151",
+                                    outline: "none",
+                                    cursor: "pointer",
+                                    background: "#FFF"
+                                  }}
+                                >
+                                  <option value="citizen">Citizen (Demote)</option>
+                                  <option value="officer">Officer (Staff)</option>
+                                  <option value="admin">Sarpanch (Admin)</option>
+                                </select>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Pulsing Urgent keyframe injector ────────────────────────────────────────
 
 const pulseStyleId = 'admin-pulse-style';
@@ -788,15 +993,20 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     <div>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: "#111827" }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
+          {!t_officer && profile?.role === "admin" && (
+            <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
+          )}
           <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
         </div>
       </div>
 
-      {tab === "analytics" ? (
+      {tab === "users" && !t_officer && profile?.role === "admin" ? (
+        <StaffManagementTab t={t} notify={notify} session={session} currentProfile={profile} />
+      ) : tab === "analytics" ? (
         <AnalyticsTab list={list} t={t} />
       ) : (
         <>
