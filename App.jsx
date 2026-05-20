@@ -756,12 +756,12 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       fontFamily: SANS
     };
     if (role === "admin") {
-      return <span style={{ ...s, background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FCA5A5" }}>👑 Sarpanch (Admin)</span>;
+      return <span style={{ ...s, background: "#FEF2F2", color: "#DC2626", border: "1.5px solid #FCA5A5" }}>{t('badge_admin')}</span>;
     }
     if (role === "officer") {
-      return <span style={{ ...s, background: "#F0FDF4", color: "#16A34A", border: "1.5px solid #86EFAC" }}>🛡️ Officer (Staff)</span>;
+      return <span style={{ ...s, background: "#F0FDF4", color: "#16A34A", border: "1.5px solid #86EFAC" }}>{t('badge_officer')}</span>;
     }
-    return <span style={{ ...s, background: "#F3F4F6", color: "#4B5563", border: "1.5px solid #E5E7EB" }}>👥 Citizen</span>;
+    return <span style={{ ...s, background: "#F3F4F6", color: "#4B5563", border: "1.5px solid #E5E7EB" }}>{t('badge_citizen')}</span>;
   };
 
   return (
@@ -782,7 +782,7 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <input
           type="text"
-          placeholder="Search by name, phone, or role..."
+          placeholder={t('search_users_placeholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{
@@ -798,20 +798,20 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
           }}
         />
         <Btn variant="outline" onClick={fetchUsers} disabled={loading} style={{ padding: "10px 20px" }}>
-          {loading ? "Refreshing..." : "🔄 Reload Staff List"}
+          {loading ? t('refreshing') : t('reload_staff_list')}
         </Btn>
       </div>
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: "#6B7280" }}>
           <div style={{ fontSize: 32, animation: "urgentPulse 2s infinite" }}>👥</div>
-          <p style={{ fontWeight: 800, marginTop: 12 }}>Loading Panchayat Staff and Citizens list...</p>
+          <p style={{ fontWeight: 800, marginTop: 12 }}>{t('loading_users')}</p>
         </div>
       ) : filteredUsers.length === 0 ? (
         <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, padding: 48, textAlign: "center" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#374151" }}>No users match your search</h3>
-          <p style={{ color: "#6B7280", margin: "6px 0 0", fontSize: 13 }}>Try checking spelling or trying another term.</p>
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: "#374151" }}>{t('no_users_match')}</h3>
+          <p style={{ color: "#6B7280", margin: "6px 0 0", fontSize: 13 }}>{t('try_checking_spelling')}</p>
         </div>
       ) : (
         <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 16, overflow: "hidden" }}>
@@ -819,11 +819,11 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#F9FAFB", borderBottom: "1.5px solid #E5E7EB" }}>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Full Name</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Phone Number</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Current Role</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>Registered Date</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563", textAlign: "right" }}>Actions / Role Level</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_full_name')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_phone_number')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_current_role')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563" }}>{t('col_registered_date')}</th>
+                  <th style={{ padding: "16px 20px", fontWeight: 800, color: "#4B5563", textAlign: "right" }}>{t('col_actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -833,20 +833,20 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
                   return (
                     <tr key={u.id} style={{ borderBottom: "1px solid #E5E7EB", background: isSelf ? "#F9FAFB" : "#fff", transition: "background 0.2s" }}>
                       <td style={{ padding: "16px 20px", fontWeight: 800, color: "#111827" }}>
-                        {u.name || "Unnamed User"} {isSelf && <span style={{ color: "#047857", fontSize: 11, background: "#ECFDF5", padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>You</span>}
+                        {u.name || t('unnamed_user')} {isSelf && <span style={{ color: "#047857", fontSize: 11, background: "#ECFDF5", padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
                       </td>
-                      <td style={{ padding: "16px 20px", color: "#4B5563", fontWeight: 700 }}>{u.phone || "No phone linked"}</td>
+                      <td style={{ padding: "16px 20px", color: "#4B5563", fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
                       <td style={{ padding: "16px 20px" }}>{getRoleBadge(u.role)}</td>
                       <td style={{ padding: "16px 20px", color: "#6B7280", fontWeight: 600 }}>{dateStr}</td>
                       <td style={{ padding: "16px 20px", textAlign: "right" }}>
                         {isSelf ? (
                           <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, padding: "8px 12px", background: "#F3F4F6", borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            🔒 Lock Protection
+                            {t('lock_protection')}
                           </span>
                         ) : (
                           <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
                             {updatingId === u.id ? (
-                              <span style={{ fontSize: 12, color: "#047857", fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>Updating...</span>
+                              <span style={{ fontSize: 12, color: "#047857", fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
                             ) : (
                               <>
                                 <select
@@ -865,9 +865,9 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
                                     background: "#FFF"
                                   }}
                                 >
-                                  <option value="citizen">Citizen (Demote)</option>
-                                  <option value="officer">Officer (Staff)</option>
-                                  <option value="admin">Sarpanch (Admin)</option>
+                                  <option value="citizen">{t('role_citizen')}</option>
+                                  <option value="officer">{t('role_officer')}</option>
+                                  <option value="admin">{t('role_admin')}</option>
                                 </select>
                               </>
                             )}
