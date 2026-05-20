@@ -155,6 +155,9 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
           <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? "#047857" : "transparent", color: view === v ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
         ))}
         <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? "#047857" : "transparent", color: view === "gov-links" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('govt_links')}</button>
+        {(role === "admin" || role === "officer") && (
+          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? "linear-gradient(135deg,#047857,#059669)" : "#1F2937", color: view === "admin" ? "#fff" : "#10B981", border: view === "admin" ? "none" : "1px solid #374151", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 800, fontSize: 12 }}>🛡 {t('admin_nav')}</button>
+        )}
         {session && (
           <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? "#047857" : "transparent", color: view === "profile" ? "#fff" : "#9CA3AF", border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>{t('my_account')}</button>
         )}
@@ -550,11 +553,159 @@ const GovLinksView = ({ t }) => {
   );
 };
 
+// ─── Photo Lightbox ──────────────────────────────────────────────────────────
+
+const PhotoLightbox = ({ photos, startIndex, onClose, t }) => {
+  const [idx, setIdx] = useState(startIndex || 0);
+  if (!photos || photos.length === 0) return null;
+  const photo = photos[idx];
+  const src = photo?.url || photo;
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, backdropFilter: "blur(6px)" }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
+        <img src={src} alt="" style={{ maxWidth: "90vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }} />
+        <div style={{ textAlign: "center", marginTop: 12, color: "#fff", fontFamily: SANS, fontWeight: 700, fontSize: 13 }}>
+          {t('photo_of', { current: idx + 1, total: photos.length })}
+        </div>
+        {photos.length > 1 && (
+          <>
+            <button onClick={() => setIdx((idx - 1 + photos.length) % photos.length)} style={{ position: "absolute", left: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>‹</button>
+            <button onClick={() => setIdx((idx + 1) % photos.length)} style={{ position: "absolute", right: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>›</button>
+          </>
+        )}
+        <button onClick={onClose} style={{ position: "absolute", top: -15, right: -15, background: "#EF4444", border: "none", color: "#fff", width: 32, height: 32, borderRadius: "50%", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(239,68,68,0.4)" }}>✕</button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Analytics Tab ───────────────────────────────────────────────────────────
+
+const AnalyticsTab = ({ list, t }) => {
+  const stats = useMemo(() => {
+    const total = list.length;
+    const byStatus = {};
+    STATUS_FLOW.forEach(s => { byStatus[s] = list.filter(c => c.status === s).length; });
+    const byCat = {};
+    CATEGORIES.forEach(c => { byCat[c.id] = list.filter(x => (x.category || "").includes(c.id)).length; });
+    const withPhotos = list.filter(c => c.photos && ((Array.isArray(c.photos) && c.photos.length > 0) || (typeof c.photos === 'string' && c.photos !== '[]'))).length;
+    const urgent = list.filter(c => c.priority === "Urgent").length;
+    return { total, byStatus, byCat, withPhotos, urgent };
+  }, [list]);
+
+  const maxCat = Math.max(1, ...Object.values(stats.byCat));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      {/* Summary Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+        {[
+          { label: t('total_complaints'), value: stats.total, icon: "📊", color: "#6366F1", bg: "#EEF2FF" },
+          { label: t('open_complaints'), value: stats.byStatus.Open || 0, icon: "🔴", color: "#DC2626", bg: "#FEF2F2" },
+          { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, icon: "🔵", color: "#2563EB", bg: "#EFF6FF" },
+          { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, icon: "🟢", color: "#16A34A", bg: "#F0FDF4" },
+          { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, icon: "⚠️", color: "#991B1B", bg: "#FEF2F2" },
+        ].map((card, i) => (
+          <div key={i} style={{ background: "#fff", borderRadius: 16, padding: "20px 18px", border: "1px solid #E5E7EB", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 24 }}>{card.icon}</span>
+              <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: 99, fontSize: 10, fontWeight: 800 }}>{stats.total > 0 ? Math.round((card.value / stats.total) * 100) : 0}%</span>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: card.color }}>{card.value}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6B7280", marginTop: 4 }}>{card.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Category Distribution */}
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB" }}>
+        <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📂 {t('category_distribution')}</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {CATEGORIES.map(c => {
+            const count = stats.byCat[c.id] || 0;
+            const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+            return (
+              <div key={c.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>{c.icon} {t(c.key)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#6B7280" }}>{count} ({pct}%)</span>
+                </div>
+                <div style={{ background: "#F3F4F6", borderRadius: 99, height: 10, overflow: "hidden" }}>
+                  <div style={{ width: `${(count / maxCat) * 100}%`, height: "100%", background: "linear-gradient(90deg, #047857, #10B981)", borderRadius: 99, transition: "width 0.6s ease" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Status Breakdown + Evidence */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB" }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📈 {t('status_breakdown')}</h3>
+          {STATUS_FLOW.map(s => {
+            const m = STATUS_META[s];
+            const count = stats.byStatus[s] || 0;
+            const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+            const sKey = `status_${s.toLowerCase().replace(" ", "_")}`;
+            return (
+              <div key={s} style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.icon} {t(sKey)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#6B7280" }}>{count} ({pct}%)</span>
+                </div>
+                <div style={{ background: m.bg, borderRadius: 99, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${pct}%`, height: "100%", background: m.color, borderRadius: 99, transition: "width 0.6s ease" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ background: "#fff", borderRadius: 16, padding: 24, border: "1px solid #E5E7EB", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
+          <div style={{ fontSize: 42, fontWeight: 900, color: "#047857" }}>{stats.withPhotos}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#6B7280", marginTop: 4, textAlign: "center" }}>{t('evidence_backed')}</div>
+          <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2, textAlign: "center" }}>{t('complaints_with_photos')}</div>
+          <div style={{ marginTop: 16, width: "100%", background: "#F3F4F6", borderRadius: 99, height: 10, overflow: "hidden" }}>
+            <div style={{ width: `${stats.total > 0 ? (stats.withPhotos / stats.total) * 100 : 0}%`, height: "100%", background: "linear-gradient(90deg, #047857, #10B981)", borderRadius: 99, transition: "width 0.6s ease" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", width: "100%", marginTop: 6 }}>
+            <span style={{ fontSize: 10, color: "#9CA3AF" }}>{stats.withPhotos} {t('with_evidence')}</span>
+            <span style={{ fontSize: 10, color: "#9CA3AF" }}>{stats.total - stats.withPhotos} {t('without_evidence')}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Pulsing Urgent keyframe injector ────────────────────────────────────────
+
+const pulseStyleId = 'admin-pulse-style';
+if (typeof document !== 'undefined' && !document.getElementById(pulseStyleId)) {
+  const style = document.createElement('style');
+  style.id = pulseStyleId;
+  style.textContent = `@keyframes urgentPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: 0.85; } }`;
+  document.head.appendChild(style);
+}
+
+// ─── Admin Dashboard ─────────────────────────────────────────────────────────
+
 const AdminView = ({ t, notify, session, profile, t_officer }) => {
   const [list, setList] = useState([]);
   const [selected, setSelected] = useState(null);
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("complaints"); // complaints | analytics
+  const [lightbox, setLightbox] = useState(null); // { photos, index }
+
+  // Filters
+  const [fStatus, setFStatus] = useState("");
+  const [fCategory, setFCategory] = useState("");
+  const [fSearch, setFSearch] = useState("");
+  const [fUrgent, setFUrgent] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -565,7 +716,6 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     setLoading(true);
     let query = supabase.from("complaints").select("*").order("created_at", { ascending: false });
     if (t_officer) query = query.eq("assigned_officer_id", session.user.id);
-    
     const { data } = await query;
     if (data) setList(data);
     setLoading(false);
@@ -580,94 +730,260 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     const { error } = await supabase.from("complaints").update(updates).eq("id", id);
     if (error) notify(error.message, "err");
     else {
-      notify("Updated successfully");
+      notify(t('change_status') + " ✓");
       fetchData();
-      if (selected?.id === id) setSelected({ ...selected, ...updates });
+      if (selected?.id === id) setSelected(prev => ({ ...prev, ...updates }));
     }
   };
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 400px" : "1fr", gap: 24, alignItems: "start" }}>
-      <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 26, fontWeight: 900 }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
-          <Btn variant="ghost" onClick={fetchData}>🔄 {t("refresh")}</Btn>
-        </div>
+  // Filtered list
+  const filtered = useMemo(() => {
+    return list.filter(it => {
+      if (fStatus && it.status !== fStatus) return false;
+      if (fCategory && !(it.category || "").includes(fCategory)) return false;
+      if (fUrgent && it.priority !== "Urgent") return false;
+      if (fSearch) {
+        const q = fSearch.toLowerCase();
+        if (!(it.title || "").toLowerCase().includes(q) && !(it.ticket_id || "").toLowerCase().includes(q) && !(it.location || "").toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [list, fStatus, fCategory, fSearch, fUrgent]);
 
-        {loading ? <div>{t("loading")}</div> : list.length === 0 ? (
-          <div style={{ background: "#fff", padding: 40, textAlign: "center", borderRadius: 16 }}>{t("no_complaints")}</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {list.map(it => (
-              <div key={it.id} onClick={() => setSelected(it)}
-                   style={{ background: "#fff", padding: 18, borderRadius: 16, border: `2px solid ${selected?.id === it.id ? "#047857" : "transparent"}`, cursor: "pointer", transition: "0.2s", boxShadow: "0 2px 10px rgba(0,0,0,0.02)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: "#6B7280", letterSpacing: 0.5 }}>#{it.id.slice(0, 8)} • {it.category}</div>
-                  <Badge status={it.status} priority={it.priority} />
-                </div>
-                <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 4 }}>{it.title}</h3>
-                <div style={{ fontSize: 13, color: "#4B5563" }}>📍 {it.location}</div>
-                <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 10 }}>{t("submitted_by")} {it.phone} on {new Date(it.created_at).toLocaleDateString()}</div>
-              </div>
-            ))}
-          </div>
-        )}
+  const getPhotos = (item) => {
+    if (!item?.photos) return [];
+    if (Array.isArray(item.photos)) return item.photos;
+    try { return JSON.parse(item.photos); } catch { return []; }
+  };
+
+  // ── Tab buttons ──
+  const tabStyle = (active) => ({
+    background: active ? "linear-gradient(135deg,#047857,#059669)" : "#F3F4F6",
+    color: active ? "#fff" : "#6B7280",
+    border: "none",
+    padding: "10px 24px",
+    borderRadius: 10,
+    fontFamily: SANS,
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: "pointer",
+    transition: "all 0.2s",
+  });
+
+  // ── Select helper for filter dropdowns ──
+  const selectStyle = {
+    padding: "8px 12px",
+    borderRadius: 8,
+    border: "1.5px solid #E5E7EB",
+    fontFamily: SANS,
+    fontWeight: 700,
+    fontSize: 12,
+    background: "#fff",
+    color: "#374151",
+    outline: "none",
+    minWidth: 130,
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0 }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
+          <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
+          <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
+        </div>
       </div>
 
-      {selected && (
-        <div style={{ background: "#fff", padding: 24, borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,0.1)", position: "sticky", top: 80 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 20 }}>
-            <h3 style={{ fontSize: 20, fontWeight: 900 }}>{t("complaint_title")}</h3>
-            <button onClick={() => setSelected(null)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer" }}>✕</button>
+      {tab === "analytics" ? (
+        <AnalyticsTab list={list} t={t} />
+      ) : (
+        <>
+          {/* Filter Bar */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, padding: "14px 18px", background: "#fff", borderRadius: 14, border: "1px solid #E5E7EB", alignItems: "center" }}>
+            <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={selectStyle}>
+              <option value="">{t('all_statuses')}</option>
+              {STATUS_FLOW.map(s => {
+                const sKey = `status_${s.toLowerCase().replace(" ", "_")}`;
+                return <option key={s} value={s}>{t(sKey)}</option>;
+              })}
+            </select>
+            <select value={fCategory} onChange={e => setFCategory(e.target.value)} style={selectStyle}>
+              <option value="">{t('all_categories')}</option>
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {t(c.key)}</option>)}
+            </select>
+            <input
+              type="text"
+              placeholder={t('filter_search')}
+              value={fSearch}
+              onChange={e => setFSearch(e.target.value)}
+              style={{ ...selectStyle, flex: 1, minWidth: 180 }}
+            />
+            <button
+              onClick={() => setFUrgent(!fUrgent)}
+              style={{ padding: "8px 16px", borderRadius: 99, border: fUrgent ? "2px solid #EF4444" : "1.5px solid #E5E7EB", background: fUrgent ? "#FEF2F2" : "#fff", color: fUrgent ? "#DC2626" : "#6B7280", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", animation: fUrgent ? "urgentPulse 2s infinite" : "none" }}
+            >
+              🔥 {t('filter_priority')}
+            </button>
+            <span style={{ fontSize: 11, color: "#9CA3AF", fontWeight: 700, marginLeft: 4 }}>{filtered.length} / {list.length}</span>
           </div>
 
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase" }}>{t("description")}</label>
-            <p style={{ fontSize: 14, color: "#374151", marginTop: 4, lineHeight: 1.5 }}>{selected.description}</p>
-            {selected.is_escalated && (
-              <div style={{ marginTop: 12, padding: 12, background: "#FEF2F2", border: "1px solid #FEE2E2", borderRadius: 10, color: "#991B1B", fontSize: 12, fontWeight: 700 }}>
-                {t("escalation_warning")}
+          {/* Content Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
+            {/* Complaint List */}
+            <div>
+              {loading ? <div style={{ padding: 40, textAlign: "center", color: "#6B7280", fontWeight: 700 }}>{t("loading")}</div> : filtered.length === 0 ? (
+                <div style={{ background: "#fff", padding: 50, textAlign: "center", borderRadius: 16, color: "#9CA3AF" }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+                  <div style={{ fontWeight: 700 }}>{t("no_complaints")}</div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {filtered.map(it => {
+                    const sm = STATUS_META[it.status] || STATUS_META.Open;
+                    const isActive = selected?.id === it.id;
+                    const photos = getPhotos(it);
+                    return (
+                      <div key={it.id} onClick={() => setSelected(it)}
+                           style={{ background: "#fff", padding: "16px 18px", borderRadius: 14, borderLeft: `5px solid ${sm.color}`, border: isActive ? `2px solid #047857` : undefined, borderLeftWidth: 5, borderLeftStyle: "solid", borderLeftColor: sm.color, cursor: "pointer", transition: "all 0.15s", boxShadow: isActive ? "0 4px 20px rgba(4,120,87,0.12)" : "0 1px 6px rgba(0,0,0,0.03)", position: "relative" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", letterSpacing: 0.5, textTransform: "uppercase" }}>#{(it.ticket_id || it.id.slice(0, 8))} • {it.category}</div>
+                          <Badge status={it.status} priority={it.priority} />
+                        </div>
+                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: "#111827" }}>{it.title}</h3>
+                        <div style={{ fontSize: 12, color: "#6B7280" }}>📍 {it.location}</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+                          <span style={{ fontSize: 11, color: "#9CA3AF" }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
+                          {photos.length > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: "#047857", background: "#F0FDF4", padding: "2px 8px", borderRadius: 99 }}>📷 {photos.length}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Detail Panel */}
+            {selected && (
+              <div style={{ background: "#fff", padding: 24, borderRadius: 20, boxShadow: "0 10px 40px rgba(0,0,0,0.08)", position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>{t("complaint_details")}</h3>
+                  <button onClick={() => setSelected(null)} style={{ background: "#F3F4F6", border: "none", width: 30, height: 30, borderRadius: 8, fontSize: 14, cursor: "pointer", fontWeight: 700, color: "#6B7280" }}>✕</button>
+                </div>
+
+                {/* Title & ID */}
+                <div style={{ padding: "14px 16px", background: "#FAFAFA", borderRadius: 12, marginBottom: 16, border: "1px solid #E5E7EB" }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", marginBottom: 4 }}>#{selected.ticket_id || selected.id.slice(0, 8)}</div>
+                  <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>{selected.title}</h4>
+                  <Badge status={selected.status} priority={selected.priority} />
+                </div>
+
+                {/* Description */}
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase" }}>{t("description")}</label>
+                  <p style={{ fontSize: 13, color: "#374151", marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.description}</p>
+                  {selected.is_escalated && (
+                    <div style={{ marginTop: 10, padding: 10, background: "#FEF2F2", border: "1px solid #FEE2E2", borderRadius: 8, color: "#991B1B", fontSize: 11, fontWeight: 700 }}>
+                      {t("escalation_warning")}
+                    </div>
+                  )}
+                </div>
+
+                {/* Photo Evidence Viewer */}
+                {(() => {
+                  const photos = getPhotos(selected);
+                  return (
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase", display: "block", marginBottom: 8 }}>{t("photo_viewer")} ({photos.length})</label>
+                      {photos.length === 0 ? (
+                        <div style={{ padding: 16, background: "#FAFAFA", borderRadius: 10, textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>{t('no_photos')}</div>
+                      ) : (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                          {photos.map((p, i) => (
+                            <div key={i} onClick={() => setLightbox({ photos, index: i })} style={{ cursor: "pointer", borderRadius: 8, overflow: "hidden", border: "2px solid #E5E7EB", transition: "border-color 0.2s", position: "relative" }}
+                                 onMouseOver={e => e.currentTarget.style.borderColor = '#047857'}
+                                 onMouseOut={e => e.currentTarget.style.borderColor = '#E5E7EB'}>
+                              <img src={p.url || p} style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} alt="" />
+                              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+                                   onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.3)'}
+                                   onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0)'}>
+                                <span style={{ color: "#fff", fontSize: 18, opacity: 0.9 }}>🔍</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Management Controls */}
+                <div style={{ borderTop: "1.5px solid #F3F4F6", paddingTop: 18 }}>
+                  <label style={{ fontSize: 11, fontWeight: 800, color: "#374151", display: "block", marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("management_controls")}</label>
+
+                  {/* Status Update Buttons */}
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 8, display: "block" }}>{t('change_status')}</label>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {STATUS_FLOW.map(s => {
+                        const m = STATUS_META[s];
+                        const isActive = selected.status === s;
+                        const sKey = `status_${s.toLowerCase().replace(" ", "_")}`;
+                        return (
+                          <button key={s}
+                            onClick={() => updateGrievance(selected.id, { status: s })}
+                            style={{ padding: "6px 14px", borderRadius: 99, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? (s === "Closed" ? "#fff" : (m.bg === m.color ? m.color : "#fff")) : m.color, fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", letterSpacing: 0.3, opacity: isActive ? 1 : 0.75 }}
+                            onMouseOver={e => { if (!isActive) { e.currentTarget.style.background = m.bg; e.currentTarget.style.opacity = '1'; } }}
+                            onMouseOut={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.75'; } }}
+                          >
+                            {m.icon} {t(sKey)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Priority Toggle */}
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 8, display: "block" }}>{t('priority_label')}</label>
+                    <button
+                      onClick={() => updateGrievance(selected.id, { priority: selected.priority === "Urgent" ? null : "Urgent" })}
+                      style={{ padding: "8px 20px", borderRadius: 99, border: selected.priority === "Urgent" ? "2px solid #DC2626" : "1.5px solid #E5E7EB", background: selected.priority === "Urgent" ? "#EF4444" : "#fff", color: selected.priority === "Urgent" ? "#fff" : "#6B7280", fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: SANS, transition: "all 0.2s", animation: selected.priority === "Urgent" ? "urgentPulse 2s infinite" : "none" }}
+                    >
+                      🔥 {selected.priority === "Urgent" ? t('unmark_urgent') : t('mark_urgent')}
+                    </button>
+                  </div>
+
+                  {/* Officer Assignment */}
+                  {!t_officer && (
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 10, fontWeight: 700, color: "#6B7280", marginBottom: 6, display: "block" }}>{t('assign_officer')}</label>
+                      <select
+                        value={selected.assigned_officer_id || ""}
+                        onChange={e => updateGrievance(selected.id, { assigned_officer_id: e.target.value || null, status: !e.target.value ? selected.status : (selected.status === "Open" ? "Assigned" : selected.status) })}
+                        style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontFamily: SANS, fontWeight: 700, fontSize: 13, background: "#FAFAFA" }}
+                      >
+                        <option value="">{t('select_officer')}</option>
+                        {officers.map(o => <option key={o.id} value={o.id}>{o.name} ({o.phone})</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
+        </>
+      )}
 
-          {selected.photos?.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ fontSize: 10, fontWeight: 800, color: "#9CA3AF", textTransform: "uppercase" }}>{t("evidence_photos")}</label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginTop: 8 }}>
-                {selected.photos.map((p, i) => (
-                  <img key={i} src={p.url} style={{ width: "100%", height: 100, objectFit: "cover", borderRadius: 8, border: "1px solid #E5E7EB" }} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div style={{ borderTop: "1.5px solid #F3F4F6", paddingTop: 20 }}>
-            <label style={{ fontSize: 11, fontWeight: 800, color: "#374151", display: "block", marginBottom: 12 }}>{t("management_controls")}</label>
-            
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 10, color: "#6B7280" }}>Change Status</label>
-              <select value={selected.status} onChange={e => updateGrievance(selected.id, { status: e.target.value })}
-                      style={{ width: "100%", marginTop: 6, padding: "10px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontFamily: SANS, fontWeight: 700 }}>
-                {STATUS_FLOW.map(s => {
-                  const sKey = `status_${s.toLowerCase().replace(" ", "_")}`;
-                  return <option key={s} value={s}>{t(sKey)}</option>;
-                })}
-              </select>
-            </div>
-
-            {!t_officer && (
-              <div>
-                <label style={{ fontSize: 10, color: "#6B7280" }}>Assign Officer</label>
-                <select value={selected.assigned_officer_id || ""} onChange={e => updateGrievance(selected.id, { assigned_officer_id: e.target.value, status: selected.status === "Open" ? "Assigned" : selected.status })}
-                        style={{ width: "100%", marginTop: 6, padding: "10px", borderRadius: 10, border: "1.5px solid #E5E7EB", fontFamily: SANS, fontWeight: 700 }}>
-                  <option value="">-- Select Officer --</option>
-                  {officers.map(o => <option key={o.id} value={o.id}>{o.name} ({o.phone})</option>)}
-                </select>
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Photo Lightbox */}
+      {lightbox && (
+        <PhotoLightbox
+          photos={lightbox.photos}
+          startIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+          t={t}
+        />
       )}
     </div>
   );
@@ -854,6 +1170,7 @@ export default function App() {
         setProfile(data); 
         setRole(data.role); 
         if (!data.name) setShowProfileSetup(true);
+        if (data.role === "admin" || data.role === "officer") navigate("admin");
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -870,15 +1187,15 @@ export default function App() {
   const shared = { t, notify, navigate, session, profile, role, i18n };
 
   const renderContent = () => {
-    // RBAC: Redirect to appropriate dashboard
-    if (role === "admin") return <AdminView {...shared} />;
-    if (role === "officer") return <AdminView {...shared} t_officer />; 
-    
     switch(view) {
       case "submit": return <SubmitView {...shared} />;
       case "track":  return <TrackView {...shared} />;
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
+      case "admin":
+        if (role === "admin") return <AdminView {...shared} />;
+        if (role === "officer") return <AdminView {...shared} t_officer />;
+        return <HomeView {...shared} />;
       default:       return <HomeView {...shared} />;
     }
   };
