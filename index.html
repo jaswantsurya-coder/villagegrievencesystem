@@ -3,7 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Village Grievance System</title>
+    <title>Digital Gram Panchayat — Village Grievance System</title>
+    <meta name="description" content="Secure & Transparent Village Grievance Redressal System for Telangana Gram Panchayats. Submit, track, and resolve community issues." />
+    <meta name="theme-color" content="#0284c7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GramPanchayat" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -48,10 +54,56 @@
         color: var(--color-text);
         transition: background-color 0.3s ease, color 0.3s ease;
       }
+
+      /* PWA Install Banner */
+      .pwa-install-banner {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #0284c7, #0369a1);
+        color: #fff;
+        padding: 14px 28px;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(2, 132, 199, 0.3);
+        z-index: 9999;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        backdrop-filter: blur(10px);
+        animation: slideUp 0.5s ease;
+      }
+
+      @keyframes slideUp {
+        from { transform: translateX(-50%) translateY(100px); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+      }
+
+      /* Offline indicator */
+      .offline-indicator {
+        position: fixed;
+        top: 68px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #f59e0b;
+        color: #78350f;
+        padding: 8px 24px;
+        border-radius: 0 0 12px 12px;
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        font-size: 12px;
+        z-index: 9998;
+        display: none;
+        box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
+    <div id="offline-indicator" class="offline-indicator">📡 You are offline — drafts will sync when connected</div>
     <script type="module" src="/main.jsx"></script>
   </body>
 </html>

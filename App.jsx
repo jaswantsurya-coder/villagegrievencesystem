@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { supabase } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 const THEME = {
   colors: {
@@ -57,6 +58,60 @@ const STATUS_META = {
   Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥" },
 };
 
+const SPEECH_LANGS = [
+  { code: "en-US", label: "English", flag: "🇬🇧" },
+  { code: "hi-IN", label: "हिन्दी", flag: "🇮🇳" },
+  { code: "te-IN", label: "తెలుగు", flag: "🇮🇳" },
+];
+
+// ─── Offline Queue Helper ─────────────────────────────────────────────────────
+
+const OFFLINE_KEY = "offline_complaints";
+
+const getOfflineQueue = () => {
+  try {
+    return JSON.parse(localStorage.getItem(OFFLINE_KEY) || "[]");
+  } catch { return []; }
+};
+
+const addToOfflineQueue = (complaint) => {
+  const queue = getOfflineQueue();
+  queue.push({ ...complaint, _offlineId: Date.now() });
+  localStorage.setItem(OFFLINE_KEY, JSON.stringify(queue));
+  window.dispatchEvent(new Event("offline-queue-updated"));
+};
+
+const clearOfflineQueue = () => {
+  localStorage.removeItem(OFFLINE_KEY);
+  window.dispatchEvent(new Event("offline-queue-updated"));
+};
+
+const removeFromOfflineQueue = (offlineId) => {
+  const queue = getOfflineQueue();
+  const updated = queue.filter(item => item._offlineId !== offlineId);
+  localStorage.setItem(OFFLINE_KEY, JSON.stringify(updated));
+  window.dispatchEvent(new Event("offline-queue-updated"));
+};
+
+// ─── Push Notification Helper ─────────────────────────────────────────────────
+
+const requestPushPermission = async () => {
+  if (!("Notification" in window)) return "unsupported";
+  if (Notification.permission === "granted") return "granted";
+  if (Notification.permission === "denied") return "denied";
+  return await Notification.requestPermission();
+};
+
+const showBrowserNotification = (title, body) => {
+  if (Notification.permission === "granted") {
+    new Notification(title, {
+      body,
+      icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏘</text></svg>",
+      vibrate: [200, 100, 200],
+    });
+  }
+};
+
 // ─── Helper Components ────────────────────────────────────────────────────────
 
 const Badge = ({ status, priority }) => {
@@ -107,6 +162,124 @@ const Btn = ({ children, variant = "primary", full, style: s, ...props }) => {
     <button style={{ ...V[variant], padding: "10px 20px", borderRadius: THEME.radius.sm, fontFamily: THEME.font, fontWeight: 600, fontSize: 14, cursor: "pointer", width: full ? "100%" : undefined, transition: "all 0.2s", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, ...s }} {...props}>
       {children}
     </button>
+  );
+};
+
+// ─── Star Rating Component ────────────────────────────────────────────────────
+
+const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
+  const [hover, setHover] = useState(0);
+  return (
+    <div style={{ display: "flex", gap: 4, cursor: readonly ? "default" : "pointer" }}>
+      {[1, 2, 3, 4, 5].map(star => (
+        <span
+          key={star}
+          onClick={() => !readonly && onRate && onRate(star)}
+          onMouseEnter={() => !readonly && setHover(star)}
+          onMouseLeave={() => !readonly && setHover(0)}
+          style={{
+            fontSize: size,
+            color: star <= (hover || rating) ? "#f59e0b" : "#d1d5db",
+            transition: "all 0.15s",
+            transform: star <= (hover || rating) ? "scale(1.15)" : "scale(1)",
+            filter: star <= (hover || rating) ? "drop-shadow(0 2px 4px rgba(245,158,11,0.4))" : "none",
+          }}
+        >★</span>
+      ))}
+    </div>
+  );
+};
+
+// ─── Voice Input Button Component ─────────────────────────────────────────────
+
+const VoiceInputBtn = ({ onTranscript, lang = "en-US" }) => {
+  const { t } = useTranslation();
+  const [speechLang, setSpeechLang] = useState(lang);
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    browserSupportsSpeechRecognition
+  } = useSpeechRecognition();
+
+  useEffect(() => {
+    if (transcript) {
+      onTranscript(transcript);
+    }
+  }, [transcript]);
+
+  if (!browserSupportsSpeechRecognition) {
+    return <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('voice_not_supported')}</span>;
+  }
+
+  const toggleListening = () => {
+    if (listening) {
+      SpeechRecognition.stopListening();
+    } else {
+      resetTranscript();
+      SpeechRecognition.startListening({ continuous: true, language: speechLang });
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+      <button
+        type="button"
+        onClick={toggleListening}
+        style={{
+          background: listening ? THEME.colors.danger : "linear-gradient(135deg, #0284c7, #0369a1)",
+          color: "#fff",
+          border: "none",
+          width: 44,
+          height: 44,
+          borderRadius: "50%",
+          fontSize: 20,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.3s",
+          animation: listening ? "urgentPulse 1.5s infinite" : "none",
+          boxShadow: listening ? "0 0 20px rgba(220,38,38,0.4)" : "0 4px 12px rgba(2,132,199,0.3)",
+        }}
+        title={listening ? t('stop_voice') : t('start_voice')}
+      >
+        {listening ? "⏹" : "🎤"}
+      </button>
+      <select
+        value={speechLang}
+        onChange={e => setSpeechLang(e.target.value)}
+        style={{
+          padding: "8px 12px",
+          borderRadius: THEME.radius.sm,
+          border: `1.5px solid ${THEME.colors.border}`,
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: THEME.font,
+          background: THEME.colors.surface,
+          color: THEME.colors.text,
+          outline: "none",
+          cursor: "pointer",
+        }}
+      >
+        {SPEECH_LANGS.map(l => (
+          <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+        ))}
+      </select>
+      {listening && (
+        <span style={{
+          fontSize: 12,
+          fontWeight: 700,
+          color: THEME.colors.danger,
+          animation: "urgentPulse 1.5s infinite",
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+        }}>
+          🔴 {t('listening')}
+        </span>
+      )}
+    </div>
   );
 };
 
@@ -180,9 +353,9 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
           <div style={{ color: THEME.colors.textMuted, fontSize: 11, fontWeight: 500 }}>{t('subtitle')}</div>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        {["home", "submit", "track"].map(v => (
-          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : 'home')}</button>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        {["home", "submit", "track", "gallery"].map(v => (
+          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : v === 'gallery' ? 'public_gallery' : 'home')}</button>
         ))}
         <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? THEME.colors.primaryLight : "transparent", color: view === "gov-links" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('govt_links')}</button>
         {session && (
@@ -211,7 +384,7 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
 // ─── Sub-Views ────────────────────────────────────────────────────────────────
 
 const HomeView = ({ navigate, t }) => (
-  <div style={{ position: "relative", minHeight: "80vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "-32px -24px" }}>
+  <div style={{ position: "relative", minHeight: "80vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "-32px 0", width: "100vw", marginLeft: "calc(50% - 50vw)" }}>
     <div style={{ position: "absolute", inset: 0, background: "url(https://images.cnippet.dev/image/upload/v1770400411/img_14002.jpg) bottom/cover no-repeat" }}>
       <div style={{ position: "absolute", inset: 0, background: "var(--hero-overlay)" }} />
     </div>
@@ -221,12 +394,13 @@ const HomeView = ({ navigate, t }) => (
       <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
         <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
+        <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.success, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("gallery")}>🌟 {t('public_gallery')}</Btn>
       </div>
     </div>
   </div>
 );
 
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents, CircleMarker, Popup } from "react-leaflet";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 
@@ -309,6 +483,8 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
   );
 };
 
+// ─── Submit View (with Voice Input + Offline Queue) ──────────────────────────
+
 const SubmitView = ({ t, notify, navigate, session }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -340,36 +516,50 @@ const SubmitView = ({ t, notify, navigate, session }) => {
     });
   };
 
+  const handleVoiceTranscript = (text) => {
+    setForm(prev => ({ ...prev, description: text }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!session) return notify(t("login_to_track"), "err");
     if (form.categories.length === 0) return notify("Please select at least one category", "err");
     
     setLoading(true);
-    try {
-      const ticketId = generateTicketId();
-      
-      // Append extra questions to description safely
-      const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
-      
-      const { error } = await supabase.from("complaints").insert([{
-        citizen_id: session.user.id,
-        ticket_id: ticketId,
-        title: form.title,
-        description: fullDescription,
-        category: form.categories.join(", "),
-        location: form.location,
-        latitude: form.latitude,
-        longitude: form.longitude,
-        status: "Open"
-      }]);
+    const ticketId = generateTicketId();
+    const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
+    
+    const complaint = {
+      citizen_id: session.user.id,
+      ticket_id: ticketId,
+      title: form.title,
+      description: fullDescription,
+      category: form.categories.join(", "),
+      location: form.location,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      status: "Open"
+    };
 
+    // Check if offline — save to local queue
+    if (!navigator.onLine) {
+      addToOfflineQueue(complaint);
+      notify(`📡 ${t('saved_offline')} Ticket: ${ticketId}`);
+      navigate("track");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("complaints").insert([complaint]);
       if (error) throw error;
       notify(`${t("success_submit")} Ticket: ${ticketId}`);
       navigate("track");
     } catch (err) { 
-      console.error("Submission error:", err);
-      notify(err.message, "err"); 
+      // If network fails mid-request, save offline
+      addToOfflineQueue(complaint);
+      notify(`📡 ${t('saved_offline')} Ticket: ${ticketId}`);
+      navigate("track");
     }
     setLoading(false);
   };
@@ -380,6 +570,13 @@ const SubmitView = ({ t, notify, navigate, session }) => {
         <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>{t('register_grievance')}</h2>
         <span style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, background: THEME.colors.background, padding: "6px 14px", borderRadius: THEME.radius.full }}>Step {step} of 2</span>
       </div>
+
+      {/* Offline draft indicator */}
+      {!navigator.onLine && (
+        <div style={{ background: THEME.colors.warningBg, border: `1px solid #fcd34d`, borderRadius: THEME.radius.md, padding: "12px 18px", marginBottom: 20, color: "#92400e", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
+          📡 {t('offline_mode_msg')}
+        </div>
+      )}
       
       {step === 1 ? (
         <div>
@@ -408,7 +605,18 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           </div>
           
           <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
-          <Textarea label={t("description")} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required />
+          
+          {/* Voice Input */}
+          <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} — <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
+          <VoiceInputBtn onTranscript={handleVoiceTranscript} lang={
+            (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
+          } />
+          <textarea
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+            required
+            style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, color: THEME.colors.text, resize: "vertical", minHeight: 110, transition: "border-color 0.2s", marginBottom: 18 }}
+          />
           
           {/* Extra Questions */}
           <div style={{ background: THEME.colors.background, padding: 20, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, marginBottom: 24 }}>
@@ -450,12 +658,52 @@ const SubmitView = ({ t, notify, navigate, session }) => {
   );
 };
 
+// ─── Track View (with Ratings + Upvoting) ────────────────────────────────────
+
 const TrackView = ({ t, notify, session }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [ratings, setRatings] = useState({});
+  const [upvoteCounts, setUpvoteCounts] = useState({});
+  const [userUpvotes, setUserUpvotes] = useState({});
+  const [ratingForm, setRatingForm] = useState({});
+  const [offlineDrafts, setOfflineDrafts] = useState(getOfflineQueue());
 
   useEffect(() => {
-    if (session) fetchGrievances();
+    const handleUpdate = () => {
+      setOfflineDrafts(getOfflineQueue());
+    };
+    const handleSyncSuccess = () => {
+      fetchGrievances();
+      fetchUpvotes();
+    };
+    window.addEventListener("offline-queue-updated", handleUpdate);
+    window.addEventListener("offline-queue-synced", handleSyncSuccess);
+    return () => {
+      window.removeEventListener("offline-queue-updated", handleUpdate);
+      window.removeEventListener("offline-queue-synced", handleSyncSuccess);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchGrievances();
+      fetchRatings();
+      fetchUpvotes();
+    }
+  }, [session]);
+
+  // Supabase Realtime subscription for citizen's complaints
+  useEffect(() => {
+    if (!session) return;
+    const channel = supabase
+      .channel('citizen-complaints-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
+        fetchGrievances();
+        fetchUpvotes();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [session]);
 
   const fetchGrievances = async () => {
@@ -463,6 +711,60 @@ const TrackView = ({ t, notify, session }) => {
     const { data, error } = await supabase.from("complaints").select("*").order("created_at", { ascending: false });
     if (!error) setItems(data);
     setLoading(false);
+  };
+
+  const fetchRatings = async () => {
+    const { data } = await supabase.from("complaint_ratings").select("*");
+    if (data) {
+      const map = {};
+      data.forEach(r => { map[r.complaint_id] = r; });
+      setRatings(map);
+    }
+  };
+
+  const fetchUpvotes = async () => {
+    const { data } = await supabase.from("complaint_upvotes").select("*");
+    if (data) {
+      const counts = {};
+      const userVotes = {};
+      data.forEach(u => {
+        counts[u.complaint_id] = (counts[u.complaint_id] || 0) + 1;
+        if (session && u.user_id === session.user.id) userVotes[u.complaint_id] = true;
+      });
+      setUpvoteCounts(counts);
+      setUserUpvotes(userVotes);
+    }
+  };
+
+  const handleUpvote = async (complaintId) => {
+    if (!session) return notify(t("login_to_track"), "err");
+    if (userUpvotes[complaintId]) {
+      // Remove upvote
+      await supabase.from("complaint_upvotes").delete().eq("complaint_id", complaintId).eq("user_id", session.user.id);
+    } else {
+      // Add upvote
+      await supabase.from("complaint_upvotes").insert([{ complaint_id: complaintId, user_id: session.user.id }]);
+    }
+    fetchUpvotes();
+  };
+
+  const submitRating = async (complaintId) => {
+    const form = ratingForm[complaintId];
+    if (!form || !form.rating) return notify("Please select a star rating", "err");
+    
+    const { error } = await supabase.from("complaint_ratings").upsert([{
+      complaint_id: complaintId,
+      citizen_id: session.user.id,
+      rating: form.rating,
+      feedback: form.feedback || "",
+    }], { onConflict: 'complaint_id,citizen_id' });
+
+    if (error) {
+      notify(error.message, "err");
+    } else {
+      notify(t('rating_submitted'));
+      fetchRatings();
+    }
   };
 
   const deleteGrievance = async (id) => {
@@ -477,29 +779,257 @@ const TrackView = ({ t, notify, session }) => {
     }
   };
 
+  // Show offline drafts
+
   if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
   return (
     <div>
       <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 32, letterSpacing: "-0.01em" }}>{t("your_grievances")}</h2>
-      {loading ? <div>{t("loading")}</div> : items.length === 0 ? <div style={{ textAlign: "center", padding: 40, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>{t("no_complaints")}</div> : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          {items.map(it => (
-            <div key={it.id} style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 13, color: THEME.colors.textMuted, fontWeight: 700, marginBottom: 4 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
-                  <h3 style={{ fontSize: 20, fontWeight: 800 }}>{it.title}</h3>
-                </div>
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-                  <Badge status={it.status} priority={it.priority} />
-                  <button onClick={() => deleteGrievance(it.id)} style={{ background: THEME.colors.dangerBg, border: `1px solid ${THEME.colors.danger}`, color: THEME.colors.danger, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Delete grievance">Delete</button>
-                </div>
-              </div>
-              <p style={{ fontSize: 15, color: THEME.colors.textMuted, marginBottom: 24, lineHeight: 1.5 }}>{it.description}</p>
-              <Timeline status={it.status} />
+
+      {/* Offline Drafts */}
+      {offlineDrafts.length > 0 && (
+        <div style={{ background: THEME.colors.warningBg, border: `2px solid #fcd34d`, borderRadius: THEME.radius.md, padding: 20, marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 24 }}>📡</span>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: "#92400e" }}>{t('offline_drafts')} ({offlineDrafts.length})</h3>
+            </div>
+            <button 
+              onClick={() => {
+                if (!navigator.onLine) {
+                  notify("⚠️ You are still offline. Please connect to the internet.", "err");
+                  return;
+                }
+                notify("🔄 Syncing offline drafts...");
+                window.dispatchEvent(new Event("manual-sync-trigger"));
+              }}
+              style={{
+                background: "#d97706",
+                color: "#fff",
+                border: "none",
+                padding: "6px 14px",
+                borderRadius: THEME.radius.sm,
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "background 0.2s"
+              }}
+            >
+              🔄 Sync Now
+            </button>
+          </div>
+          <p style={{ fontSize: 13, color: "#92400e", margin: "0 0 12px", lineHeight: 1.5 }}>{t('offline_sync_msg')}</p>
+          {offlineDrafts.map((d, i) => (
+            <div key={i} style={{ background: "#fff", padding: 12, borderRadius: THEME.radius.sm, marginBottom: 8, border: "1px solid #fcd34d" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>#{d.ticket_id}</span>
+              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600 }}>{d.title}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {loading ? <div>{t("loading")}</div> : items.length === 0 ? <div style={{ textAlign: "center", padding: 40, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>{t("no_complaints")}</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {items.map(it => {
+            const existingRating = ratings[it.id];
+            const rf = ratingForm[it.id] || {};
+            return (
+              <div key={it.id} style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: THEME.colors.textMuted, fontWeight: 700, marginBottom: 4 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
+                    <h3 style={{ fontSize: 20, fontWeight: 800 }}>{it.title}</h3>
+                  </div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <Badge status={it.status} priority={it.priority} />
+                    <button onClick={() => deleteGrievance(it.id)} style={{ background: THEME.colors.dangerBg, border: `1px solid ${THEME.colors.danger}`, color: THEME.colors.danger, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Delete grievance">Delete</button>
+                  </div>
+                </div>
+                <p style={{ fontSize: 15, color: THEME.colors.textMuted, marginBottom: 16, lineHeight: 1.5 }}>{it.description}</p>
+                
+                {/* Upvote Button */}
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+                  <button
+                    onClick={() => handleUpvote(it.id)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "8px 16px",
+                      borderRadius: THEME.radius.full,
+                      border: userUpvotes[it.id] ? `2px solid ${THEME.colors.danger}` : `1.5px solid ${THEME.colors.border}`,
+                      background: userUpvotes[it.id] ? THEME.colors.dangerBg : THEME.colors.surface,
+                      color: userUpvotes[it.id] ? THEME.colors.danger : THEME.colors.textMuted,
+                      fontWeight: 800,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      fontFamily: THEME.font,
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    🔥 {upvoteCounts[it.id] || 0} {t('upvotes')}
+                  </button>
+                  <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('upvote_help')}</span>
+                </div>
+
+                <Timeline status={it.status} />
+
+                {/* Rating Section for Resolved/Closed complaints */}
+                {(it.status === "Resolved" || it.status === "Closed") && it.citizen_id === session?.user?.id && (
+                  <div style={{ marginTop: 20, padding: 20, background: THEME.colors.successBg, borderRadius: THEME.radius.md, border: `1px solid #86efac` }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 800, margin: "0 0 12px", color: THEME.colors.success }}>
+                      {existingRating ? `✅ ${t('your_rating')}` : `⭐ ${t('rate_experience')}`}
+                    </h4>
+                    {existingRating ? (
+                      <div>
+                        <StarRating rating={existingRating.rating} readonly size={24} />
+                        {existingRating.feedback && <p style={{ fontSize: 13, color: THEME.colors.text, marginTop: 8, fontStyle: "italic" }}>"{existingRating.feedback}"</p>}
+                      </div>
+                    ) : (
+                      <div>
+                        <StarRating
+                          rating={rf.rating || 0}
+                          onRate={(r) => setRatingForm(prev => ({ ...prev, [it.id]: { ...rf, rating: r } }))}
+                          size={32}
+                        />
+                        <textarea
+                          placeholder={t('rating_feedback_placeholder')}
+                          value={rf.feedback || ""}
+                          onChange={e => setRatingForm(prev => ({ ...prev, [it.id]: { ...rf, feedback: e.target.value } }))}
+                          style={{ width: "100%", padding: 12, borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontSize: 13, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, resize: "vertical", minHeight: 60, marginTop: 12 }}
+                        />
+                        <Btn onClick={() => submitRating(it.id)} style={{ marginTop: 12, padding: "8px 20px", fontSize: 13 }}>
+                          ⭐ {t('submit_rating')}
+                        </Btn>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Public Gallery (Resolved Issues Feed) ───────────────────────────────────
+
+const GalleryView = ({ t, session }) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filterCat, setFilterCat] = useState("");
+  const [search, setSearch] = useState("");
+  const [ratings, setRatings] = useState({});
+
+  useEffect(() => {
+    fetchResolved();
+    fetchRatings();
+  }, []);
+
+  const fetchResolved = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("complaints")
+      .select("*")
+      .in("status", ["Resolved", "Closed"])
+      .order("updated_at", { ascending: false });
+    if (data) setItems(data);
+    setLoading(false);
+  };
+
+  const fetchRatings = async () => {
+    const { data } = await supabase.from("complaint_ratings").select("*");
+    if (data) {
+      const map = {};
+      data.forEach(r => { map[r.complaint_id] = r; });
+      setRatings(map);
+    }
+  };
+
+  const filtered = items.filter(it => {
+    if (filterCat && !(it.category || "").includes(filterCat)) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!(it.title || "").toLowerCase().includes(q) && !(it.location || "").toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+
+  const getPhotos = (item) => {
+    if (!item?.photos) return [];
+    if (Array.isArray(item.photos)) return item.photos;
+    try { return JSON.parse(item.photos); } catch { return []; }
+  };
+
+  return (
+    <div>
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 8 }}>🌟 {t('public_gallery')}</h2>
+        <p style={{ color: THEME.colors.textMuted, fontSize: 15, margin: 0 }}>{t('gallery_subtitle')}</p>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, background: THEME.colors.surface, color: THEME.colors.text, outline: "none" }}>
+          <option value="">{t('all_categories')}</option>
+          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {t(c.key)}</option>)}
+        </select>
+        <input
+          type="text"
+          placeholder={t('filter_search')}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, flex: 1, minWidth: 200, background: THEME.colors.surface, color: THEME.colors.text, outline: "none" }}
+        />
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: THEME.colors.textMuted }}>{t('loading')}</div> : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+          <h3 style={{ fontWeight: 800, color: THEME.colors.text }}>{t('no_resolved_yet')}</h3>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+          {filtered.map(it => {
+            const photos = getPhotos(it);
+            const r = ratings[it.id];
+            const sm = STATUS_META[it.status] || STATUS_META.Resolved;
+            const resolvedDate = it.updated_at ? new Date(it.updated_at).toLocaleDateString() : "";
+            const createdDate = it.created_at ? new Date(it.created_at).toLocaleDateString() : "";
+            // Calc resolution time
+            const resolutionDays = it.created_at && it.updated_at ? Math.max(1, Math.ceil((new Date(it.updated_at) - new Date(it.created_at)) / (1000 * 60 * 60 * 24))) : null;
+
+            return (
+              <div key={it.id} style={{ background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, overflow: "hidden", boxShadow: THEME.shadow.sm, transition: "all 0.2s" }}>
+                {/* Photo banner */}
+                {photos.length > 0 && (
+                  <div style={{ height: 160, overflow: "hidden", position: "relative" }}>
+                    <img src={photos[0]?.url || photos[0]} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                    <div style={{ position: "absolute", top: 12, right: 12, background: sm.color, color: "#fff", padding: "4px 12px", borderRadius: THEME.radius.full, fontSize: 11, fontWeight: 800 }}>
+                      {sm.icon} {t(`status_${it.status.toLowerCase().replace(" ", "_")}`)}
+                    </div>
+                  </div>
+                )}
+                <div style={{ padding: 20 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 6 }}>{it.category} • 📍 {it.location}</div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 8px", color: THEME.colors.text }}>{it.title}</h3>
+                  
+                  <div style={{ display: "flex", gap: 16, fontSize: 11, color: THEME.colors.textMuted, marginBottom: 12 }}>
+                    <span>📅 {createdDate}</span>
+                    {resolutionDays && <span>⏱ {resolutionDays} {t('days_to_resolve')}</span>}
+                  </div>
+
+                  {r && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+                      <StarRating rating={r.rating} readonly size={16} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted }}>({r.rating}/5)</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -509,6 +1039,7 @@ const TrackView = ({ t, notify, session }) => {
 const ProfileView = ({ t, session, profile, notify }) => {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [pushStatus, setPushStatus] = useState(Notification?.permission || "default");
 
   useEffect(() => {
     if (session) fetchStats();
@@ -518,6 +1049,16 @@ const ProfileView = ({ t, session, profile, notify }) => {
     const { count, error } = await supabase.from("complaints").select("*", { count: "exact", head: true }).eq("citizen_id", session.user.id);
     if (!error) setCount(count || 0);
     setLoading(false);
+  };
+
+  const enablePush = async () => {
+    const result = await requestPushPermission();
+    setPushStatus(result);
+    if (result === "granted") {
+      notify(t('push_enabled'));
+    } else {
+      notify(t('push_denied'), "err");
+    }
   };
 
   if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
@@ -548,6 +1089,23 @@ const ProfileView = ({ t, session, profile, notify }) => {
             {loading ? "..." : count}
           </div>
         </div>
+      </div>
+
+      {/* Push Notifications Section */}
+      <div style={{ background: THEME.colors.primaryLight, border: `1px solid ${THEME.colors.primary}`, borderRadius: THEME.radius.md, padding: 24, marginBottom: 24 }}>
+        <h4 style={{ fontSize: 15, fontWeight: 700, color: THEME.colors.primaryHover, margin: "0 0 8px" }}>🔔 {t('push_notifications')}</h4>
+        <p style={{ fontSize: 13, color: THEME.colors.primaryHover, margin: "0 0 16px", lineHeight: 1.6 }}>
+          {t('push_desc')}
+        </p>
+        {pushStatus === "granted" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, color: THEME.colors.success, fontWeight: 700, fontSize: 13 }}>
+            ✅ {t('push_enabled_status')}
+          </div>
+        ) : (
+          <Btn onClick={enablePush} style={{ padding: "10px 24px", fontSize: 13 }}>
+            🔔 {t('enable_push')}
+          </Btn>
+        )}
       </div>
 
       <div style={{ background: THEME.colors.successBg, border: `1px solid #86efac`, borderRadius: THEME.radius.md, padding: 24 }}>
@@ -617,9 +1175,17 @@ const PhotoLightbox = ({ photos, startIndex, onClose, t }) => {
   );
 };
 
-// ─── Analytics Tab ───────────────────────────────────────────────────────────
+// ─── Enhanced Analytics Tab (with Heatmap + Resolution Time + Satisfaction) ──
 
 const AnalyticsTab = ({ list, t }) => {
+  const [ratings, setRatings] = useState([]);
+  
+  useEffect(() => {
+    supabase.from("complaint_ratings").select("*").then(({ data }) => {
+      if (data) setRatings(data);
+    });
+  }, []);
+
   const stats = useMemo(() => {
     const total = list.length;
     const byStatus = {};
@@ -628,32 +1194,106 @@ const AnalyticsTab = ({ list, t }) => {
     CATEGORIES.forEach(c => { byCat[c.id] = list.filter(x => (x.category || "").includes(c.id)).length; });
     const withPhotos = list.filter(c => c.photos && ((Array.isArray(c.photos) && c.photos.length > 0) || (typeof c.photos === 'string' && c.photos !== '[]'))).length;
     const urgent = list.filter(c => c.priority === "Urgent").length;
-    return { total, byStatus, byCat, withPhotos, urgent };
-  }, [list]);
+
+    // Resolution time calculation
+    const resolved = list.filter(c => c.status === "Resolved" || c.status === "Closed");
+    const avgResolutionDays = resolved.length > 0
+      ? Math.round(resolved.reduce((acc, c) => {
+          const days = (new Date(c.updated_at) - new Date(c.created_at)) / (1000 * 60 * 60 * 24);
+          return acc + Math.max(0, days);
+        }, 0) / resolved.length)
+      : 0;
+
+    // Average satisfaction
+    const avgRating = ratings.length > 0
+      ? (ratings.reduce((acc, r) => acc + r.rating, 0) / ratings.length).toFixed(1)
+      : "—";
+
+    // Geo data for heatmap
+    const geoData = list.filter(c => c.latitude && c.longitude).map(c => ({
+      lat: parseFloat(c.latitude),
+      lng: parseFloat(c.longitude),
+      status: c.status,
+      title: c.title,
+      category: c.category,
+    }));
+
+    return { total, byStatus, byCat, withPhotos, urgent, avgResolutionDays, avgRating, geoData };
+  }, [list, ratings]);
 
   const maxCat = Math.max(1, ...Object.values(stats.byCat));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       {/* Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 14 }}>
         {[
           { label: t('total_complaints'), value: stats.total, icon: "📊", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
           { label: t('open_complaints'), value: stats.byStatus.Open || 0, icon: "🔴", color: THEME.colors.danger, bg: THEME.colors.dangerBg },
           { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, icon: "🔵", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
           { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, icon: "🟢", color: THEME.colors.success, bg: THEME.colors.successBg },
           { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, icon: "⚠️", color: "#991B1B", bg: THEME.colors.dangerBg },
+          { label: t('avg_resolution'), value: `${stats.avgResolutionDays}d`, icon: "⏱", color: "#7c3aed", bg: "#ede9fe" },
+          { label: t('satisfaction_score'), value: stats.avgRating, icon: "⭐", color: "#f59e0b", bg: "#fffbeb" },
         ].map((card, i) => (
           <div key={i} style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: "20px 18px", border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontSize: 24 }}>{card.icon}</span>
-              <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: THEME.radius.full, fontSize: 10, fontWeight: 800 }}>{stats.total > 0 ? Math.round((card.value / stats.total) * 100) : 0}%</span>
+              {typeof card.value === 'number' && stats.total > 0 && (
+                <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: THEME.radius.full, fontSize: 10, fontWeight: 800 }}>{Math.round((card.value / stats.total) * 100)}%</span>
+              )}
             </div>
             <div style={{ fontSize: 28, fontWeight: 900, color: card.color }}>{card.value}</div>
             <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted, marginTop: 4 }}>{card.label}</div>
           </div>
         ))}
       </div>
+
+      {/* Complaint Heatmap */}
+      {stats.geoData.length > 0 && (
+        <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🗺 {t('complaint_heatmap')}</h3>
+          <div style={{ height: 350, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}` }}>
+            <MapContainer
+              center={[stats.geoData[0].lat, stats.geoData[0].lng]}
+              zoom={12}
+              style={{ height: "100%", width: "100%" }}
+            >
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OSM' />
+              {stats.geoData.map((pt, i) => {
+                const sm = STATUS_META[pt.status] || STATUS_META.Open;
+                // Use hardcoded colors since CSS vars can't be used in Leaflet
+                const colorMap = {
+                  "Open": "#dc2626",
+                  "Assigned": "#d97706",
+                  "In Progress": "#0284c7",
+                  "Resolved": "#16a34a",
+                  "Closed": "#475569",
+                  "Escalated": "#991b1b"
+                };
+                return (
+                  <CircleMarker
+                    key={i}
+                    center={[pt.lat, pt.lng]}
+                    radius={10}
+                    pathOptions={{
+                      color: colorMap[pt.status] || "#dc2626",
+                      fillColor: colorMap[pt.status] || "#dc2626",
+                      fillOpacity: 0.6,
+                      weight: 2,
+                    }}
+                  >
+                    <Popup>
+                      <strong>{pt.title}</strong><br />
+                      {sm.icon} {pt.status} • {pt.category}
+                    </Popup>
+                  </CircleMarker>
+                );
+              })}
+            </MapContainer>
+          </div>
+        </div>
+      )}
 
       {/* Category Distribution */}
       <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
@@ -940,8 +1580,9 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   const [selected, setSelected] = useState(null);
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("complaints"); // complaints | analytics
-  const [lightbox, setLightbox] = useState(null); // { photos, index }
+  const [tab, setTab] = useState("complaints"); // complaints | analytics | users
+  const [lightbox, setLightbox] = useState(null);
+  const [upvoteCounts, setUpvoteCounts] = useState({});
 
   // Filters
   const [fStatus, setFStatus] = useState("");
@@ -952,7 +1593,32 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   useEffect(() => {
     fetchData();
     if (!t_officer) fetchOfficers();
+    fetchUpvotes();
   }, [t_officer]);
+
+  // Supabase Realtime subscription for admin
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-complaints-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, (payload) => {
+        fetchData();
+        fetchUpvotes();
+        // Browser push notification for new complaints
+        if (payload.eventType === 'INSERT') {
+          showBrowserNotification(
+            '🆕 New Grievance Filed',
+            `${payload.new.title} — ${payload.new.category}`
+          );
+        } else if (payload.eventType === 'UPDATE' && payload.old.status !== payload.new.status) {
+          showBrowserNotification(
+            `📋 Status Updated: ${payload.new.status}`,
+            `${payload.new.title} — Ticket #${payload.new.ticket_id}`
+          );
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
@@ -968,6 +1634,15 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     if (data) setOfficers(data);
   };
 
+  const fetchUpvotes = async () => {
+    const { data } = await supabase.from("complaint_upvotes").select("complaint_id");
+    if (data) {
+      const counts = {};
+      data.forEach(u => { counts[u.complaint_id] = (counts[u.complaint_id] || 0) + 1; });
+      setUpvoteCounts(counts);
+    }
+  };
+
   const updateGrievance = async (id, updates) => {
     const { error } = await supabase.from("complaints").update(updates).eq("id", id);
     if (error) notify(error.message, "err");
@@ -978,7 +1653,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     }
   };
 
-  // Filtered list
+  // Filtered list (sort by upvotes first)
   const filtered = useMemo(() => {
     return list.filter(it => {
       if (fStatus && it.status !== fStatus) return false;
@@ -989,8 +1664,8 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
         if (!(it.title || "").toLowerCase().includes(q) && !(it.ticket_id || "").toLowerCase().includes(q) && !(it.location || "").toLowerCase().includes(q)) return false;
       }
       return true;
-    });
-  }, [list, fStatus, fCategory, fSearch, fUrgent]);
+    }).sort((a, b) => (upvoteCounts[b.id] || 0) - (upvoteCounts[a.id] || 0));
+  }, [list, fStatus, fCategory, fSearch, fUrgent, upvoteCounts]);
 
   const getPhotos = (item) => {
     if (!item?.photos) return [];
@@ -1031,7 +1706,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
           {!t_officer && profile?.role === "admin" && (
@@ -1091,6 +1766,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     const sm = STATUS_META[it.status] || STATUS_META.Open;
                     const isActive = selected?.id === it.id;
                     const photos = getPhotos(it);
+                    const votes = upvoteCounts[it.id] || 0;
                     return (
                       <div key={it.id} onClick={() => setSelected(it)}
                            style={{ background: THEME.colors.surface, padding: "16px 18px", borderRadius: THEME.radius.md, borderLeft: `5px solid ${sm.color}`, border: isActive ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`, borderLeftWidth: 5, borderLeftStyle: "solid", borderLeftColor: sm.color, cursor: "pointer", transition: "all 0.15s", boxShadow: isActive ? THEME.shadow.md : THEME.shadow.sm, position: "relative" }}>
@@ -1101,7 +1777,10 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                         <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{it.title}</h3>
                         <div style={{ fontSize: 12, color: THEME.colors.textMuted }}>📍 {it.location}</div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                          <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
+                          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
+                            {votes > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.danger, background: THEME.colors.dangerBg, padding: "2px 8px", borderRadius: THEME.radius.full }}>🔥 {votes}</span>}
+                          </div>
                           {photos.length > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.success, background: THEME.colors.successBg, padding: "2px 8px", borderRadius: THEME.radius.full }}>📷 {photos.length}</span>}
                         </div>
                       </div>
@@ -1124,6 +1803,9 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>#{selected.ticket_id || selected.id.slice(0, 8)}</div>
                   <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>{selected.title}</h4>
                   <Badge status={selected.status} priority={selected.priority} />
+                  {(upvoteCounts[selected.id] || 0) > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: THEME.colors.danger }}>🔥 {upvoteCounts[selected.id]} {t('community_upvotes')}</div>
+                  )}
                 </div>
 
                 {/* Description */}
@@ -1281,14 +1963,18 @@ const ProfileSetupModal = ({ session, onComplete, notify, t }) => {
   );
 };
 
+import { SignInPage } from "./components/ui/sign-in";
+
 const LoginModal = ({ onLogin, onClose, notify, t }) => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email");
+    const password = formData.get("password");
+
     if (!email || !password) return notify("Please fill all fields", "err");
     
     setLoading(true);
@@ -1311,49 +1997,16 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, backdropFilter: "blur(2px)" }}>
-      <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: 24, width: 360, boxShadow: THEME.shadow.md }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800 }}>{isSignUp ? t('sign_up') : t('login')}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: THEME.colors.textMuted }}>✕</button>
-        </div>
-
-        <form onSubmit={handleAuth}>
-          <p style={{ fontSize: 13, color: THEME.colors.textMuted, marginBottom: 20 }}>
-            {isSignUp ? t('create_account') : t('login_to_account')}
-          </p>
-          <Input 
-            label={t('email_label')} 
-            type="email"
-            placeholder="you@example.com" 
-            value={email} 
-            onChange={e => setEmail(e.target.value)}
-            required
-          />
-          <Input 
-            label={t('password_label')} 
-            type="password"
-            placeholder="••••••••" 
-            value={password} 
-            onChange={e => setPassword(e.target.value)}
-            required
-            style={{ marginTop: 12 }}
-          />
-          <Btn type="submit" full disabled={loading} style={{ marginTop: 20 }}>
-            {loading ? t('loading') : (isSignUp ? t('sign_up') : t('login'))}
-          </Btn>
-        </form>
-
-        <div style={{ textAlign: "center", marginTop: 20 }}>
-          <button 
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)} 
-            style={{ background: "none", border: "none", color: THEME.colors.primary, fontWeight: 700, cursor: "pointer", fontSize: 13 }}
-          >
-            {isSignUp ? t('already_have_account') : t('dont_have_account')}
-          </button>
-        </div>
-      </div>
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "white" }}>
+      <SignInPage 
+        title={isSignUp ? t('sign_up') : t('login')}
+        description={isSignUp ? "Create an account to submit your grievances." : "Access your account and continue your journey with us"}
+        heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
+        onSignIn={handleAuth}
+        onCreateAccount={() => setIsSignUp(true)}
+        onResetPassword={() => notify("Password reset not implemented yet", "err")}
+      />
+      <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 40, height: 40, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
     </div>
   );
 };
@@ -1392,6 +2045,66 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // ─── Offline queue auto-sync ──────────────────────────────────────────────
+  useEffect(() => {
+    const syncOfflineQueue = async () => {
+      if (!session) return;
+      if (!navigator.onLine) return;
+      const queue = getOfflineQueue();
+      if (queue.length === 0) return;
+
+      let syncedIds = [];
+      let lastError = null;
+
+      for (const complaint of queue) {
+        const { _offlineId, ...data } = complaint;
+        // Make sure citizen_id matches the current authenticated session user
+        data.citizen_id = session.user.id;
+        
+        const { error } = await supabase.from("complaints").insert([data]);
+        if (!error) {
+          syncedIds.push(_offlineId);
+        } else {
+          lastError = error;
+          console.error("Offline sync error details:", error);
+        }
+      }
+
+      if (syncedIds.length > 0) {
+        // Remove only successfully synced items from localStorage
+        const updatedQueue = queue.filter(item => !syncedIds.includes(item._offlineId));
+        localStorage.setItem(OFFLINE_KEY, JSON.stringify(updatedQueue));
+        
+        // Notify components to update reactive drafts
+        window.dispatchEvent(new Event("offline-queue-updated"));
+        window.dispatchEvent(new Event("offline-queue-synced"));
+        
+        notify(`✅ ${syncedIds.length} offline draft(s) synced successfully!`);
+      }
+
+      if (lastError) {
+        notify(`⚠️ Sync failed for some drafts: ${lastError.message || "Unknown error"}`, "err");
+      }
+    };
+
+    syncOfflineQueue();
+    window.addEventListener('online', syncOfflineQueue);
+    window.addEventListener('manual-sync-trigger', syncOfflineQueue);
+    return () => {
+      window.removeEventListener('online', syncOfflineQueue);
+      window.removeEventListener('manual-sync-trigger', syncOfflineQueue);
+    };
+  }, [session]);
+
+  // ─── Request push notification permission on login ────────────────────────
+  useEffect(() => {
+    if (session && "Notification" in window && Notification.permission === "default") {
+      // Soft-ask after a delay
+      const timer = setTimeout(() => requestPushPermission(), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [session]);
 
   const fetchProfile = async (id) => {
     try {
@@ -1445,17 +2158,18 @@ export default function App() {
       case "track":  return <TrackView {...shared} />;
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
+      case "gallery": return <GalleryView {...shared} />;
       case "admin":
         if (role === "admin") return <AdminView {...shared} />;
         if (role === "officer") return <AdminView {...shared} t_officer />;
         if (session) return (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16, fontFamily: SANS }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16, fontFamily: THEME.font }}>
             <div style={{ fontSize: 48 }}>🔒</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#111827" }}>Access Restricted</div>
-            <div style={{ color: "#6B7280", fontSize: 14, textAlign: "center", maxWidth: 360 }}>
-              Your account role is <strong style={{ color: "#DC2626" }}>{role || "loading..."}</strong>.<br/>You need <strong>admin</strong> or <strong>officer</strong> role to access this dashboard.
+            <div style={{ fontSize: 22, fontWeight: 800, color: THEME.colors.text }}>Access Restricted</div>
+            <div style={{ color: THEME.colors.textMuted, fontSize: 14, textAlign: "center", maxWidth: 360 }}>
+              Your account role is <strong style={{ color: THEME.colors.danger }}>{role || "loading..."}</strong>.<br/>You need <strong>admin</strong> or <strong>officer</strong> role to access this dashboard.
             </div>
-            <div style={{ background: "#FEF3C7", border: "1px solid #F59E0B", borderRadius: 10, padding: "16px 24px", maxWidth: 440, fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
+            <div style={{ background: THEME.colors.warningBg, border: `1px solid #fcd34d`, borderRadius: 10, padding: "16px 24px", maxWidth: 440, fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
               <strong>To get admin access:</strong><br/>
               1. Go to your Supabase Dashboard → SQL Editor<br/>
               2. Run: <code style={{ background: "#FDE68A", padding: "2px 6px", borderRadius: 4 }}>UPDATE profiles SET role = 'admin' WHERE id = '{session?.user?.id}';</code><br/>
