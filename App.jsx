@@ -3,6 +3,10 @@ import { supabase } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
+import * as XLSX from 'xlsx';
+import { QRCodeSVG } from 'qrcode.react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const THEME = {
   colors: {
@@ -63,6 +67,46 @@ const SPEECH_LANGS = [
   { code: "hi-IN", label: "हिन्दी", flag: "🇮🇳" },
   { code: "te-IN", label: "తెలుగు", flag: "🇮🇳" },
 ];
+
+const GOVERNMENT_SCHEMES = [
+  { id: "mgnrega", name: "MGNREGA", key: "scheme_mgnrega", icon: "👷", category: "Employment", url: "https://nrega.nic.in/" },
+  { id: "pmay", name: "PM Awas Yojana", key: "scheme_pmay", icon: "🏠", category: "Housing", url: "https://pmaymis.gov.in/" },
+  { id: "jjm", name: "Jal Jeevan Mission", key: "scheme_jjm", icon: "💧", category: "Water", url: "https://jaljeevanmission.gov.in/" },
+  { id: "sbm", name: "Swachh Bharat Mission", key: "scheme_sbm", icon: "🧹", category: "Sanitation", url: "https://swachhbharatmission.gov.in/" },
+  { id: "pmkisan", name: "PM-KISAN", key: "scheme_pmkisan", icon: "🌾", category: "Agriculture", url: "https://pmkisan.gov.in/" },
+  { id: "ayushman", name: "Ayushman Bharat", key: "scheme_ayushman", icon: "🏥", category: "Health", url: "https://pmjay.gov.in/" },
+  { id: "ddugky", name: "DDU-GKY", key: "scheme_ddugky", icon: "🎓", category: "Skill Development", url: "https://ddugky.gov.in/" },
+  { id: "nrlm", name: "NRLM", key: "scheme_nrlm", icon: "🤝", category: "Livelihoods", url: "https://nrlm.gov.in/" },
+];
+
+// ─── Point-in-polygon (ray casting) for boundary checking ─────────────────
+const pointInPolygon = (point, polygon) => {
+  const [x, y] = point;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
+const isPointInGeoJSON = (lat, lng, geojson) => {
+  if (!geojson || !geojson.features) return true; // No boundary = always inside
+  for (const feature of geojson.features) {
+    if (feature.geometry.type === "Polygon") {
+      const coords = feature.geometry.coordinates[0].map(c => [c[0], c[1]]);
+      if (pointInPolygon([lng, lat], coords)) return true;
+    } else if (feature.geometry.type === "MultiPolygon") {
+      for (const poly of feature.geometry.coordinates) {
+        const coords = poly[0].map(c => [c[0], c[1]]);
+        if (pointInPolygon([lng, lat], coords)) return true;
+      }
+    }
+  }
+  return false;
+};
 
 // ─── Offline Queue Helper ─────────────────────────────────────────────────────
 
@@ -394,13 +438,14 @@ const HomeView = ({ navigate, t }) => (
       <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
         <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
+        <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.text, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("submit_anonymous")}>🕵️ {t('file_anonymously') || "File Anonymously"}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.success, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("gallery")}>🌟 {t('public_gallery')}</Btn>
       </div>
     </div>
   </div>
 );
 
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents, CircleMarker, Popup } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents, CircleMarker, Popup, GeoJSON } from "react-leaflet";
 import L from 'leaflet';
 import "leaflet/dist/leaflet.css";
 
@@ -424,9 +469,17 @@ const MapEvents = ({ onLocationSelect }) => {
   return null;
 };
 
-const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
+const LocationPicker = ({ onLocationSelect, t, initialCoords, boundaries }) => {
   const [pos, setPos] = useState(initialCoords || [17.3850, 78.4867]);
+  const [outsideBoundary, setOutsideBoundary] = useState(false);
   const markerRef = useRef(null);
+
+  const checkBoundary = (lat, lng) => {
+    if (boundaries && boundaries.length > 0) {
+      const isInside = boundaries.some(b => isPointInGeoJSON(lat, lng, b.geojson));
+      setOutsideBoundary(!isInside);
+    }
+  };
 
   const eventHandlers = useMemo(() => ({
     dragend() {
@@ -435,9 +488,10 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
         const newPos = marker.getLatLng();
         setPos([newPos.lat, newPos.lng]);
         onLocationSelect(newPos.lat, newPos.lng);
+        checkBoundary(newPos.lat, newPos.lng);
       }
     },
-  }), []);
+  }), [boundaries]);
 
   const RecenterMap = ({ position }) => {
     const map = useMap();
@@ -453,9 +507,12 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
         const newPos = [p.coords.latitude, p.coords.longitude];
         setPos(newPos);
         onLocationSelect(newPos[0], newPos[1]);
+        checkBoundary(newPos[0], newPos[1]);
       });
     }
   };
+
+  const boundaryStyle = { color: "#0284c7", weight: 2, fillColor: "#0284c7", fillOpacity: 0.08, dashArray: "6 4" };
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -467,18 +524,240 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords }) => {
           📍 {t('use_current_location')}
         </button>
       </div>
+      {outsideBoundary && (
+        <div style={{ background: THEME.colors.warningBg, border: "1px solid #fcd34d", borderRadius: THEME.radius.sm, padding: "10px 14px", marginBottom: 10, color: "#92400e", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+          {t('boundary_warning')}
+        </div>
+      )}
       <div style={{ height: 280, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
         <MapContainer center={pos} zoom={13} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
+          {boundaries && boundaries.map((b, i) => (
+            <GeoJSON key={`boundary-${b.id || i}`} data={b.geojson} style={() => boundaryStyle} />
+          ))}
           <Marker position={pos} draggable={true} eventHandlers={eventHandlers} ref={markerRef} />
           <RecenterMap position={pos} />
           <MapEvents onLocationSelect={(lat, lng) => {
             setPos([lat, lng]);
             onLocationSelect(lat, lng);
+            checkBoundary(lat, lng);
           }} />
         </MapContainer>
       </div>
       <p style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 8 }}>{t('drag_pin_hint')}</p>
+    </div>
+  );
+};
+// ─── QR Code Modal ─────────────────────────────────────────────────────────────
+
+const QRCodeModal = ({ t, ticketId, onClose }) => {
+  const url = `${window.location.origin}?ticket=${ticketId}`;
+  
+  const downloadQR = () => {
+    const canvas = document.getElementById("qr-canvas");
+    if (!canvas) return;
+    const pngUrl = canvas.toDataURL("image/png").replace("image/png", "image/octet-stream");
+    let downloadLink = document.createElement("a");
+    downloadLink.href = pngUrl;
+    downloadLink.download = `VGS-QR-${ticketId}.png`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
+  return (
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: THEME.radius.lg, width: "100%", maxWidth: 350, textAlign: "center", boxShadow: THEME.shadow.lg }}>
+        <h3 style={{ margin: "0 0 16px 0", fontSize: 20 }}>{t('qr_code')}</h3>
+        <p style={{ fontSize: 13, color: THEME.colors.textMuted, marginBottom: 24 }}>{t('qr_scan_hint')}</p>
+        
+        <div style={{ background: "#fff", padding: 16, borderRadius: THEME.radius.md, display: "inline-block", marginBottom: 24 }}>
+          <QRCodeSVG id="qr-canvas" value={url} size={200} level="H" includeMargin={true} />
+        </div>
+        
+        <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 24 }}>{t('qr_ticket').replace('{{id}}', ticketId)}</div>
+        
+        <div style={{ display: "flex", gap: 12 }}>
+          <Btn variant="ghost" onClick={onClose} style={{ flex: 1 }}>Close</Btn>
+          <Btn onClick={downloadQR} style={{ flex: 1 }}>{t('download_qr')}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Anonymous Submit View ───────────────────────────────────────────────────
+
+const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
+  const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [form, setForm] = useState({ 
+    categories: [], title: "", description: "", location: "", 
+    latitude: 17.3850, longitude: 78.4867, duration: "Just started",
+    isEmergency: false, peopleAffected: "", relatedScheme: ""
+  });
+  const [photos, setPhotos] = useState([]);
+
+  const sendOtp = () => {
+    if (phone.length < 10) return notify("Enter a valid phone number", "err");
+    setOtpSent(true);
+    notify(t('otp_sent'));
+  };
+
+  const verifyOtp = () => {
+    if (otp === "123456") {
+      setPhoneVerified(true);
+      notify(t('otp_verified'));
+    } else {
+      notify(t('otp_invalid'), "err");
+    }
+  };
+
+  const generateTicketId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'VGS-';
+    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
+    return result;
+  };
+
+  const toggleCategory = (id) => {
+    setForm(prev => {
+      const cats = prev.categories;
+      if (cats.includes(id)) return { ...prev, categories: cats.filter(c => c !== id) };
+      return { ...prev, categories: [...cats, id] };
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (form.categories.length === 0) return notify("Please select at least one category", "err");
+    if (!phoneVerified) return notify("Please verify your phone number", "err");
+    
+    setLoading(true);
+    const ticketId = generateTicketId();
+    const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
+    
+    const complaint = {
+      ticket_id: ticketId,
+      title: form.title,
+      description: fullDescription,
+      category: form.categories.join(", "),
+      location: form.location,
+      latitude: form.latitude,
+      longitude: form.longitude,
+      status: "Open",
+      related_scheme: form.relatedScheme || null,
+      is_anonymous: true,
+      anonymous_phone: phone
+    };
+
+    try {
+      const { error } = await supabase.from("complaints").insert([complaint]);
+      if (error) throw error;
+      notify(`${t("success_submit")} Ticket: ${ticketId}`);
+      navigate("track");
+    } catch (err) { 
+      notify(err.message, "err");
+    }
+    setLoading(false);
+  };
+
+  if (!phoneVerified) {
+    return (
+      <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 480, margin: "0 auto" }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, marginBottom: 16 }}>{t('anonymous_mode')}</h2>
+        <p style={{ fontSize: 14, color: THEME.colors.textMuted, marginBottom: 32 }}>{t('anonymous_desc')}</p>
+        
+        {!otpSent ? (
+          <div>
+            <Input label={t('enter_phone')} placeholder="e.g. 9876543210" value={phone} onChange={e => setPhone(e.target.value)} />
+            <Btn full onClick={sendOtp} style={{ marginTop: 16 }}>{t('send_otp_btn')}</Btn>
+          </div>
+        ) : (
+          <div>
+            <Input label="Enter OTP (Use 123456)" placeholder="123456" value={otp} onChange={e => setOtp(e.target.value)} />
+            <Btn full onClick={verifyOtp} style={{ marginTop: 16 }}>{t('verify_otp_btn')}</Btn>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+        <div>
+          <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>{t('register_grievance')}</h2>
+          <span style={{ display: "inline-block", background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "4px 8px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, marginTop: 8 }}>🕵️ {t('anonymous_badge')}</span>
+        </div>
+        <span style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, background: THEME.colors.background, padding: "6px 14px", borderRadius: THEME.radius.full }}>Step {step} of 2</span>
+      </div>
+
+      {step === 1 ? (
+        <div>
+          <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Select Problem Categories (Multiple allowed)</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
+            {CATEGORIES.map(c => {
+              const isSelected = form.categories.includes(c.id);
+              return (
+                <div key={c.id} onClick={() => toggleCategory(c.id)}
+                     style={{ padding: "16px 10px", borderRadius: THEME.radius.md, border: `2px solid ${isSelected ? THEME.colors.primary : THEME.colors.border}`, background: isSelected ? THEME.colors.primaryLight : THEME.colors.surface, cursor: "pointer", textAlign: "center", transition: "all 0.2s", transform: isSelected ? "scale(0.98)" : "scale(1)" }}>
+                  <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? THEME.colors.primaryHover : THEME.colors.text }}>{t(c.key)}</div>
+                </div>
+              );
+            })}
+          </div>
+          <Btn full onClick={() => {
+            if (form.categories.length === 0) notify("Please select at least one category", "err");
+            else setStep(2);
+          }}>Select & Continue</Btn>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: 24, padding: 14, background: THEME.colors.primaryLight, borderRadius: THEME.radius.sm, fontSize: 13, color: THEME.colors.primaryHover, fontWeight: 600, border: `1px solid ${THEME.colors.primary}` }}>
+            Selected: {form.categories.join(", ")}
+          </div>
+          
+          <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+          
+          <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")}</label>
+          <textarea
+            value={form.description}
+            onChange={e => setForm({ ...form, description: e.target.value })}
+            required
+            style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, color: THEME.colors.text, resize: "vertical", minHeight: 110, transition: "border-color 0.2s", marginBottom: 18 }}
+          />
+          
+          <div style={{ background: THEME.colors.background, padding: 20, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 16, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>{t('additional_details')}</label>
+            
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: THEME.colors.text, marginBottom: 8 }}>{t('how_long_problem')}</label>
+              <select value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, outline: "none", fontFamily: THEME.font, fontSize: 14, background: THEME.colors.surface }}>
+                <option value="Just started">{t('just_started')}</option>
+                <option value="1-3 days">{t('one_to_three_days')}</option>
+                <option value="Over a week">{t('over_a_week')}</option>
+                <option value="Persistent/Long-term">{t('persistent_long_term')}</option>
+              </select>
+            </div>
+          </div>
+
+          <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
+          
+          <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+          <PhotoUpload photos={photos} setPhotos={setPhotos} />
+          
+          <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
+            <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1, background: THEME.colors.background }}>{t('back_btn')}</Btn>
+            <Btn type="submit" disabled={loading} style={{ flex: 2 }}>{loading ? t("submitting") : t("submit_btn")}</Btn>
+          </div>
+        </form>
+      )}
     </div>
   );
 };
@@ -497,9 +776,17 @@ const SubmitView = ({ t, notify, navigate, session }) => {
     longitude: 78.4867,
     duration: "Just started",
     isEmergency: false,
-    peopleAffected: ""
+    peopleAffected: "",
+    relatedScheme: ""
   });
   const [photos, setPhotos] = useState([]);
+  const [boundaries, setBoundaries] = useState([]);
+
+  useEffect(() => {
+    supabase.from("village_boundaries").select("*").eq("is_active", true).then(({ data }) => {
+      if (data) setBoundaries(data);
+    });
+  }, []);
 
   const generateTicketId = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -538,7 +825,8 @@ const SubmitView = ({ t, notify, navigate, session }) => {
       location: form.location,
       latitude: form.latitude,
       longitude: form.longitude,
-      status: "Open"
+      status: "Open",
+      related_scheme: form.relatedScheme || null
     };
 
     // Check if offline — save to local queue
@@ -643,7 +931,26 @@ const SubmitView = ({ t, notify, navigate, session }) => {
             </label>
           </div>
 
-          <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
+          {/* Government Scheme Linking */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: "block", marginBottom: 8, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t('related_scheme')}</label>
+            <select value={form.relatedScheme} onChange={e => setForm({...form, relatedScheme: e.target.value})} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, outline: "none", fontFamily: THEME.font, fontSize: 14, background: THEME.colors.surface, color: THEME.colors.text }}>
+              <option value="">{t('select_scheme')}</option>
+              {GOVERNMENT_SCHEMES.map(s => (
+                <option key={s.id} value={s.id}>{s.icon} {t(s.key)} — {s.category}</option>
+              ))}
+            </select>
+            {form.relatedScheme && (() => {
+              const scheme = GOVERNMENT_SCHEMES.find(s => s.id === form.relatedScheme);
+              return scheme ? (
+                <a href={scheme.url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 8, fontSize: 12, fontWeight: 700, color: THEME.colors.primary, textDecoration: "none" }}>
+                  {scheme.icon} {t('view_scheme_details')} ↗
+                </a>
+              ) : null;
+            })()}
+          </div>
+
+          <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
           
           <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
           <PhotoUpload photos={photos} setPhotos={setPhotos} />
@@ -838,11 +1145,16 @@ const TrackView = ({ t, notify, session }) => {
               <div key={it.id} style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
                   <div>
-                    <div style={{ fontSize: 13, color: THEME.colors.textMuted, fontWeight: 700, marginBottom: 4 }}>#{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}</div>
+                    <div style={{ fontSize: 13, color: THEME.colors.textMuted, fontWeight: 700, marginBottom: 4 }}>
+                      #{it.id.slice(0, 8)} • {t(CATEGORIES.find(c => c.id === it.category)?.key || "cat_other")}
+                      {it.is_anonymous && <span style={{ marginLeft: 8, background: THEME.colors.textMuted, color: "#fff", padding: "2px 8px", borderRadius: THEME.radius.full, fontSize: 10 }}>🕵️ {t('anonymous_badge') || "Anonymous"}</span>}
+                      {it.related_scheme && <span style={{ marginLeft: 8, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "2px 8px", borderRadius: THEME.radius.full, fontSize: 10 }}>🏛 {it.related_scheme}</span>}
+                    </div>
                     <h3 style={{ fontSize: 20, fontWeight: 800 }}>{it.title}</h3>
                   </div>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Badge status={it.status} priority={it.priority} />
+                    <button onClick={() => setQrItem(it)} style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.text, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Show QR Code">📱 QR</button>
                     <button onClick={() => deleteGrievance(it.id)} style={{ background: THEME.colors.dangerBg, border: `1px solid ${THEME.colors.danger}`, color: THEME.colors.danger, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Delete grievance">Delete</button>
                   </div>
                 </div>
@@ -909,6 +1221,8 @@ const TrackView = ({ t, notify, session }) => {
           })}
         </div>
       )}
+      
+      {qrItem && <QRCodeModal ticketId={qrItem.ticket_id} title={qrItem.title} t={t} onClose={() => setQrItem(null)} />}
     </div>
   );
 };
@@ -1012,7 +1326,11 @@ const GalleryView = ({ t, session }) => {
                   </div>
                 )}
                 <div style={{ padding: 20 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 6 }}>{it.category} • 📍 {it.location}</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 6 }}>
+                    {it.category} • 📍 {it.location}
+                    {it.is_anonymous && <span style={{ marginLeft: 8, background: THEME.colors.textMuted, color: "#fff", padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🕵️ {t('anonymous_badge') || "Anonymous"}</span>}
+                    {it.related_scheme && <span style={{ marginLeft: 8, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🏛 {it.related_scheme}</span>}
+                  </div>
                   <h3 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 8px", color: THEME.colors.text }}>{it.title}</h3>
                   
                   <div style={{ display: "flex", gap: 16, fontSize: 11, color: THEME.colors.textMuted, marginBottom: 12 }}>
@@ -1223,8 +1541,65 @@ const AnalyticsTab = ({ list, t }) => {
 
   const maxCat = Math.max(1, ...Object.values(stats.byCat));
 
+  const generatePDFReport = () => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(20);
+    doc.text("Panchayat Monthly Summary Report", 14, 22);
+    
+    doc.setFontSize(11);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 32);
+    
+    doc.setFontSize(14);
+    doc.text("Summary Statistics", 14, 45);
+    
+    autoTable(doc, {
+      startY: 50,
+      head: [['Metric', 'Value']],
+      body: [
+        ['Total Complaints', stats.total],
+        ['Open', stats.byStatus.Open || 0],
+        ['In Progress', stats.byStatus["In Progress"] || 0],
+        ['Resolved', stats.byStatus.Resolved || 0],
+        ['Escalated', stats.byStatus.Escalated || 0],
+        ['Avg. Resolution Time (days)', stats.avgResolutionDays],
+      ],
+    });
+    
+    doc.text("Category Breakdown", 14, doc.lastAutoTable.finalY + 15);
+    
+    const catData = CATEGORIES.map(c => [t(c.key), stats.byCat[c.id] || 0]);
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 20,
+      head: [['Category', 'Complaints']],
+      body: catData,
+    });
+    
+    doc.text("Recent Complaints", 14, doc.lastAutoTable.finalY + 15);
+    
+    const recentData = list.slice(0, 10).map(c => [
+      c.ticket_id, 
+      c.category, 
+      c.title, 
+      c.status,
+      new Date(c.created_at).toLocaleDateString()
+    ]);
+    
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 20,
+      head: [['Ticket ID', 'Category', 'Title', 'Status', 'Date']],
+      body: recentData,
+      styles: { fontSize: 9 }
+    });
+    
+    doc.save("Panchayat_Monthly_Report.pdf");
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <Btn onClick={generatePDFReport}>📄 {t('download_report_pdf') || "Download PDF Report"}</Btn>
+      </div>
       {/* Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 14 }}>
         {[
@@ -1562,6 +1937,207 @@ USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
     </div>
   );
 };
+// ─── Bulk Import Tab Component ────────────────────────────────────────────────
+const BulkImportTab = ({ t, notify }) => {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const parsedData = XLSX.utils.sheet_to_json(ws);
+      setData(parsedData);
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleImport = async () => {
+    if (data.length === 0) return;
+    setLoading(true);
+    let successCount = 0;
+    
+    // Map data to DB columns. Expecting: Title, Description, Category, Location, Status
+    const formattedData = data.map(row => ({
+      ticket_id: 'VGS-' + Math.random().toString(36).substr(2, 6).toUpperCase(),
+      title: row.Title || row.title || 'Bulk Imported Complaint',
+      description: row.Description || row.description || 'Imported from offline register',
+      category: row.Category || row.category || 'Other',
+      location: row.Location || row.location || 'Unknown',
+      status: row.Status || row.status || 'Open',
+      latitude: 17.3850,
+      longitude: 78.4867,
+      is_anonymous: true // For admin bulk import without specific citizen
+    }));
+
+    // Insert in batches of 100 to avoid limits
+    for (let i = 0; i < formattedData.length; i += 100) {
+      const batch = formattedData.slice(i, i + 100);
+      const { error } = await supabase.from("complaints").insert(batch);
+      if (!error) successCount += batch.length;
+      else console.error("Import error:", error);
+    }
+
+    if (successCount > 0) {
+      notify(t('import_success').replace('{{count}}', successCount));
+      setData([]); // clear after success
+    } else {
+      notify(t('import_error'), 'err');
+    }
+    setLoading(false);
+  };
+
+  const downloadTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([{ Title: "Broken Pipe", Description: "Water leaking near temple", Category: "Water", Location: "Main Street", Status: "Open" }]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Complaints");
+    XLSX.writeFile(wb, "VGS_Bulk_Import_Template.xlsx");
+  };
+
+  return (
+    <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.sm }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 8px 0" }}>{t('bulk_import')}</h3>
+          <p style={{ margin: 0, color: THEME.colors.textMuted, fontSize: 14 }}>{t('bulk_import_desc')}</p>
+        </div>
+        <Btn variant="ghost" onClick={downloadTemplate} style={{ fontSize: 13 }}>📄 {t('download_template')}</Btn>
+      </div>
+
+      <div style={{ border: `2px dashed ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 40, textAlign: "center", marginBottom: 24, background: THEME.colors.background }}>
+        <input type="file" id="file-upload" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" onChange={handleFileUpload} style={{ display: "none" }} />
+        <label htmlFor="file-upload" style={{ display: "inline-block", background: THEME.colors.primary, color: "#fff", padding: "10px 20px", borderRadius: THEME.radius.sm, fontWeight: 700, cursor: "pointer", marginBottom: 12 }}>
+          {t('upload_file')}
+        </label>
+        <div style={{ color: THEME.colors.textMuted, fontSize: 13 }}>{t('drag_drop_file')}</div>
+        <div style={{ color: THEME.colors.textMuted, fontSize: 12, marginTop: 4 }}>{t('supported_formats')}</div>
+      </div>
+
+      {data.length > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h4 style={{ margin: 0, fontSize: 16 }}>{t('preview_data')} ({t('rows_found').replace('{{count}}', data.length)})</h4>
+            <Btn onClick={handleImport} disabled={loading}>{loading ? t('importing') : t('import_all')}</Btn>
+          </div>
+          <div style={{ overflowX: "auto", border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: THEME.colors.background, borderBottom: `1px solid ${THEME.colors.border}` }}>
+                  <th style={{ padding: "12px 16px" }}>Title</th>
+                  <th style={{ padding: "12px 16px" }}>Category</th>
+                  <th style={{ padding: "12px 16px" }}>Location</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.slice(0, 5).map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                    <td style={{ padding: "12px 16px" }}>{row.Title || row.title}</td>
+                    <td style={{ padding: "12px 16px" }}>{row.Category || row.category}</td>
+                    <td style={{ padding: "12px 16px" }}>{row.Location || row.location}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data.length > 5 && <div style={{ textAlign: "center", padding: 12, color: THEME.colors.textMuted, fontSize: 13 }}>Showing first 5 rows...</div>}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Boundaries Tab Component ─────────────────────────────────────────────────
+const BoundariesTab = ({ t, notify }) => {
+  const [boundaries, setBoundaries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [name, setName] = useState("");
+  const fileInputRef = useRef(null);
+
+  useEffect(() => { fetchBoundaries(); }, []);
+
+  const fetchBoundaries = async () => {
+    setLoading(true);
+    const { data } = await supabase.from("village_boundaries").select("*").order("created_at", { ascending: false });
+    if (data) setBoundaries(data);
+    setLoading(false);
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!name.trim()) return notify("Please enter a boundary name first", "err");
+    
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const geojson = JSON.parse(evt.target.result);
+        const { error } = await supabase.from("village_boundaries").insert([{ name, geojson }]);
+        if (error) throw error;
+        notify(t('boundary_uploaded'));
+        setName("");
+        fetchBoundaries();
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } catch (err) {
+        notify("Invalid GeoJSON file or upload error: " + err.message, "err");
+      }
+      setUploading(false);
+    };
+    reader.readAsText(file);
+  };
+
+  const deleteBoundary = async (id) => {
+    if (!window.confirm("Are you sure?")) return;
+    const { error } = await supabase.from("village_boundaries").delete().eq("id", id);
+    if (!error) fetchBoundaries();
+  };
+
+  return (
+    <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.sm }}>
+      <div style={{ marginBottom: 32 }}>
+        <h3 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 8px 0" }}>{t('village_boundaries')}</h3>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <Input label={t('boundary_name')} placeholder="e.g. Ward 5 Boundary" value={name} onChange={e => setName(e.target.value)} />
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <input type="file" ref={fileInputRef} accept=".geojson,application/geo+json" onChange={handleFileUpload} style={{ display: "none" }} id="geojson-upload" />
+            <label htmlFor="geojson-upload" style={{ display: "inline-block", background: THEME.colors.primary, color: "#fff", padding: "12px 20px", borderRadius: THEME.radius.sm, fontWeight: 700, cursor: uploading ? "wait" : "pointer", opacity: uploading ? 0.7 : 1 }}>
+              {uploading ? "Uploading..." : t('upload_geojson')}
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h4 style={{ fontSize: 16, margin: "0 0 16px 0" }}>{t('active_boundaries')}</h4>
+        {loading ? <p>Loading...</p> : boundaries.length === 0 ? <p style={{ color: THEME.colors.textMuted }}>{t('no_boundaries')}</p> : (
+          <div style={{ border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 14 }}>
+              <tbody>
+                {boundaries.map(b => (
+                  <tr key={b.id} style={{ borderBottom: `1px solid ${THEME.colors.border}` }}>
+                    <td style={{ padding: "16px 20px", fontWeight: 600 }}>{b.name}</td>
+                    <td style={{ padding: "16px 20px", color: THEME.colors.textMuted }}>{new Date(b.created_at).toLocaleDateString()}</td>
+                    <td style={{ padding: "16px 20px", textAlign: "right" }}>
+                      <Btn variant="ghost" onClick={() => deleteBoundary(b.id)} style={{ color: THEME.colors.danger }}>{t('delete_boundary')}</Btn>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ─── Pulsing Urgent keyframe injector ────────────────────────────────────────
 
@@ -1710,7 +2286,11 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
           {!t_officer && profile?.role === "admin" && (
-            <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
+            <>
+              <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
+              <button style={tabStyle(tab === "bulk_import")} onClick={() => setTab("bulk_import")}>📁 {t('tab_bulk_import')}</button>
+              <button style={tabStyle(tab === "boundaries")} onClick={() => setTab("boundaries")}>🗺️ {t('tab_boundaries')}</button>
+            </>
           )}
           <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
         </div>
@@ -1718,6 +2298,10 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
       {tab === "users" && !t_officer && profile?.role === "admin" ? (
         <StaffManagementTab t={t} notify={notify} session={session} currentProfile={profile} />
+      ) : tab === "bulk_import" && !t_officer && profile?.role === "admin" ? (
+        <BulkImportTab t={t} notify={notify} />
+      ) : tab === "boundaries" && !t_officer && profile?.role === "admin" ? (
+        <BoundariesTab t={t} notify={notify} />
       ) : tab === "analytics" ? (
         <AnalyticsTab list={list} t={t} />
       ) : (
@@ -1800,8 +2384,12 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
                 {/* Title & ID */}
                 <div style={{ padding: "14px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, marginBottom: 16, border: `1px solid ${THEME.colors.border}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>#{selected.ticket_id || selected.id.slice(0, 8)}</div>
-                  <h4 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>{selected.title}</h4>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>
+                    #{selected.ticket_id || selected.id.slice(0, 8)}
+                    {selected.is_anonymous && <span style={{ marginLeft: 8, background: THEME.colors.textMuted, color: "#fff", padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🕵️ {t('anonymous_badge') || "Anonymous"}</span>}
+                    {selected.related_scheme && <span style={{ marginLeft: 8, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🏛 {selected.related_scheme}</span>}
+                  </div>
+                  <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 8px" }}>{selected.title}</h4>
                   <Badge status={selected.status} priority={selected.priority} />
                   {(upvoteCounts[selected.id] || 0) > 0 && (
                     <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: THEME.colors.danger }}>🔥 {upvoteCounts[selected.id]} {t('community_upvotes')}</div>
@@ -2155,6 +2743,7 @@ export default function App() {
   const renderContent = () => {
     switch(view) {
       case "submit": return <SubmitView {...shared} />;
+      case "submit_anonymous": return <AnonymousSubmitView {...shared} />;
       case "track":  return <TrackView {...shared} />;
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
