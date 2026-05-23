@@ -236,7 +236,7 @@ const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
 
 // ─── Voice Input Button Component ─────────────────────────────────────────────
 
-const VoiceInputBtn = ({ onTranscript, lang = "en-US" }) => {
+const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
   const { t } = useTranslation();
   const [speechLang, setSpeechLang] = useState(lang);
   const {
@@ -266,6 +266,23 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US" }) => {
     } else {
       resetTranscript();
       SpeechRecognition.startListening({ continuous: true, language: speechLang });
+      
+      // Hook into native speech recognition to capture errors (like permission denied)
+      setTimeout(() => {
+        const recognition = SpeechRecognition.getRecognition();
+        if (recognition) {
+          recognition.onerror = (event) => {
+            console.error("Speech Recognition Error:", event.error);
+            if (event.error === 'not-allowed') {
+              if (notify) notify("Microphone permission denied! Please allow microphone access in your browser settings.", "err");
+            } else if (event.error === 'no-speech') {
+              // Ignore no-speech errors
+            } else {
+              if (notify) notify(`Voice input error: ${event.error}`, "err");
+            }
+          };
+        }
+      }, 150);
     }
   };
 
@@ -732,7 +749,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
           <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} - <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
           <VoiceInputBtn onTranscript={(text) => setForm(prev => ({ ...prev, description: text }))} lang={
             (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
-          } />
+          } notify={notify} />
           <textarea
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
@@ -905,7 +922,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} — <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
           <VoiceInputBtn onTranscript={handleVoiceTranscript} lang={
             (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
-          } />
+          } notify={notify} />
           <textarea
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
