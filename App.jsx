@@ -68,6 +68,13 @@ const SPEECH_LANGS = [
   { code: "te-IN", label: "తెలుగు", flag: "🇮🇳" },
 ];
 
+const getSpeechLangFromAppLang = (language = "en") => {
+  const baseLang = language.split("-")[0];
+  if (baseLang === "hi") return "hi-IN";
+  if (baseLang === "te") return "te-IN";
+  return "en-US";
+};
+
 const GOVERNMENT_SCHEMES = [
   { id: "mgnrega", name: "MGNREGA", key: "scheme_mgnrega", icon: "👷", category: "Employment", url: "https://nrega.nic.in/" },
   { id: "pmay", name: "PM Awas Yojana", key: "scheme_pmay", icon: "🏠", category: "Housing", url: "https://pmaymis.gov.in/" },
@@ -261,6 +268,31 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
     return <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('voice_not_supported')}</span>;
   }
 
+  const startVoiceRecognition = async (language) => {
+    const recognition = SpeechRecognition.getRecognition();
+    if (recognition) recognition.lang = language;
+    await SpeechRecognition.startListening({ continuous: true, language });
+  };
+
+  const handleLanguageChange = async (event) => {
+    const nextLang = event.target.value;
+    setSpeechLang(nextLang);
+
+    if (!listening) return;
+
+    try {
+      setVoiceStatus("Switching language...");
+      await SpeechRecognition.stopListening();
+      resetTranscript();
+      await startVoiceRecognition(nextLang);
+      setVoiceStatus("");
+      notify?.(`Voice language changed to ${SPEECH_LANGS.find(l => l.code === nextLang)?.label || nextLang}.`);
+    } catch (err) {
+      setVoiceStatus("");
+      notify?.(err?.message || "Could not switch voice language. Please stop and start the mic again.", "err");
+    }
+  };
+
   const toggleListening = async (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -291,7 +323,7 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
 
       setVoiceStatus("Starting microphone...");
       resetTranscript();
-      await SpeechRecognition.startListening({ continuous: true, language: speechLang });
+      await startVoiceRecognition(speechLang);
       setVoiceStatus("");
       
       // Hook into native speech recognition to capture errors (like permission denied)
@@ -344,7 +376,7 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
       </button>
       <select
         value={speechLang}
-        onChange={e => setSpeechLang(e.target.value)}
+        onChange={handleLanguageChange}
         style={{
           padding: "8px 12px",
           borderRadius: THEME.radius.sm,
@@ -359,7 +391,7 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
         }}
       >
         {SPEECH_LANGS.map(l => (
-          <option key={l.code} value={l.code}>{l.flag} {l.label}</option>
+          <option key={l.code} value={l.code}>{l.code} - {l.label}</option>
         ))}
       </select>
       {listening && (
@@ -645,7 +677,7 @@ const QRCodeModal = ({ t, ticketId, onClose }) => {
 
 // ─── Anonymous Submit View ───────────────────────────────────────────────────
 
-const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
+const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
@@ -783,9 +815,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
           <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
           
           <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} - <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
-          <VoiceInputBtn onTranscript={(text) => setForm(prev => ({ ...prev, description: text }))} lang={
-            (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
-          } notify={notify} />
+          <VoiceInputBtn onTranscript={(text) => setForm(prev => ({ ...prev, description: text }))} lang={getSpeechLangFromAppLang(i18n.language)} notify={notify} />
           <textarea
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
@@ -824,7 +854,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
 
 // ─── Submit View (with Voice Input + Offline Queue) ──────────────────────────
 
-const SubmitView = ({ t, notify, navigate, session }) => {
+const SubmitView = ({ t, notify, navigate, session, i18n }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ 
@@ -956,9 +986,7 @@ const SubmitView = ({ t, notify, navigate, session }) => {
           
           {/* Voice Input */}
           <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} — <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
-          <VoiceInputBtn onTranscript={handleVoiceTranscript} lang={
-            (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
-          } notify={notify} />
+          <VoiceInputBtn onTranscript={handleVoiceTranscript} lang={getSpeechLangFromAppLang(i18n.language)} notify={notify} />
           <textarea
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
