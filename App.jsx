@@ -238,12 +238,17 @@ const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
 
 const VoiceInputBtn = ({ onTranscript, lang = "en-US" }) => {
   const { t } = useTranslation();
+  const [speechLang, setSpeechLang] = useState(lang);
   const {
     transcript,
     listening,
     resetTranscript,
     browserSupportsSpeechRecognition
   } = useSpeechRecognition();
+
+  useEffect(() => {
+    setSpeechLang(lang);
+  }, [lang]);
 
   useEffect(() => {
     if (transcript) {
