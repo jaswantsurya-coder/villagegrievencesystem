@@ -58,7 +58,7 @@ const STATUS_META = {
   "In Progress": { color: THEME.colors.primary, bg: THEME.colors.primaryLight, border: "#7dd3fc", icon: "🔵" },
   Resolved:      { color: THEME.colors.success, bg: THEME.colors.successBg, border: "#86efac", icon: "🟢" },
   Closed:        { color: THEME.colors.textMuted, bg: "#f1f5f9", border: "#cbd5e1", icon: "⚫" },
-  Escalated:     { color: "#991b1b", bg: THEME.colors.dangerBg, border: "#f87171", icon: "⚠️" },
+  Escalated:     { color: "#ea580c", bg: "#ffedd5", border: "#fdba74", icon: "🔥" },
   Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥" },
 };
 
@@ -238,7 +238,6 @@ const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
 
 const VoiceInputBtn = ({ onTranscript, lang = "en-US" }) => {
   const { t } = useTranslation();
-  const [speechLang, setSpeechLang] = useState(lang);
   const {
     transcript,
     listening,
@@ -725,7 +724,10 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries }) => {
           
           <Input label={t("complaint_title")} placeholder="e.g. Broken Water Pipe" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
           
-          <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")}</label>
+          <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")} - <span style={{ color: THEME.colors.primary }}>{t('voice_hint')}</span></label>
+          <VoiceInputBtn onTranscript={(text) => setForm(prev => ({ ...prev, description: text }))} lang={
+            (() => { const l = localStorage.getItem('i18nextLng') || 'en'; return l === 'hi' ? 'hi-IN' : l === 'te' ? 'te-IN' : 'en-US'; })()
+          } />
           <textarea
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
@@ -967,6 +969,27 @@ const SubmitView = ({ t, notify, navigate, session }) => {
 
 // ─── Track View (with Ratings + Upvoting) ────────────────────────────────────
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 20, color: "red", background: "#fef2f2", border: "1px solid red" }}>
+          <h2>Something went wrong in this view.</h2>
+          <pre style={{ whiteSpace: "pre-wrap" }}>{this.state.error.toString()}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const TrackView = ({ t, notify, session }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -975,6 +998,7 @@ const TrackView = ({ t, notify, session }) => {
   const [userUpvotes, setUserUpvotes] = useState({});
   const [ratingForm, setRatingForm] = useState({});
   const [offlineDrafts, setOfflineDrafts] = useState(getOfflineQueue());
+  const [qrItem, setQrItem] = useState(null);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -1015,7 +1039,7 @@ const TrackView = ({ t, notify, session }) => {
 
   const fetchGrievances = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("complaints").select("*").order("created_at", { ascending: false });
+    const { data, error } = await supabase.from("complaints").select("*").eq("citizen_id", session.user.id).order("created_at", { ascending: false });
     if (!error) setItems(data);
     setLoading(false);
   };
@@ -2744,7 +2768,7 @@ export default function App() {
     switch(view) {
       case "submit": return <SubmitView {...shared} />;
       case "submit_anonymous": return <AnonymousSubmitView {...shared} />;
-      case "track":  return <TrackView {...shared} />;
+      case "track":  return <ErrorBoundary><TrackView {...shared} /></ErrorBoundary>;
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
       case "gallery": return <GalleryView {...shared} />;
