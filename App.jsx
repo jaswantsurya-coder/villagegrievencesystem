@@ -239,6 +239,7 @@ const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
 const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
   const { t } = useTranslation();
   const [speechLang, setSpeechLang] = useState(lang);
+  const [voiceStatus, setVoiceStatus] = useState("");
   const {
     transcript,
     listening,
@@ -260,12 +261,38 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
     return <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('voice_not_supported')}</span>;
   }
 
-  const toggleListening = () => {
+  const toggleListening = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
     if (listening) {
-      SpeechRecognition.stopListening();
-    } else {
+      await SpeechRecognition.stopListening();
+      setVoiceStatus("");
+      return;
+    }
+
+    try {
+      if (!window.isSecureContext) {
+        notify?.("Voice input needs HTTPS or localhost to access the microphone.", "err");
+        return;
+      }
+
+      if (navigator.permissions?.query) {
+        try {
+          const permission = await navigator.permissions.query({ name: "microphone" });
+          if (permission.state === "denied") {
+            notify?.("Microphone permission is blocked. Allow it from the browser site settings.", "err");
+            return;
+          }
+        } catch {
+          // Browser does not expose microphone permission queries.
+        }
+      }
+
+      setVoiceStatus("Starting microphone...");
       resetTranscript();
-      SpeechRecognition.startListening({ continuous: true, language: speechLang });
+      await SpeechRecognition.startListening({ continuous: true, language: speechLang });
+      setVoiceStatus("");
       
       // Hook into native speech recognition to capture errors (like permission denied)
       setTimeout(() => {
@@ -274,15 +301,18 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
           recognition.onerror = (event) => {
             console.error("Speech Recognition Error:", event.error);
             if (event.error === 'not-allowed') {
-              if (notify) notify("Microphone permission denied! Please allow microphone access in your browser settings.", "err");
+              notify?.("Microphone permission denied. Please allow microphone access in your browser settings.", "err");
             } else if (event.error === 'no-speech') {
-              // Ignore no-speech errors
+              setVoiceStatus("Listening... speak now");
             } else {
-              if (notify) notify(`Voice input error: ${event.error}`, "err");
+              notify?.(`Voice input error: ${event.error}`, "err");
             }
           };
         }
       }, 150);
+    } catch (err) {
+      setVoiceStatus("");
+      notify?.(err?.message || "Could not start voice input. Check microphone permission and try again.", "err");
     }
   };
 
@@ -300,6 +330,7 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
           borderRadius: "50%",
           fontSize: 20,
           cursor: "pointer",
+          flex: "0 0 44px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -342,6 +373,11 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
           gap: 4,
         }}>
           🔴 {t('listening')}
+        </span>
+      )}
+      {!listening && voiceStatus && (
+        <span style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary }}>
+          {voiceStatus}
         </span>
       )}
     </div>
