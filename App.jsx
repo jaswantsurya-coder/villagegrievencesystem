@@ -243,6 +243,29 @@ const StarRating = ({ rating, onRate, readonly = false, size = 28 }) => {
 
 // ─── Voice Input Button Component ─────────────────────────────────────────────
 
+const VoiceWaveformIcon = ({ listening = false }) => (
+  <span style={{
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    background: "#fff",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  }}>
+    {listening ? (
+      <span style={{ width: 13, height: 13, borderRadius: 2, background: "#111" }} />
+    ) : (
+      <svg width="25" height="25" viewBox="0 0 25 25" fill="none" aria-hidden="true">
+        <rect x="4" y="10" width="3" height="5" rx="1.5" fill="#111" />
+        <rect x="9" y="6" width="3" height="13" rx="1.5" fill="#111" />
+        <rect x="14" y="8" width="3" height="9" rx="1.5" fill="#111" />
+        <rect x="19" y="10" width="3" height="5" rx="1.5" fill="#111" />
+      </svg>
+    )}
+  </span>
+);
+
 const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
   const { t } = useTranslation();
   const [speechLang, setSpeechLang] = useState(lang);
@@ -354,25 +377,23 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
         type="button"
         onClick={toggleListening}
         style={{
-          background: listening ? THEME.colors.danger : "linear-gradient(135deg, #0284c7, #0369a1)",
-          color: "#fff",
+          background: listening ? THEME.colors.danger : "#242424",
           border: "none",
-          width: 44,
-          height: 44,
-          borderRadius: "50%",
-          fontSize: 20,
+          width: 56,
+          height: 56,
+          borderRadius: 18,
           cursor: "pointer",
-          flex: "0 0 44px",
+          flex: "0 0 56px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           transition: "all 0.3s",
           animation: listening ? "urgentPulse 1.5s infinite" : "none",
-          boxShadow: listening ? "0 0 20px rgba(220,38,38,0.4)" : "0 4px 12px rgba(2,132,199,0.3)",
+          boxShadow: listening ? "0 0 20px rgba(220,38,38,0.4)" : "0 4px 12px rgba(0,0,0,0.25)",
         }}
         title={listening ? t('stop_voice') : t('start_voice')}
       >
-        {listening ? "⏹" : "🎤"}
+        <VoiceWaveformIcon listening={listening} />
       </button>
       <select
         value={speechLang}
