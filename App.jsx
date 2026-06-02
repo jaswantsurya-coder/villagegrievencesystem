@@ -8,10 +8,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
-  BarChart3, Building2, Camera, Check, CircleAlert, CircleDot, Clock3,
-  Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
-  GraduationCap, HeartPulse, Leaf, Moon, ShieldCheck, Sparkles, Star,
-  Sun, TrendingUp, Zap
+  BarChart3, Building2, CalendarDays, Camera, Check, CircleAlert, CircleDot,
+  Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
+  GraduationCap, HeartPulse, Images, Leaf, MapPin, Moon, Search, ShieldCheck,
+  Sparkles, Star, Sun, TrendingUp, Zap
 } from 'lucide-react';
 
 const THEME = {
@@ -71,10 +71,11 @@ const STATUS_META = {
 const ICONS = {
   agriculture: Leaf, alert: CircleAlert, building: Building2, camera: Camera,
   chart: BarChart3, clock: Clock3, dot: CircleDot, download: Download,
-  education: GraduationCap, electricity: Zap, file: FileText, folder: FolderOpen,
-  health: HeartPulse, moon: Moon, other: Ellipsis, road: Construction,
-  sanitation: Sparkles, shield: ShieldCheck, star: Star, sun: Sun,
-  trend: TrendingUp, water: Droplets,
+  calendar: CalendarDays, education: GraduationCap, electricity: Zap, file: FileText,
+  folder: FolderOpen, gallery: Images, health: HeartPulse, location: MapPin,
+  moon: Moon, other: Ellipsis, road: Construction, sanitation: Sparkles,
+  search: Search, shield: ShieldCheck, star: Star, sun: Sun, trend: TrendingUp,
+  water: Droplets,
 };
 
 const AppIcon = ({ name, size = 18, color = "currentColor", strokeWidth = 2, style }) => {
@@ -1441,29 +1442,36 @@ const GalleryView = ({ t, session }) => {
   return (
     <div>
       <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 8 }}>🌟 {t('public_gallery')}</h2>
+        <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}><span style={{ width: 42, height: 42, borderRadius: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", color: THEME.colors.primary, background: THEME.colors.primaryLight }}><AppIcon name="gallery" size={22} /></span>{t('public_gallery')}</h2>
         <p style={{ color: THEME.colors.textMuted, fontSize: 15, margin: 0 }}>{t('gallery_subtitle')}</p>
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{ padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, background: THEME.colors.surface, color: THEME.colors.text, outline: "none" }}>
-          <option value="">{t('all_categories')}</option>
-          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {t(c.key)}</option>)}
-        </select>
-        <input
-          type="text"
-          placeholder={t('filter_search')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, flex: 1, minWidth: 200, background: THEME.colors.surface, color: THEME.colors.text, outline: "none" }}
-        />
+      <div style={{ marginBottom: 24, padding: 16, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.surface }}>
+        <div style={{ position: "relative", marginBottom: 14 }}>
+          <AppIcon name="search" size={18} color={THEME.colors.textMuted} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            type="text"
+            placeholder={t('filter_search')}
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ width: "100%", padding: "12px 14px 12px 42px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 600, fontSize: 13, minHeight: 44, boxSizing: "border-box", background: THEME.colors.background, color: THEME.colors.text, outline: "none" }}
+          />
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} aria-label={t('filter_category')}>
+          <button type="button" onClick={() => setFilterCat("")} aria-pressed={!filterCat} style={{ minHeight: 38, padding: "8px 12px", borderRadius: THEME.radius.full, border: `1px solid ${!filterCat ? THEME.colors.primary : THEME.colors.border}`, background: !filterCat ? THEME.colors.primaryLight : THEME.colors.background, color: !filterCat ? THEME.colors.primaryHover : THEME.colors.textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: THEME.font, fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}><AppIcon name="folder" size={15} /> {t('all_categories')}</button>
+          {CATEGORIES.map(c => {
+            const active = filterCat === c.id;
+            return <button key={c.id} type="button" onClick={() => setFilterCat(c.id)} aria-pressed={active} style={{ minHeight: 38, padding: "8px 12px", borderRadius: THEME.radius.full, border: `1px solid ${active ? c.color : THEME.colors.border}`, background: active ? c.bg : THEME.colors.background, color: active ? c.color : THEME.colors.textMuted, cursor: "pointer", display: "flex", alignItems: "center", gap: 7, fontFamily: THEME.font, fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}><AppIcon name={c.iconName} size={15} /> {t(c.key)}</button>;
+          })}
+        </div>
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: THEME.colors.textMuted }}>{t('loading')}</div> : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: 60, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}` }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
-          <h3 style={{ fontWeight: 800, color: THEME.colors.text }}>{t('no_resolved_yet')}</h3>
+          <span style={{ width: 72, height: 72, margin: "0 auto 16px", borderRadius: 24, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.primary, background: THEME.colors.primaryLight }}><AppIcon name="gallery" size={34} strokeWidth={1.7} /></span>
+          <h3 style={{ fontWeight: 800, color: THEME.colors.text, marginBottom: 6 }}>{t('no_resolved_yet')}</h3>
+          <p style={{ margin: 0, color: THEME.colors.textMuted, fontSize: 13 }}>{filterCat || search ? t('gallery_filter_hint') : t('gallery_empty_hint')}</p>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
@@ -2479,7 +2487,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
             </select>
             <select value={fCategory} onChange={e => setFCategory(e.target.value)} style={selectStyle}>
               <option value="">{t('all_categories')}</option>
-              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.icon} {t(c.key)}</option>)}
+              {CATEGORIES.map(c => <option key={c.id} value={c.id}>{t(c.key)}</option>)}
             </select>
             <input
               type="text"
