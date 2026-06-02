@@ -2024,12 +2024,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       {policyError && (
         <div style={{ background: THEME.colors.dangerBg, border: `1px solid ${STATUS_META.Open.border}`, borderRadius: THEME.radius.md, padding: "16px 20px", marginBottom: 20, color: THEME.colors.danger, fontSize: 13, lineHeight: 1.6 }}>
           <strong style={{ fontSize: 14 }}>⚠️ Row Level Security (RLS) Policy Missing</strong><br/>
-          To enable role updates from the UI in a secure, production-grade manner, please execute the <code style={{ background: "#FEE2E2", padding: "2px 6px", borderRadius: 4, fontWeight: 700 }}>add-admin-policy.sql</code> script in your **Supabase SQL Editor**:
-          <pre style={{ background: THEME.colors.surface, padding: 12, borderRadius: 8, marginTop: 10, fontSize: 11, overflowX: "auto", border: `1.5px solid ${STATUS_META.Open.border}`, color: THEME.colors.text }}>
-{`CREATE POLICY "Admins can update all profiles" 
-ON profiles FOR UPDATE TO authenticated 
-USING ( (SELECT role FROM profiles WHERE id = auth.uid()) = 'admin' );`}
-          </pre>
+          Role updates are not currently permitted by the database policy. Please contact your database administrator to review the required permissions.
         </div>
       )}
 
