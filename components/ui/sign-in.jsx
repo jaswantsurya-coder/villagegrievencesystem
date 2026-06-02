@@ -27,7 +27,7 @@ export const SignInPage = ({
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row font-sans w-full bg-white text-gray-900 overflow-y-auto">
       {/* Left column: sign-in form */}
-      <section className="flex-1 flex items-center justify-center px-5 py-16 sm:p-8 z-10">
+      <section className="auth-form-panel flex-1 flex items-center justify-center px-5 py-16 sm:p-8 z-10">
         <div className="w-full max-w-md">
           <div className="flex flex-col gap-6">
             <h1 className="animate-element animate-delay-100 text-3xl sm:text-4xl md:text-5xl font-semibold leading-tight break-words">{title}</h1>
@@ -80,7 +80,7 @@ export const SignInPage = ({
 
       {/* Right column: hero image */}
       {heroImageSrc && (
-        <section className="hidden md:block flex-1 relative p-4 z-0">
+        <section className="auth-art-panel hidden md:block flex-1 relative p-4 z-0">
           <div className="animate-slide-right animate-delay-300 absolute inset-4 rounded-3xl bg-cover bg-center" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
         </section>
       )}

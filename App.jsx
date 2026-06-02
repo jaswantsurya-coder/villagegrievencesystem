@@ -2781,7 +2781,9 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     } catch (err) {
       const message = err?.message || "";
       const normalizedMessage = message.toLowerCase();
-      const displayMessage = !isSignUp && normalizedMessage.includes("email not confirmed")
+      const displayMessage = normalizedMessage.includes("email rate limit exceeded")
+          ? t('auth_email_rate_limit')
+          : !isSignUp && normalizedMessage.includes("email not confirmed")
           ? t('auth_email_confirm_required')
           : !isSignUp && normalizedMessage.includes("invalid login credentials")
             ? t('account_not_found_help')

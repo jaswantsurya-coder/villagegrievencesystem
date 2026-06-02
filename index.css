@@ -16,6 +16,17 @@
   display: none;
 }
 
+@media (min-width: 769px) {
+  .auth-form-panel {
+    flex: 0 0 min(50vw, 680px) !important;
+    padding: 48px clamp(32px, 5vw, 88px) !important;
+  }
+
+  .auth-art-panel {
+    min-width: 0;
+  }
+}
+
 @media (max-width: 768px) {
   .shell-nav {
     height: 64px !important;
