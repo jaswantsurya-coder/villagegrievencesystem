@@ -10,8 +10,8 @@ import autoTable from 'jspdf-autotable';
 import {
   BarChart3, Building2, CalendarDays, Camera, Check, CircleAlert, CircleDot,
   Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
-  GraduationCap, HeartPulse, Images, Leaf, MapPin, Moon, Search, ShieldCheck,
-  Sparkles, Star, Sun, TrendingUp, Zap
+  GraduationCap, HeartPulse, Images, Leaf, MapPin, Menu, Moon, Search,
+  ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap
 } from 'lucide-react';
 
 const THEME = {
@@ -538,9 +538,28 @@ const Timeline = ({ status }) => {
 };
 
 const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => (
+  <ShellLayout children={children} view={view} role={role} navigate={navigate} toast={toast} session={session} profile={profile} handleLogout={handleLogout} setShowLogin={setShowLogin} t={t} i18n={i18n} theme={theme} setTheme={setTheme} />
+);
+
+const ShellLayout = ({ children, view, navigate, toast, session, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const goTo = (nextView) => {
+    navigate(nextView);
+    setMobileMenuOpen(false);
+  };
+  const navItems = [
+    ["home", t('home')],
+    ["submit", t('submit_grievance')],
+    ["track", t('track_status')],
+    ["gallery", t('public_gallery')],
+    ["gov-links", t('govt_links')],
+  ];
+  const navButtonStyle = (active) => ({ background: active ? THEME.colors.primaryLight : "transparent", color: active ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" });
+
+  return (
   <div style={{ fontFamily: THEME.font, minHeight: "100vh", background: THEME.colors.background, color: THEME.colors.text }}>
     <nav className="shell-nav" style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
-      <div className="shell-brand" style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
+      <div className="shell-brand" style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => goTo("home")}>
         <div style={{ width: 38, height: 38, background: THEME.colors.primary, color: "#fff", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center" }}><AppIcon name="building" size={20} /></div>
         <div>
           <div style={{ color: THEME.colors.text, fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>{t('app_title')}</div>
@@ -548,15 +567,15 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
         </div>
       </div>
       <div className="shell-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        {["home", "submit", "track", "gallery"].map(v => (
-          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : v === 'gallery' ? 'public_gallery' : 'home')}</button>
+        {navItems.slice(0, 4).map(([v, label]) => (
+          <button key={v} onClick={() => goTo(v)} style={navButtonStyle(view === v)}>{label}</button>
         ))}
-        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? THEME.colors.primaryLight : "transparent", color: view === "gov-links" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('govt_links')}</button>
+        <button onClick={() => goTo("gov-links")} style={navButtonStyle(view === "gov-links")}>{t('govt_links')}</button>
         {session && (
-          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
+          <button onClick={() => goTo("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
         )}
         {session && (
-          <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? THEME.colors.primaryLight : "transparent", color: view === "profile" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('my_account')}</button>
+          <button onClick={() => goTo("profile")} style={navButtonStyle(view === "profile")}>{t('my_account')}</button>
         )}
         <div style={{ width: 1, height: 24, background: THEME.colors.border, margin: "0 4px" }} />
         <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? "Switch to dark theme" : "Switch to light theme"} title={theme === 'light' ? "Switch to dark theme" : "Switch to light theme"} style={{ width: 44, height: 44, background: THEME.colors.background, color: theme === 'light' ? "#475569" : "#f59e0b", border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{theme === 'light' ? <AppIcon name="moon" size={17} /> : <AppIcon name="sun" size={18} />}</button>
@@ -567,13 +586,27 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
           <Btn style={{ padding: "8px 16px", fontSize: 13, minHeight: 36 }} onClick={() => setShowLogin(true)}>{t('login')}</Btn>
         )}
       </div>
+      <div className="mobile-shell-controls">
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? "Switch to dark theme" : "Switch to light theme"} className="mobile-icon-button">{theme === 'light' ? <AppIcon name="moon" size={18} /> : <AppIcon name="sun" size={18} />}</button>
+        <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} className="mobile-language-button">{i18n.language.toUpperCase()}</button>
+        <button onClick={() => setMobileMenuOpen(prev => !prev)} aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? "Close navigation menu" : "Open navigation menu"} className="mobile-icon-button">{mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}</button>
+      </div>
+      {mobileMenuOpen && (
+        <div className="mobile-nav-menu">
+          {navItems.map(([v, label]) => <button key={v} onClick={() => goTo(v)} className={view === v ? "mobile-nav-item active" : "mobile-nav-item"}>{label}</button>)}
+          {session && <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('admin_nav')}</button>}
+          {session && <button onClick={() => goTo("profile")} className={view === "profile" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('my_account')}</button>}
+          {session ? <button onClick={handleLogout} className="mobile-nav-item danger">{t('logout')}</button> : <button onClick={() => { setMobileMenuOpen(false); setShowLogin(true); }} className="mobile-nav-item primary">{t('login')}</button>}
+        </div>
+      )}
     </nav>
     {toast && (
       <div style={{ position: "fixed", top: 84, right: 24, zIndex: 1000, background: toast.type === "err" ? THEME.colors.dangerBg : THEME.colors.successBg, color: toast.type === "err" ? THEME.colors.danger : THEME.colors.success, padding: "14px 20px", borderRadius: THEME.radius.md, border: `1px solid ${toast.type === "err" ? '#fca5a5' : '#86efac'}`, fontWeight: 600, boxShadow: THEME.shadow.md, display: "flex", alignItems: "center", gap: 10 }}>{toast.type === "err" ? "⚠️" : "✅"} {toast.msg}</div>
     )}
     <div className="shell-content" style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px" }}>{children}</div>
   </div>
-);
+  );
+};
 
 // ─── Sub-Views ────────────────────────────────────────────────────────────────
 

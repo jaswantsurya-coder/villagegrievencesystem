@@ -11,33 +11,107 @@
   z-index: 0;
 }
 
+.mobile-shell-controls,
+.mobile-nav-menu {
+  display: none;
+}
+
 @media (max-width: 768px) {
   .shell-nav {
-    height: auto !important;
+    height: 64px !important;
     min-height: 64px;
     padding: 8px 12px !important;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
+    position: sticky;
   }
 
   .shell-brand {
-    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
-  .shell-actions {
-    width: 100%;
-    flex-wrap: nowrap !important;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scrollbar-width: none;
+  .shell-brand > div:last-child {
+    min-width: 0;
   }
 
-  .shell-actions::-webkit-scrollbar {
+  .shell-brand > div:last-child > div {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shell-brand > div:last-child > div:last-child {
     display: none;
   }
 
-  .shell-actions > * {
+  .shell-actions {
+    display: none !important;
+  }
+
+  .mobile-shell-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     flex: 0 0 auto;
+  }
+
+  .mobile-icon-button,
+  .mobile-language-button {
+    min-width: 42px;
+    height: 42px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-background);
+    color: var(--color-text);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .mobile-nav-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 12px;
+    right: 12px;
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+    box-shadow: 0 16px 32px rgba(15, 23, 42, 0.24);
+  }
+
+  .mobile-nav-item {
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: transparent;
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .mobile-nav-item.active,
+  .mobile-nav-item.primary {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    color: var(--color-primary-hover);
+  }
+
+  .mobile-nav-item.danger {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
   }
 
   .shell-content {
