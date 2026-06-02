@@ -7,6 +7,12 @@ import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  BarChart3, Building2, Camera, Check, CircleAlert, CircleDot, Clock3,
+  Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
+  GraduationCap, HeartPulse, Leaf, Moon, ShieldCheck, Sparkles, Star,
+  Sun, TrendingUp, Zap
+} from 'lucide-react';
 
 const THEME = {
   colors: {
@@ -41,26 +47,59 @@ const THEME = {
 };
 
 const CATEGORIES = [
-  { id: "Road & Infrastructure", key: "cat_road", icon: "🛣" },
-  { id: "Water Supply", key: "cat_water", icon: "💧" },
-  { id: "Electricity", key: "cat_electricity", icon: "⚡" },
-  { id: "Sanitation", key: "cat_sanitation", icon: "🧹" },
-  { id: "Education", key: "cat_education", icon: "📚" },
-  { id: "Health Services", key: "cat_health", icon: "🏥" },
-  { id: "Agriculture", key: "cat_agriculture", icon: "🌾" },
-  { id: "Other", key: "cat_other", icon: "📌" },
+  { id: "Road & Infrastructure", key: "cat_road", icon: "🛣", iconName: "road", color: "#f97316", bg: "rgba(249,115,22,0.14)" },
+  { id: "Water Supply", key: "cat_water", icon: "💧", iconName: "water", color: "#0ea5e9", bg: "rgba(14,165,233,0.14)" },
+  { id: "Electricity", key: "cat_electricity", icon: "⚡", iconName: "electricity", color: "#eab308", bg: "rgba(234,179,8,0.14)" },
+  { id: "Sanitation", key: "cat_sanitation", icon: "🧹", iconName: "sanitation", color: "#14b8a6", bg: "rgba(20,184,166,0.14)" },
+  { id: "Education", key: "cat_education", icon: "📚", iconName: "education", color: "#8b5cf6", bg: "rgba(139,92,246,0.14)" },
+  { id: "Health Services", key: "cat_health", icon: "🏥", iconName: "health", color: "#ec4899", bg: "rgba(236,72,153,0.14)" },
+  { id: "Agriculture", key: "cat_agriculture", icon: "🌾", iconName: "agriculture", color: "#22c55e", bg: "rgba(34,197,94,0.14)" },
+  { id: "Other", key: "cat_other", icon: "📌", iconName: "other", color: "#94a3b8", bg: "rgba(148,163,184,0.14)" },
 ];
 
 const STATUS_FLOW = ["Open", "Assigned", "In Progress", "Resolved", "Closed", "Escalated"];
 const STATUS_META = {
-  Open:          { color: THEME.colors.danger, bg: THEME.colors.dangerBg, border: "#fca5a5", icon: "🔴" },
-  Assigned:      { color: THEME.colors.warning, bg: THEME.colors.warningBg, border: "#fcd34d", icon: "🟡" },
-  "In Progress": { color: THEME.colors.primary, bg: THEME.colors.primaryLight, border: "#7dd3fc", icon: "🔵" },
-  Resolved:      { color: THEME.colors.success, bg: THEME.colors.successBg, border: "#86efac", icon: "🟢" },
-  Closed:        { color: THEME.colors.textMuted, bg: "#f1f5f9", border: "#cbd5e1", icon: "⚫" },
-  Escalated:     { color: "#ea580c", bg: "#ffedd5", border: "#fdba74", icon: "🔥" },
-  Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥" },
+  Open:          { color: THEME.colors.danger, bg: THEME.colors.dangerBg, border: "#fca5a5", icon: "🔴", iconName: "dot" },
+  Assigned:      { color: THEME.colors.warning, bg: THEME.colors.warningBg, border: "#fcd34d", icon: "🟡", iconName: "dot" },
+  "In Progress": { color: THEME.colors.primary, bg: THEME.colors.primaryLight, border: "#7dd3fc", icon: "🔵", iconName: "dot" },
+  Resolved:      { color: THEME.colors.success, bg: THEME.colors.successBg, border: "#86efac", icon: "🟢", iconName: "dot" },
+  Closed:        { color: THEME.colors.textMuted, bg: "#f1f5f9", border: "#cbd5e1", icon: "⚫", iconName: "dot" },
+  Escalated:     { color: "#ea580c", bg: "#ffedd5", border: "#fdba74", icon: "🔥", iconName: "alert" },
+  Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥", iconName: "alert" },
 };
+
+const ICONS = {
+  agriculture: Leaf, alert: CircleAlert, building: Building2, camera: Camera,
+  chart: BarChart3, clock: Clock3, dot: CircleDot, download: Download,
+  education: GraduationCap, electricity: Zap, file: FileText, folder: FolderOpen,
+  health: HeartPulse, moon: Moon, other: Ellipsis, road: Construction,
+  sanitation: Sparkles, shield: ShieldCheck, star: Star, sun: Sun,
+  trend: TrendingUp, water: Droplets,
+};
+
+const AppIcon = ({ name, size = 18, color = "currentColor", strokeWidth = 2, style }) => {
+  const Icon = ICONS[name] || Ellipsis;
+  return <Icon size={size} color={color} strokeWidth={strokeWidth} style={style} aria-hidden="true" />;
+};
+
+const CategoryIcon = ({ category, size = 24 }) => (
+  <span style={{ width: 44, height: 44, borderRadius: 14, background: category.bg, color: category.color, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+    <AppIcon name={category.iconName} size={size} strokeWidth={2.2} />
+  </span>
+);
+
+const CategoryCard = ({ category, selected, onClick, label }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={selected}
+    style={{ minHeight: 142, padding: "18px 12px", borderRadius: THEME.radius.md, border: `1.5px solid ${selected ? THEME.colors.primary : THEME.colors.border}`, background: selected ? THEME.colors.primaryLight : THEME.colors.surface, cursor: "pointer", textAlign: "center", transition: "transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease", transform: selected ? "translateY(-2px)" : "translateY(0)", boxShadow: selected ? "0 8px 18px rgba(2,132,199,0.14)" : "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, position: "relative", fontFamily: THEME.font }}
+  >
+    {selected && <span style={{ position: "absolute", top: 10, right: 10, width: 20, height: 20, borderRadius: "50%", background: THEME.colors.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}><Check size={13} strokeWidth={3} /></span>}
+    <CategoryIcon category={category} />
+    <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.35, color: selected ? THEME.colors.primaryHover : THEME.colors.text }}>{label}</span>
+  </button>
+);
 
 const SPEECH_LANGS = [
   { code: "en-US", label: "English", flag: "🇬🇧" },
@@ -202,7 +241,7 @@ const Textarea = ({ label, ...props }) => (
   </div>
 );
 
-const Btn = ({ children, variant = "primary", full, style: s, ...props }) => {
+const Btn = ({ children, variant = "primary", full, style: s, disabled, ...props }) => {
   const V = {
     primary: { background: THEME.colors.primary, color: THEME.colors.surface, border: "none" },
     outline:  { background: "transparent", color: THEME.colors.primary, border: `1.5px solid ${THEME.colors.primary}` },
@@ -210,7 +249,7 @@ const Btn = ({ children, variant = "primary", full, style: s, ...props }) => {
     dark:     { background: THEME.colors.dark, color: THEME.colors.surface, border: "none" },
   };
   return (
-    <button style={{ ...V[variant], padding: "10px 20px", borderRadius: THEME.radius.sm, fontFamily: THEME.font, fontWeight: 600, fontSize: 14, cursor: "pointer", width: full ? "100%" : undefined, transition: "all 0.2s", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, ...s }} {...props}>
+    <button disabled={disabled} style={{ ...V[variant], padding: "10px 20px", borderRadius: THEME.radius.sm, fontFamily: THEME.font, fontWeight: 700, fontSize: 14, cursor: disabled ? "not-allowed" : "pointer", width: full ? "100%" : undefined, transition: "transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: disabled ? 0.5 : 1, touchAction: "manipulation", boxShadow: variant === "primary" ? "0 6px 16px rgba(2,132,199,0.18)" : "none", ...s }} {...props}>
       {children}
     </button>
   );
@@ -501,7 +540,7 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
   <div style={{ fontFamily: THEME.font, minHeight: "100vh", background: THEME.colors.background, color: THEME.colors.text }}>
     <nav style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
-        <div style={{ width: 36, height: 36, background: THEME.colors.primary, color: THEME.colors.surface, borderRadius: THEME.radius.sm, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏘</div>
+        <div style={{ width: 38, height: 38, background: THEME.colors.primary, color: "#fff", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center" }}><AppIcon name="building" size={20} /></div>
         <div>
           <div style={{ color: THEME.colors.text, fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>{t('app_title')}</div>
           <div style={{ color: THEME.colors.textMuted, fontSize: 11, fontWeight: 500 }}>{t('subtitle')}</div>
@@ -509,17 +548,17 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
       </div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {["home", "submit", "track", "gallery"].map(v => (
-          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : v === 'gallery' ? 'public_gallery' : 'home')}</button>
+          <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : v === 'gallery' ? 'public_gallery' : 'home')}</button>
         ))}
-        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? THEME.colors.primaryLight : "transparent", color: view === "gov-links" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('govt_links')}</button>
+        <button onClick={() => navigate("gov-links")} style={{ background: view === "gov-links" ? THEME.colors.primaryLight : "transparent", color: view === "gov-links" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('govt_links')}</button>
         {session && (
-          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? THEME.colors.surface : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s" }}>🛡 {t('admin_nav')}</button>
+          <button onClick={() => navigate("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
         )}
         {session && (
           <button onClick={() => navigate("profile")} style={{ background: view === "profile" ? THEME.colors.primaryLight : "transparent", color: view === "profile" ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t('my_account')}</button>
         )}
         <div style={{ width: 1, height: 24, background: THEME.colors.border, margin: "0 4px" }} />
-        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} style={{ background: "transparent", color: THEME.colors.text, border: "none", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center" }}>{theme === 'light' ? '🌙' : '☀️'}</button>
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} aria-label={theme === 'light' ? "Switch to dark theme" : "Switch to light theme"} title={theme === 'light' ? "Switch to dark theme" : "Switch to light theme"} style={{ width: 44, height: 44, background: THEME.colors.background, color: theme === 'light' ? "#475569" : "#f59e0b", border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>{theme === 'light' ? <AppIcon name="moon" size={17} /> : <AppIcon name="sun" size={18} />}</button>
         <button onClick={() => i18n.changeLanguage(i18n.language === 'en' ? 'hi' : i18n.language === 'hi' ? 'te' : 'en')} style={{ background: THEME.colors.background, color: THEME.colors.text, border: `1px solid ${THEME.colors.border}`, padding: "8px 12px", borderRadius: THEME.radius.sm, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>{i18n.language.toUpperCase()}</button>
         {session ? (
           <Btn variant="outline" style={{ padding: "8px 16px", fontSize: 13, minHeight: 36, borderColor: THEME.colors.danger, color: THEME.colors.danger, borderWidth: 1 }} onClick={handleLogout}>{t('logout')}</Btn>
@@ -548,7 +587,7 @@ const HomeView = ({ navigate, t }) => (
       <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
         <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
-        <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.text, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("submit_anonymous")}>🕵️ {t('file_anonymously') || "File Anonymously"}</Btn>
+        <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.text, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("submit_anonymous")}>🕵️ {t('anonymous_mode')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.success, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("gallery")}>🌟 {t('public_gallery')}</Btn>
       </div>
     </div>
@@ -814,11 +853,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
             {CATEGORIES.map(c => {
               const isSelected = form.categories.includes(c.id);
               return (
-                <div key={c.id} onClick={() => toggleCategory(c.id)}
-                     style={{ padding: "16px 10px", borderRadius: THEME.radius.md, border: `2px solid ${isSelected ? THEME.colors.primary : THEME.colors.border}`, background: isSelected ? THEME.colors.primaryLight : THEME.colors.surface, cursor: "pointer", textAlign: "center", transition: "all 0.2s", transform: isSelected ? "scale(0.98)" : "scale(1)" }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? THEME.colors.primaryHover : THEME.colors.text }}>{t(c.key)}</div>
-                </div>
+                <CategoryCard key={c.id} category={c} selected={isSelected} onClick={() => toggleCategory(c.id)} label={t(c.key)} />
               );
             })}
           </div>
@@ -984,11 +1019,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
             {CATEGORIES.map(c => {
               const isSelected = form.categories.includes(c.id);
               return (
-                <div key={c.id} onClick={() => toggleCategory(c.id)}
-                     style={{ padding: "16px 10px", borderRadius: THEME.radius.md, border: `2px solid ${isSelected ? THEME.colors.primary : THEME.colors.border}`, background: isSelected ? THEME.colors.primaryLight : THEME.colors.surface, cursor: "pointer", textAlign: "center", transition: "all 0.2s", transform: isSelected ? "scale(0.98)" : "scale(1)" }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>{c.icon}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: isSelected ? THEME.colors.primaryHover : THEME.colors.text }}>{t(c.key)}</div>
-                </div>
+                <CategoryCard key={c.id} category={c} selected={isSelected} onClick={() => toggleCategory(c.id)} label={t(c.key)} />
               );
             })}
           </div>
@@ -1729,22 +1760,22 @@ const AnalyticsTab = ({ list, t }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <Btn onClick={generatePDFReport}>📄 {t('download_report_pdf') || "Download PDF Report"}</Btn>
+        <Btn onClick={generatePDFReport}><AppIcon name="download" size={17} /> {t('download_report_pdf', { defaultValue: "Download PDF Report" })}</Btn>
       </div>
       {/* Summary Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 14 }}>
         {[
-          { label: t('total_complaints'), value: stats.total, icon: "📊", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
-          { label: t('open_complaints'), value: stats.byStatus.Open || 0, icon: "🔴", color: THEME.colors.danger, bg: THEME.colors.dangerBg },
-          { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, icon: "🔵", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
-          { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, icon: "🟢", color: THEME.colors.success, bg: THEME.colors.successBg },
-          { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, icon: "⚠️", color: "#991B1B", bg: THEME.colors.dangerBg },
-          { label: t('avg_resolution'), value: `${stats.avgResolutionDays}d`, icon: "⏱", color: "#7c3aed", bg: "#ede9fe" },
-          { label: t('satisfaction_score'), value: stats.avgRating, icon: "⭐", color: "#f59e0b", bg: "#fffbeb" },
+          { label: t('total_complaints'), value: stats.total, iconName: "chart", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+          { label: t('open_complaints'), value: stats.byStatus.Open || 0, iconName: "dot", color: THEME.colors.danger, bg: THEME.colors.dangerBg },
+          { label: t('in_progress_complaints'), value: stats.byStatus["In Progress"] || 0, iconName: "dot", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+          { label: t('resolved_complaints'), value: stats.byStatus.Resolved || 0, iconName: "dot", color: THEME.colors.success, bg: THEME.colors.successBg },
+          { label: t('escalated_complaints'), value: stats.byStatus.Escalated || 0, iconName: "alert", color: "#f97316", bg: "#fff7ed" },
+          { label: t('avg_resolution'), value: `${stats.avgResolutionDays}d`, iconName: "clock", color: "#7c3aed", bg: "#ede9fe" },
+          { label: t('satisfaction_score'), value: stats.avgRating, iconName: "star", color: "#f59e0b", bg: "#fffbeb" },
         ].map((card, i) => (
           <div key={i} style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: "20px 18px", border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <span style={{ fontSize: 24 }}>{card.icon}</span>
+              <span style={{ width: 42, height: 42, borderRadius: 13, display: "flex", alignItems: "center", justifyContent: "center", background: card.bg, color: card.color }}><AppIcon name={card.iconName} size={21} strokeWidth={2.2} /></span>
               {typeof card.value === 'number' && stats.total > 0 && (
                 <span style={{ background: card.bg, color: card.color, padding: "3px 10px", borderRadius: THEME.radius.full, fontSize: 10, fontWeight: 800 }}>{Math.round((card.value / stats.total) * 100)}%</span>
               )}
@@ -1758,7 +1789,7 @@ const AnalyticsTab = ({ list, t }) => {
       {/* Complaint Heatmap */}
       {stats.geoData.length > 0 && (
         <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
-          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16 }}>🗺 {t('complaint_heatmap')}</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16, display: "flex", alignItems: "center", gap: 9 }}><AppIcon name="road" size={19} color={THEME.colors.primary} /> {t('complaint_heatmap')}</h3>
           <div style={{ height: 350, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}` }}>
             <MapContainer
               center={[stats.geoData[0].lat, stats.geoData[0].lng]}
@@ -1803,7 +1834,7 @@ const AnalyticsTab = ({ list, t }) => {
 
       {/* Category Distribution */}
       <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
-        <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📂 {t('category_distribution')}</h3>
+        <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20, display: "flex", alignItems: "center", gap: 9 }}><AppIcon name="folder" size={19} color={THEME.colors.primary} /> {t('category_distribution')}</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {CATEGORIES.map(c => {
             const count = stats.byCat[c.id] || 0;
@@ -1811,7 +1842,7 @@ const AnalyticsTab = ({ list, t }) => {
             return (
               <div key={c.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{c.icon} {t(c.key)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text, display: "flex", alignItems: "center", gap: 7 }}><AppIcon name={c.iconName} size={15} color={c.color} /> {t(c.key)}</span>
                   <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.textMuted }}>{count} ({pct}%)</span>
                 </div>
                 <div style={{ background: THEME.colors.background, borderRadius: THEME.radius.full, height: 10, overflow: "hidden" }}>
@@ -1826,7 +1857,7 @@ const AnalyticsTab = ({ list, t }) => {
       {/* Status Breakdown + Evidence */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
-          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20 }}>📈 {t('status_breakdown')}</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20, display: "flex", alignItems: "center", gap: 9 }}><AppIcon name="trend" size={19} color={THEME.colors.primary} /> {t('status_breakdown')}</h3>
           {STATUS_FLOW.map(s => {
             const m = STATUS_META[s];
             const count = stats.byStatus[s] || 0;
@@ -1835,7 +1866,7 @@ const AnalyticsTab = ({ list, t }) => {
             return (
               <div key={s} style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.icon} {t(sKey)}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: m.color, display: "flex", alignItems: "center", gap: 7 }}><AppIcon name={m.iconName} size={14} /> {t(sKey)}</span>
                   <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.textMuted }}>{count} ({pct}%)</span>
                 </div>
                 <div style={{ background: m.bg, borderRadius: THEME.radius.full, height: 8, overflow: "hidden" }}>
@@ -1847,7 +1878,7 @@ const AnalyticsTab = ({ list, t }) => {
         </div>
 
         <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
+          <span style={{ width: 64, height: 64, borderRadius: 20, background: THEME.colors.successBg, color: THEME.colors.success, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><AppIcon name="camera" size={30} strokeWidth={1.8} /></span>
           <div style={{ fontSize: 42, fontWeight: 900, color: THEME.colors.success }}>{stats.withPhotos}</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginTop: 4, textAlign: "center" }}>{t('evidence_backed')}</div>
           <div style={{ fontSize: 11, color: THEME.colors.textMuted, marginTop: 2, textAlign: "center" }}>{t('complaints_with_photos')}</div>
