@@ -539,15 +539,15 @@ const Timeline = ({ status }) => {
 
 const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => (
   <div style={{ fontFamily: THEME.font, minHeight: "100vh", background: THEME.colors.background, color: THEME.colors.text }}>
-    <nav style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
+    <nav className="shell-nav" style={{ background: THEME.colors.surface, borderBottom: `1px solid ${THEME.colors.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64, position: "sticky", top: 0, zIndex: 100, boxShadow: THEME.shadow.sm }}>
+      <div className="shell-brand" style={{ display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }} onClick={() => navigate("home")}>
         <div style={{ width: 38, height: 38, background: THEME.colors.primary, color: "#fff", borderRadius: 11, display: "flex", alignItems: "center", justifyContent: "center" }}><AppIcon name="building" size={20} /></div>
         <div>
           <div style={{ color: THEME.colors.text, fontWeight: 800, fontSize: 15, letterSpacing: "-0.01em" }}>{t('app_title')}</div>
           <div style={{ color: THEME.colors.textMuted, fontSize: 11, fontWeight: 500 }}>{t('subtitle')}</div>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div className="shell-actions" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         {["home", "submit", "track", "gallery"].map(v => (
           <button key={v} onClick={() => navigate(v)} style={{ background: view === v ? THEME.colors.primaryLight : "transparent", color: view === v ? THEME.colors.primaryHover : THEME.colors.textMuted, border: "none", padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 600, fontSize: 13, transition: "all 0.2s" }}>{t(v === 'submit' ? 'submit_grievance' : v === 'track' ? 'track_status' : v === 'gallery' ? 'public_gallery' : 'home')}</button>
         ))}
@@ -571,7 +571,7 @@ const Shell = ({ children, view, role, navigate, toast, session, profile, handle
     {toast && (
       <div style={{ position: "fixed", top: 84, right: 24, zIndex: 1000, background: toast.type === "err" ? THEME.colors.dangerBg : THEME.colors.successBg, color: toast.type === "err" ? THEME.colors.danger : THEME.colors.success, padding: "14px 20px", borderRadius: THEME.radius.md, border: `1px solid ${toast.type === "err" ? '#fca5a5' : '#86efac'}`, fontWeight: 600, boxShadow: THEME.shadow.md, display: "flex", alignItems: "center", gap: 10 }}>{toast.type === "err" ? "⚠️" : "✅"} {toast.msg}</div>
     )}
-    <div style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px" }}>{children}</div>
+    <div className="shell-content" style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px" }}>{children}</div>
   </div>
 );
 
@@ -585,7 +585,7 @@ const HomeView = ({ navigate, t }) => (
     <div style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "80px 20px", color: THEME.colors.text }}>
       <h1 style={{ fontSize: "clamp(2.5rem, 5vw, 4rem)", fontWeight: 900, marginBottom: 24, letterSpacing: "-0.02em", lineHeight: 1.1 }}>{t('welcome')}</h1>
       <p style={{ fontSize: "clamp(1.125rem, 2vw, 1.25rem)", color: THEME.colors.textMuted, marginBottom: 48, maxWidth: 680, margin: "0 auto 48px", lineHeight: 1.6 }}>{t('welcome_subtitle')}</p>
-      <div style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
+      <div className="hero-actions" style={{ display: "flex", gap: 16, justifyContent: "center", flexWrap: "wrap" }}>
         <Btn style={{ padding: "16px 32px", fontSize: 16, borderRadius: THEME.radius.full }} onClick={() => navigate("submit")}>{t('submit_grievance')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.primaryHover, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("track")}>{t('track_status')}</Btn>
         <Btn variant="ghost" style={{ padding: "16px 32px", fontSize: 16, background: THEME.colors.surface, color: THEME.colors.text, borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }} onClick={() => navigate("submit_anonymous")}>🕵️ {t('anonymous_mode')}</Btn>
@@ -679,7 +679,7 @@ const LocationPicker = ({ onLocationSelect, t, initialCoords, boundaries }) => {
           {t('boundary_warning')}
         </div>
       )}
-      <div style={{ height: 280, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
+      <div className="leaflet-map-frame" style={{ height: 280, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
         <MapContainer center={pos} zoom={13} style={{ height: "100%", width: "100%" }}>
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution='&copy; OpenStreetMap contributors' />
           {boundaries && boundaries.map((b, i) => (
@@ -838,7 +838,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
   }
 
   return (
-    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
+    <div className="grievance-form-card" style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <div>
           <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>{t('register_grievance')}</h2>
@@ -850,7 +850,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
       {step === 1 ? (
         <div>
           <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Select Problem Categories (Multiple allowed)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
+          <div className="category-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
             {CATEGORIES.map(c => {
               const isSelected = form.categories.includes(c.id);
               return (
@@ -1000,7 +1000,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
   };
 
   return (
-    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
+    <div className="grievance-form-card" style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
         <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em" }}>{t('register_grievance')}</h2>
         <span style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, background: THEME.colors.background, padding: "6px 14px", borderRadius: THEME.radius.full }}>Step {step} of 2</span>
@@ -1016,7 +1016,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       {step === 1 ? (
         <div>
           <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Select Problem Categories (Multiple allowed)</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
+          <div className="category-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
             {CATEGORIES.map(c => {
               const isSelected = form.categories.includes(c.id);
               return (
@@ -1474,7 +1474,7 @@ const GalleryView = ({ t, session }) => {
           <p style={{ margin: 0, color: THEME.colors.textMuted, fontSize: 13 }}>{filterCat || search ? t('gallery_filter_hint') : t('gallery_empty_hint')}</p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+        <div className="gallery-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
           {filtered.map(it => {
             const photos = getPhotos(it);
             const r = ratings[it.id];
@@ -1616,11 +1616,11 @@ const GovLinksView = ({ t }) => {
   ];
 
   return (
-    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 880, margin: "0 auto" }}>
+    <div className="responsive-card" style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 880, margin: "0 auto" }}>
       <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12, letterSpacing: "-0.01em" }}>{t('official_resources')}</h2>
       <p style={{ color: THEME.colors.textMuted, marginBottom: 32, fontSize: 15 }}>{t('explore_portals')}</p>
       
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+      <div className="resource-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
         {links.map((link, i) => (
           <a key={i} href={link.url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
             <div style={{ padding: 24, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.background, transition: "all 0.2s", cursor: "pointer", height: "100%", boxSizing: "border-box" }}
@@ -1771,7 +1771,7 @@ const AnalyticsTab = ({ list, t }) => {
         <Btn onClick={generatePDFReport}><AppIcon name="download" size={17} /> {t('download_report_pdf', { defaultValue: "Download PDF Report" })}</Btn>
       </div>
       {/* Summary Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 14 }}>
+      <div className="analytics-summary-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 14 }}>
         {[
           { label: t('total_complaints'), value: stats.total, iconName: "chart", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
           { label: t('open_complaints'), value: stats.byStatus.Open || 0, iconName: "dot", color: THEME.colors.danger, bg: THEME.colors.dangerBg },
@@ -1798,7 +1798,7 @@ const AnalyticsTab = ({ list, t }) => {
       {stats.geoData.length > 0 && (
         <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
           <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 16, display: "flex", alignItems: "center", gap: 9 }}><AppIcon name="road" size={19} color={THEME.colors.primary} /> {t('complaint_heatmap')}</h3>
-          <div style={{ height: 350, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}` }}>
+          <div className="leaflet-map-frame" style={{ height: 350, borderRadius: THEME.radius.md, overflow: "hidden", border: `1.5px solid ${THEME.colors.border}` }}>
             <MapContainer
               center={[stats.geoData[0].lat, stats.geoData[0].lng]}
               zoom={12}
@@ -1863,7 +1863,7 @@ const AnalyticsTab = ({ list, t }) => {
       </div>
 
       {/* Status Breakdown + Evidence */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="analytics-detail-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.md, padding: 24, border: `1px solid ${THEME.colors.border}` }}>
           <h3 style={{ fontSize: 16, fontWeight: 800, marginBottom: 20, display: "flex", alignItems: "center", gap: 9 }}><AppIcon name="trend" size={19} color={THEME.colors.primary} /> {t('status_breakdown')}</h3>
           {STATUS_FLOW.map(s => {
@@ -2450,9 +2450,9 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+      <div className="admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div className="admin-tabs" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
           {!t_officer && profile?.role === "admin" && (
@@ -2506,7 +2506,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
           </div>
 
           {/* Content Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: selected ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
+          <div className="admin-content-grid" style={{ display: "grid", gridTemplateColumns: selected ? "1fr 420px" : "1fr", gap: 24, alignItems: "start" }}>
             {/* Complaint List */}
             <div>
               {loading ? <div style={{ padding: 40, textAlign: "center", color: THEME.colors.textMuted, fontWeight: 700 }}>{t("loading")}</div> : filtered.length === 0 ? (
@@ -2546,7 +2546,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
             {/* Detail Panel */}
             {selected && (
-              <div style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
+              <div className="admin-detail-panel" style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>{t("complaint_details")}</h3>
                   <button onClick={() => setSelected(null)} style={{ background: THEME.colors.background, border: "none", width: 30, height: 30, borderRadius: THEME.radius.sm, fontSize: 14, cursor: "pointer", fontWeight: 700, color: THEME.colors.textMuted }}>✕</button>

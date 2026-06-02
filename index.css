@@ -1,5 +1,133 @@
 @import "tailwindcss";
 
+.leaflet-map-frame {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+
+.leaflet-map-frame .leaflet-container {
+  position: relative;
+  z-index: 0;
+}
+
+@media (max-width: 768px) {
+  .shell-nav {
+    height: auto !important;
+    min-height: 64px;
+    padding: 8px 12px !important;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .shell-brand {
+    width: 100%;
+  }
+
+  .shell-actions {
+    width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .shell-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .shell-actions > * {
+    flex: 0 0 auto;
+  }
+
+  .shell-content {
+    padding: 20px 14px !important;
+  }
+
+  .grievance-form-card {
+    padding: 24px 16px !important;
+    border-radius: 14px !important;
+  }
+
+  .responsive-card {
+    padding: 24px 16px !important;
+  }
+
+  .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .category-grid button {
+    min-height: 124px !important;
+    padding: 14px 8px !important;
+  }
+
+  .hero-actions {
+    gap: 10px !important;
+  }
+
+  .hero-actions > button {
+    width: min(100%, 340px) !important;
+  }
+
+  .leaflet-map-frame {
+    height: 230px !important;
+  }
+
+  .gallery-grid,
+  .resource-grid,
+  .analytics-detail-grid,
+  .admin-content-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .analytics-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .admin-header {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .admin-tabs {
+    width: 100%;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  .admin-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-tabs > * {
+    flex: 0 0 auto;
+  }
+
+  .admin-detail-panel {
+    position: static !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .shell-content {
+    padding: 16px 10px !important;
+  }
+
+  .grievance-form-card {
+    padding: 20px 12px !important;
+  }
+
+  .analytics-summary-grid {
+    gap: 10px !important;
+  }
+}
+
 @keyframes fadeSlideIn {
   to {
     opacity: 1;
