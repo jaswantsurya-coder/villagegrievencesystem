@@ -19,6 +19,8 @@ export const SignInPage = ({
   submitLabel = "Sign In",
   switchPrompt = "New to our platform?",
   switchLabel = "Create Account",
+  message,
+  messageType = "success",
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -30,6 +32,11 @@ export const SignInPage = ({
           <div className="flex flex-col gap-6">
             <h1 className="animate-element animate-delay-100 text-3xl sm:text-4xl md:text-5xl font-semibold leading-tight break-words">{title}</h1>
             <p className="animate-element animate-delay-200 text-gray-500">{description}</p>
+            {message && (
+              <div role="status" className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${messageType === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                {message}
+              </div>
+            )}
 
             <form className="space-y-5" onSubmit={onSignIn}>
               <div className="animate-element animate-delay-300">

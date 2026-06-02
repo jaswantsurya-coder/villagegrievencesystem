@@ -2754,9 +2754,11 @@ import { SignInPage } from "./components/ui/sign-in";
 const LoginModal = ({ onLogin, onClose, notify, t }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState(null);
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    setAuthMessage(null);
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email");
     const password = formData.get("password");
@@ -2769,7 +2771,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
       if (isSignUp) {
         ({ data, error } = await supabase.auth.signUp({ email, password }));
         if (error) throw error;
-        notify(t('signup_success'));
+        setAuthMessage({ type: "success", text: t('signup_success') });
         setIsSignUp(false);
       } else {
         ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
@@ -2779,14 +2781,13 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     } catch (err) {
       const message = err?.message || "";
       const normalizedMessage = message.toLowerCase();
-      notify(
-        !isSignUp && normalizedMessage.includes("email not confirmed")
+      const displayMessage = !isSignUp && normalizedMessage.includes("email not confirmed")
           ? t('auth_email_confirm_required')
           : !isSignUp && normalizedMessage.includes("invalid login credentials")
             ? t('account_not_found_help')
-            : message,
-        "err"
-      );
+            : message;
+      setAuthMessage({ type: "error", text: displayMessage });
+      notify(displayMessage, "err");
     }
     setLoading(false);
   };
@@ -2798,9 +2799,11 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         description={isSignUp ? t('create_account') : t('login_to_account')}
         heroImageSrc="/images/login-abstract-background.jpg"
         onSignIn={handleAuth}
-        onSwitchMode={() => setIsSignUp(prev => !prev)}
+        onSwitchMode={() => { setIsSignUp(prev => !prev); setAuthMessage(null); }}
         isSignUp={isSignUp}
         loading={loading}
+        message={authMessage?.text}
+        messageType={authMessage?.type}
         submitLabel={isSignUp ? t('sign_up') : t('login')}
         switchPrompt={isSignUp ? t('auth_existing_prompt') : t('auth_new_prompt')}
         switchLabel={isSignUp ? t('login') : t('sign_up')}
