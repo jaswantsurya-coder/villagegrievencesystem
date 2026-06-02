@@ -612,7 +612,7 @@ const ShellLayout = ({ children, view, navigate, toast, session, handleLogout, s
 
 const HomeView = ({ navigate, t }) => (
   <div style={{ position: "relative", minHeight: "80vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", overflow: "hidden", margin: "-32px 0", width: "100vw", marginLeft: "calc(50% - 50vw)" }}>
-    <div style={{ position: "absolute", inset: 0, background: "url(https://images.cnippet.dev/image/upload/v1770400411/img_14002.jpg) bottom/cover no-repeat" }}>
+    <div style={{ position: "absolute", inset: 0, background: "url(/images/home-wind-turbines.jpg) bottom/cover no-repeat" }}>
       <div style={{ position: "absolute", inset: 0, background: "var(--hero-overlay)" }} />
     </div>
     <div style={{ position: "relative", zIndex: 10, textAlign: "center", padding: "80px 20px", color: THEME.colors.text }}>
@@ -2801,7 +2801,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
       <SignInPage 
         title={isSignUp ? t('sign_up') : t('login')}
         description={isSignUp ? t('create_account') : t('login_to_account')}
-        heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
+        heroImageSrc="/images/login-abstract-background.jpg"
         onSignIn={handleAuth}
         onSwitchMode={() => setIsSignUp(prev => !prev)}
         isSignUp={isSignUp}
