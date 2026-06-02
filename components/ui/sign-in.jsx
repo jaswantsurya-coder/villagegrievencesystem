@@ -13,17 +13,22 @@ export const SignInPage = ({
   heroImageSrc,
   onSignIn,
   onResetPassword,
-  onCreateAccount,
+  onSwitchMode,
+  isSignUp = false,
+  loading = false,
+  submitLabel = "Sign In",
+  switchPrompt = "New to our platform?",
+  switchLabel = "Create Account",
 }) => {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="h-[100dvh] flex flex-col md:flex-row font-sans w-[100dvw] bg-white text-gray-900">
+    <div className="min-h-[100dvh] flex flex-col md:flex-row font-sans w-full bg-white text-gray-900 overflow-y-auto">
       {/* Left column: sign-in form */}
-      <section className="flex-1 flex items-center justify-center p-8 z-10">
+      <section className="flex-1 flex items-center justify-center px-5 py-16 sm:p-8 z-10">
         <div className="w-full max-w-md">
           <div className="flex flex-col gap-6">
-            <h1 className="animate-element animate-delay-100 text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
+            <h1 className="animate-element animate-delay-100 text-3xl sm:text-4xl md:text-5xl font-semibold leading-tight break-words">{title}</h1>
             <p className="animate-element animate-delay-200 text-gray-500">{description}</p>
 
             <form className="space-y-5" onSubmit={onSignIn}>
@@ -46,21 +51,21 @@ export const SignInPage = ({
                 </GlassInputWrapper>
               </div>
 
-              <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
+              {!isSignUp && <div className="animate-element animate-delay-500 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-sm">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-600" />
                   <span className="text-gray-700">Keep me signed in</span>
                 </label>
                 <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-violet-500 transition-colors">Reset password</a>
-              </div>
+              </div>}
 
-              <button type="submit" className="animate-element animate-delay-600 w-full rounded-2xl bg-gray-900 py-4 font-medium text-white hover:bg-gray-800 transition-colors">
-                Sign In
+              <button type="submit" disabled={loading} className="animate-element animate-delay-600 w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
+                {loading ? "Please wait..." : submitLabel}
               </button>
             </form>
 
-            <p className="animate-element animate-delay-700 text-center text-sm text-gray-500 mt-4">
-              New to our platform? <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-violet-500 hover:underline transition-colors">Create Account</a>
+            <p className="animate-element animate-delay-700 text-center text-sm leading-6 text-gray-500 mt-2 sm:mt-4">
+              {switchPrompt} <a href="#" onClick={(e) => { e.preventDefault(); onSwitchMode?.(); }} className="inline-block text-violet-600 font-medium hover:underline transition-colors">{switchLabel}</a>
             </p>
           </div>
         </div>

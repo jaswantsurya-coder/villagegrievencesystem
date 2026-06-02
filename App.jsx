@@ -2733,7 +2733,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     const email = formData.get("email");
     const password = formData.get("password");
 
-    if (!email || !password) return notify("Please fill all fields", "err");
+    if (!email || !password) return notify(t('auth_fill_fields'), "err");
     
     setLoading(true);
     try {
@@ -2741,7 +2741,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
       if (isSignUp) {
         ({ data, error } = await supabase.auth.signUp({ email, password }));
         if (error) throw error;
-        notify("Signup successful! You can now log in.");
+        notify(t('signup_success'));
         setIsSignUp(false);
       } else {
         ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
@@ -2749,7 +2749,16 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         if (data.session) onLogin(data.session);
       }
     } catch (err) {
-      notify(err.message, "err");
+      const message = err?.message || "";
+      const normalizedMessage = message.toLowerCase();
+      notify(
+        !isSignUp && normalizedMessage.includes("email not confirmed")
+          ? t('auth_email_confirm_required')
+          : !isSignUp && normalizedMessage.includes("invalid login credentials")
+            ? t('account_not_found_help')
+            : message,
+        "err"
+      );
     }
     setLoading(false);
   };
@@ -2758,13 +2767,18 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "white" }}>
       <SignInPage 
         title={isSignUp ? t('sign_up') : t('login')}
-        description={isSignUp ? "Create an account to submit your grievances." : "Access your account and continue your journey with us"}
+        description={isSignUp ? t('create_account') : t('login_to_account')}
         heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
         onSignIn={handleAuth}
-        onCreateAccount={() => setIsSignUp(true)}
+        onSwitchMode={() => setIsSignUp(prev => !prev)}
+        isSignUp={isSignUp}
+        loading={loading}
+        submitLabel={isSignUp ? t('sign_up') : t('login')}
+        switchPrompt={isSignUp ? t('auth_existing_prompt') : t('auth_new_prompt')}
+        switchLabel={isSignUp ? t('login') : t('sign_up')}
         onResetPassword={() => notify("Password reset not implemented yet", "err")}
       />
-      <button onClick={onClose} style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 40, height: 40, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
+      <button className="login-modal-close" onClick={onClose} aria-label="Close login" style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
     </div>
   );
 };
@@ -2924,15 +2938,12 @@ export default function App() {
         if (session) return (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16, fontFamily: THEME.font }}>
             <div style={{ fontSize: 48 }}>🔒</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: THEME.colors.text }}>Access Restricted</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: THEME.colors.text }}>{t('access_restricted')}</div>
             <div style={{ color: THEME.colors.textMuted, fontSize: 14, textAlign: "center", maxWidth: 360 }}>
-              Your account role is <strong style={{ color: THEME.colors.danger }}>{role || "loading..."}</strong>.<br/>You need <strong>admin</strong> or <strong>officer</strong> role to access this dashboard.
+              {t('current_role')} <strong style={{ color: THEME.colors.danger }}>{role || "citizen"}</strong>.<br/>{t('admin_access_notice')}
             </div>
-            <div style={{ background: THEME.colors.warningBg, border: `1px solid #fcd34d`, borderRadius: 10, padding: "16px 24px", maxWidth: 440, fontSize: 13, color: "#92400E", lineHeight: 1.6 }}>
-              <strong>To get admin access:</strong><br/>
-              1. Go to your Supabase Dashboard → SQL Editor<br/>
-              2. Run: <code style={{ background: "#FDE68A", padding: "2px 6px", borderRadius: 4 }}>UPDATE profiles SET role = 'admin' WHERE id = '{session?.user?.id}';</code><br/>
-              3. Click "Refresh Role" below
+            <div style={{ background: THEME.colors.warningBg, border: `1px solid #fcd34d`, borderRadius: 10, padding: "16px 24px", maxWidth: 440, fontSize: 13, color: "#92400E", lineHeight: 1.6, textAlign: "center" }}>
+              {t('admin_contact_notice')}
             </div>
             <button
               onClick={async () => {
@@ -2941,7 +2952,7 @@ export default function App() {
               }}
               style={{ background: "linear-gradient(135deg,#047857,#10B981)", color: "#fff", border: "none", padding: "12px 28px", borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: "pointer" }}
             >
-              🔄 Refresh Role
+              {t('refresh_role')}
             </button>
           </div>
         );
