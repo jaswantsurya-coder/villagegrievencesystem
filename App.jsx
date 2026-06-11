@@ -2760,7 +2760,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     e.preventDefault();
     setAuthMessage(null);
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email");
+    const email = String(formData.get("email") || "").trim().toLowerCase();
     const password = formData.get("password");
 
     if (!email || !password) return notify(t('auth_fill_fields'), "err");
@@ -2781,7 +2781,9 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     } catch (err) {
       const message = err?.message || "";
       const normalizedMessage = message.toLowerCase();
-      const displayMessage = normalizedMessage.includes("email rate limit exceeded")
+      const displayMessage = normalizedMessage.includes("failed to fetch") || normalizedMessage.includes("networkerror")
+          ? "Unable to reach the authentication service. Please check the deployed Supabase environment variables and try again."
+          : normalizedMessage.includes("email rate limit exceeded")
           ? t('auth_email_rate_limit')
           : !isSignUp && normalizedMessage.includes("email not confirmed")
           ? t('auth_email_confirm_required')
@@ -2809,7 +2811,6 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         submitLabel={isSignUp ? t('sign_up') : t('login')}
         switchPrompt={isSignUp ? t('auth_existing_prompt') : t('auth_new_prompt')}
         switchLabel={isSignUp ? t('login') : t('sign_up')}
-        onResetPassword={() => notify("Password reset not implemented yet", "err")}
       />
       <button className="login-modal-close" onClick={onClose} aria-label="Close login" style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
     </div>
