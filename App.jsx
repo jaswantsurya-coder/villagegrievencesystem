@@ -326,6 +326,14 @@ const splitCategories = (category = "") => String(category || "")
   .map(part => part.trim())
   .filter(Boolean);
 
+const getHistoryInsertErrorMessage = (error) => {
+  const message = error?.message || "";
+  if (message.toLowerCase().includes("row-level security") && message.includes("complaint_history")) {
+    return "Complaint history RLS policy is missing. Run fix-complaint-history-rls.sql in Supabase SQL Editor, then try again.";
+  }
+  return message || "Failed to save complaint history.";
+};
+
 const getEvidenceStoragePathFromUrl = (url) => {
   if (!url || typeof url !== "string") return "";
   try {
@@ -802,7 +810,7 @@ const EditGrievanceModal = ({ complaint, session, notify, t, onClose, onSaved })
       };
 
       const { error: historyError } = await supabase.from("complaint_history").insert([historyPayload]);
-      if (historyError) throw historyError;
+      if (historyError) throw new Error(getHistoryInsertErrorMessage(historyError));
 
       const updatePayload = {
         photo_urls: nextPhotoUrls,
@@ -875,7 +883,7 @@ const EditGrievanceModal = ({ complaint, session, notify, t, onClose, onSaved })
       };
 
       const { error: historyError } = await supabase.from("complaint_history").insert([historyPayload]);
-      if (historyError) throw historyError;
+      if (historyError) throw new Error(getHistoryInsertErrorMessage(historyError));
 
       const updatePayload = {
         title: form.title.trim(),
