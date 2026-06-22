@@ -5,5 +5,5 @@ dist/
 .DS_Store
 *.log
 *.sql
-
+!fix-photo-evidence-upload.sql
 .vercel

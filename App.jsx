@@ -14,6 +14,57 @@ import {
   ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap
 } from 'lucide-react';
 
+const EVIDENCE_BUCKET = "complaint-evidence";
+const MAX_EVIDENCE_PHOTOS = 5;
+
+/**
+ * @typedef {Object} EvidencePhoto
+ * @property {File} file
+ * @property {string} previewUrl
+ * @property {string} name
+ * @property {string} size
+ * @property {string=} error
+ */
+
+/**
+ * @typedef {Object} ComplaintRecord
+ * @property {string=} id
+ * @property {string=} ticket_id
+ * @property {string=} title
+ * @property {string=} description
+ * @property {string=} location
+ * @property {string=} category
+ * @property {string=} status
+ * @property {string=} citizen_id
+ * @property {number=} edit_count
+ * @property {string=} updated_at
+ * @property {string|string[]=} photo_urls
+ * @property {Array<string|{url?: string}>=} photos
+ */
+
+/**
+ * @typedef {Object} GrievanceEditForm
+ * @property {string} title
+ * @property {string} description
+ * @property {string} location
+ * @property {string[]} categories
+ * @property {string} duration
+ * @property {string} peopleAffected
+ * @property {boolean} isEmergency
+ */
+
+/**
+ * @typedef {Object} ComplaintHistoryInsert
+ * @property {string} complaint_id
+ * @property {string} user_id
+ * @property {string} old_title
+ * @property {string} new_title
+ * @property {string} old_description
+ * @property {string} new_description
+ * @property {string[]} old_photo_urls
+ * @property {string[]} new_photo_urls
+ */
+
 const THEME = {
   colors: {
     primary: "var(--color-primary)", 
@@ -182,6 +233,114 @@ const removeFromOfflineQueue = (offlineId) => {
   const updated = queue.filter(item => item._offlineId !== offlineId);
   localStorage.setItem(OFFLINE_KEY, JSON.stringify(updated));
   window.dispatchEvent(new Event("offline-queue-updated"));
+};
+
+const toPhotoUrl = (value) => {
+  if (typeof value === "string") return value.trim();
+  if (value && typeof value.url === "string") return value.url.trim();
+  return "";
+};
+
+/** @param {ComplaintRecord | null | undefined} item */
+const getComplaintPhotoUrls = (item) => {
+  const raw = item?.photo_urls ?? item?.photos ?? [];
+  let parsed = raw;
+
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = raw ? [raw] : [];
+    }
+  }
+
+  return (Array.isArray(parsed) ? parsed : [])
+    .map(toPhotoUrl)
+    .filter(Boolean);
+};
+
+const getFileExtension = (file) => {
+  const fromName = file.name?.split(".").pop()?.toLowerCase();
+  if (fromName && fromName !== file.name.toLowerCase()) return fromName.replace(/[^a-z0-9]/g, "") || "jpg";
+  return file.type?.split("/")[1]?.replace(/[^a-z0-9]/g, "") || "jpg";
+};
+
+/**
+ * @param {EvidencePhoto[]} photos
+ * @param {{ ticketId: string, userId?: string | null }} options
+ * @returns {Promise<string[]>}
+ */
+const uploadEvidencePhotos = async (photos, { ticketId, userId }) => {
+  if (!photos?.length) return [];
+
+  const uploaded = await Promise.all(photos.map(async (photo, index) => {
+    const extension = getFileExtension(photo.file);
+    const safeTicketId = ticketId.replace(/[^a-zA-Z0-9_-]/g, "");
+    const folder = userId || "anonymous";
+    const unique = `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 10)}`;
+    const storagePath = `${folder}/${safeTicketId}/${unique}.${extension}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(EVIDENCE_BUCKET)
+      .upload(storagePath, photo.file, {
+        cacheControl: "3600",
+        contentType: photo.file.type || "image/jpeg",
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from(EVIDENCE_BUCKET).getPublicUrl(storagePath);
+    if (!data?.publicUrl) throw new Error("Could not generate public URL for uploaded evidence.");
+    return data.publicUrl;
+  }));
+
+  return uploaded.filter(Boolean);
+};
+
+const EDITABLE_STATUSES = ["Open", "Assigned"];
+
+const canEditComplaint = (complaint) => EDITABLE_STATUSES.includes(complaint?.status);
+
+const parseComplaintDescription = (description = "") => {
+  const marker = "\n\n--- Additional Details ---\n";
+  const [mainDescription, details = ""] = String(description || "").split(marker);
+  const duration = details.match(/Duration:\s*(.*)/)?.[1]?.trim() || "Just started";
+  const emergencyValue = details.match(/Emergency:\s*(.*)/)?.[1]?.trim().toLowerCase() || "no";
+  const peopleAffected = details.match(/People Affected:\s*(.*)/)?.[1]?.trim() || "";
+
+  return {
+    description: mainDescription || "",
+    duration,
+    isEmergency: emergencyValue === "yes",
+    peopleAffected: peopleAffected === "Not specified" ? "" : peopleAffected,
+  };
+};
+
+const buildComplaintDescription = ({ description, duration, isEmergency, peopleAffected }) => (
+  `${description}\n\n--- Additional Details ---\nDuration: ${duration || "Just started"}\nEmergency: ${isEmergency ? "Yes" : "No"}\nPeople Affected: ${peopleAffected || "Not specified"}`
+);
+
+const splitCategories = (category = "") => String(category || "")
+  .split(",")
+  .map(part => part.trim())
+  .filter(Boolean);
+
+const getEvidenceStoragePathFromUrl = (url) => {
+  if (!url || typeof url !== "string") return "";
+  try {
+    const parsed = new URL(url);
+    const publicPrefix = `/storage/v1/object/public/${EVIDENCE_BUCKET}/`;
+    const objectPrefix = `/storage/v1/object/${EVIDENCE_BUCKET}/`;
+    const prefix = parsed.pathname.includes(publicPrefix) ? publicPrefix : objectPrefix;
+    const index = parsed.pathname.indexOf(prefix);
+    if (index === -1) return "";
+    return decodeURIComponent(parsed.pathname.slice(index + prefix.length));
+  } catch {
+    const marker = `${EVIDENCE_BUCKET}/`;
+    const index = url.indexOf(marker);
+    return index === -1 ? "" : decodeURIComponent(url.slice(index + marker.length).split("?")[0]);
+  }
 };
 
 // ─── Push Notification Helper ─────────────────────────────────────────────────
@@ -477,16 +636,43 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
   );
 };
 
-const PhotoUpload = ({ photos, setPhotos }) => {
+const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) => {
   const { t } = useTranslation();
   const fileRef = useRef();
   const [dragging, setDragging] = useState(false);
 
   const processFiles = (files) => {
-    const valid = Array.from(files).filter(f => f.type.startsWith("image/")).slice(0, 5 - photos.length);
+    if (!files || disabled) return;
+    const remainingSlots = MAX_EVIDENCE_PHOTOS - photos.length;
+    const selected = Array.from(files);
+    const valid = selected
+      .filter(file => file.type.startsWith("image/"))
+      .slice(0, remainingSlots);
+
+    if (fileRef.current) fileRef.current.value = "";
+    if (remainingSlots <= 0 || valid.length === 0) return;
+
     valid.forEach(file => {
       const reader = new FileReader();
-      reader.onload = e => setPhotos(prev => [...prev, { file, url: e.target.result, name: file.name, size: (file.size / 1024).toFixed(1) }]);
+      reader.onload = e => {
+        /** @type {EvidencePhoto} */
+        const nextPhoto = {
+          file,
+          previewUrl: String(e.target?.result || ""),
+          name: file.name,
+          size: (file.size / 1024).toFixed(1),
+        };
+        setPhotos(prev => [...prev, nextPhoto].slice(0, MAX_EVIDENCE_PHOTOS));
+      };
+      reader.onerror = () => {
+        setPhotos(prev => [...prev, {
+          file,
+          previewUrl: "",
+          name: file.name,
+          size: (file.size / 1024).toFixed(1),
+          error: "Preview failed",
+        }].slice(0, MAX_EVIDENCE_PHOTOS));
+      };
       reader.readAsDataURL(file);
     });
   };
@@ -498,19 +684,28 @@ const PhotoUpload = ({ photos, setPhotos }) => {
       <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
         {t('photo_evidence')} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>{t('optional_up_to_5')}</span>
       </label>
-      {photos.length < 5 && (
-        <div onClick={() => fileRef.current.click()} onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
-             style={{ border: `2px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "30px 20px", textAlign: "center", cursor: "pointer", background: dragging ? THEME.colors.primaryLight : THEME.colors.surface, transition: "all 0.2s" }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>📸</div>
-          <div style={{ fontWeight: 600, color: THEME.colors.text, fontSize: 14 }}>{t('click_to_upload')}</div>
-          <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => processFiles(e.target.files)} />
+      {photos.length < MAX_EVIDENCE_PHOTOS && (
+        <div onClick={() => !disabled && fileRef.current?.click()} onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
+             style={{ border: `2px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "30px 20px", textAlign: "center", cursor: disabled ? "wait" : "pointer", background: dragging ? THEME.colors.primaryLight : THEME.colors.surface, transition: "all 0.2s", opacity: disabled ? 0.65 : 1 }}>
+          <div style={{ marginBottom: 8, display: "flex", justifyContent: "center", color: THEME.colors.primary }}><AppIcon name="camera" size={30} /></div>
+          <div style={{ fontWeight: 600, color: THEME.colors.text, fontSize: 14 }}>{disabled ? t('submitting') : t('click_to_upload')}</div>
+          <input ref={fileRef} type="file" accept="image/*" multiple disabled={disabled} style={{ display: "none" }} onChange={e => processFiles(e.target.files)} />
+        </div>
+      )}
+      {uploadError && (
+        <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: THEME.radius.sm, background: THEME.colors.dangerBg, color: THEME.colors.danger, fontSize: 12, fontWeight: 700 }}>
+          {uploadError}
         </div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px,1fr))", gap: 10, marginTop: 12 }}>
         {photos.map((p, i) => (
-          <div key={i} style={{ position: "relative", borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${THEME.colors.border}` }}>
-            <img src={p.url} style={{ width: "100%", height: 80, objectFit: "cover" }} />
-            <button onClick={() => removePhoto(i)} style={{ position: "absolute", top: 4, right: 4, background: "rgba(15,23,42,0.6)", border: "none", borderRadius: "50%", color: "#fff", width: 24, height: 24, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <div key={`${p.name}-${i}`} style={{ position: "relative", borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${p.error ? THEME.colors.danger : THEME.colors.border}`, background: THEME.colors.background }}>
+            {p.previewUrl ? (
+              <img src={p.previewUrl} style={{ width: "100%", height: 80, objectFit: "cover", display: "block" }} alt={p.name || "Evidence preview"} />
+            ) : (
+              <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.textMuted, fontSize: 11, fontWeight: 700, textAlign: "center", padding: 8 }}>{p.error || "Preview unavailable"}</div>
+            )}
+            <button type="button" disabled={disabled} onClick={() => removePhoto(i)} style={{ position: "absolute", top: 4, right: 4, background: "rgba(15,23,42,0.6)", border: "none", borderRadius: "50%", color: "#fff", width: 24, height: 24, cursor: disabled ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>x</button>
           </div>
         ))}
       </div>
@@ -518,6 +713,273 @@ const PhotoUpload = ({ photos, setPhotos }) => {
   );
 };
 
+const EvidenceThumbnail = ({ src, index, onClick }) => {
+  const [broken, setBroken] = useState(false);
+  const hasUrl = typeof src === "string" && src.trim().length > 0;
+
+  return (
+    <button type="button" onClick={hasUrl && !broken ? onClick : undefined} disabled={!hasUrl || broken} style={{ cursor: hasUrl && !broken ? "pointer" : "default", borderRadius: THEME.radius.sm, overflow: "hidden", border: `2px solid ${broken || !hasUrl ? THEME.colors.dangerBg : THEME.colors.border}`, transition: "border-color 0.2s", position: "relative", padding: 0, background: THEME.colors.background, minHeight: 70 }}
+         onMouseOver={e => { if (hasUrl && !broken) e.currentTarget.style.borderColor = THEME.colors.primary; }}
+         onMouseOut={e => { e.currentTarget.style.borderColor = broken || !hasUrl ? THEME.colors.dangerBg : THEME.colors.border; }}>
+      {hasUrl && !broken ? (
+        <>
+          <img src={src} onError={() => setBroken(true)} style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} alt={`Evidence photo ${index + 1}`} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
+               onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.3)'}
+               onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0)'}>
+            <span style={{ color: "#fff", fontSize: 12, opacity: 0.95, fontWeight: 800 }}>View</span>
+          </div>
+        </>
+      ) : (
+        <div style={{ height: 70, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.textMuted, fontSize: 11, fontWeight: 700, textAlign: "center", padding: 8 }}>
+          {hasUrl ? "Image unavailable" : "Missing URL"}
+        </div>
+      )}
+    </button>
+  );
+};
+
+const EditGrievanceModal = ({ complaint, session, notify, t, onClose, onSaved }) => {
+  const parsed = useMemo(() => parseComplaintDescription(complaint?.description), [complaint]);
+  const [form, setForm] = useState(() => ({
+    title: complaint?.title || "",
+    description: parsed.description,
+    location: complaint?.location || "",
+    categories: splitCategories(complaint?.category),
+    duration: parsed.duration,
+    peopleAffected: parsed.peopleAffected,
+    isEmergency: parsed.isEmergency,
+  }));
+  const [currentComplaint, setCurrentComplaint] = useState(complaint);
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState(() => getComplaintPhotoUrls(complaint));
+  const [newPhotos, setNewPhotos] = useState([]);
+  const [removingPhotoUrls, setRemovingPhotoUrls] = useState(() => new Set());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!complaint) return null;
+
+  const toggleCategory = (id) => {
+    setForm(prev => {
+      const hasCategory = prev.categories.includes(id);
+      return { ...prev, categories: hasCategory ? prev.categories.filter(c => c !== id) : [...prev.categories, id] };
+    });
+  };
+
+  const removeExistingPhoto = async (url) => {
+    if (saving || removingPhotoUrls.has(url)) return;
+    if (!window.confirm("Remove this photo evidence permanently? This deletes it from storage and updates the grievance immediately.")) return;
+
+    const storagePath = getEvidenceStoragePathFromUrl(url);
+    if (!storagePath) {
+      notify("Could not identify the storage object for this photo.", "err");
+      return;
+    }
+
+    const oldPhotoUrls = getComplaintPhotoUrls(currentComplaint);
+    const nextPhotoUrls = oldPhotoUrls.filter(item => item !== url);
+    const now = new Date().toISOString();
+
+    setRemovingPhotoUrls(prev => new Set(prev).add(url));
+    setError("");
+
+    try {
+      const { error: storageError } = await supabase.storage
+        .from(EVIDENCE_BUCKET)
+        .remove([storagePath]);
+      if (storageError) throw storageError;
+
+      /** @type {ComplaintHistoryInsert} */
+      const historyPayload = {
+        complaint_id: currentComplaint.id,
+        user_id: session.user.id,
+        old_title: currentComplaint.title || "",
+        new_title: currentComplaint.title || "",
+        old_description: currentComplaint.description || "",
+        new_description: currentComplaint.description || "",
+        old_photo_urls: oldPhotoUrls,
+        new_photo_urls: nextPhotoUrls,
+      };
+
+      const { error: historyError } = await supabase.from("complaint_history").insert([historyPayload]);
+      if (historyError) throw historyError;
+
+      const updatePayload = {
+        photo_urls: nextPhotoUrls,
+        updated_at: now,
+        edit_count: (currentComplaint.edit_count || 0) + 1,
+      };
+
+      const { data, error: updateError } = await supabase
+        .from("complaints")
+        .update(updatePayload)
+        .eq("id", currentComplaint.id)
+        .eq("citizen_id", session.user.id)
+        .in("status", EDITABLE_STATUSES)
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+
+      const updatedComplaint = data || { ...currentComplaint, ...updatePayload };
+      setCurrentComplaint(updatedComplaint);
+      setExistingPhotoUrls(nextPhotoUrls);
+      onSaved(updatedComplaint, { keepOpen: true });
+      notify("Photo evidence removed");
+    } catch (err) {
+      const message = err?.message || "Failed to remove photo evidence.";
+      setError(message);
+      notify(message, "err");
+    } finally {
+      setRemovingPhotoUrls(prev => {
+        const next = new Set(prev);
+        next.delete(url);
+        return next;
+      });
+    }
+  };
+
+  const handleSave = async (event) => {
+    event.preventDefault();
+    if (!canEditComplaint(complaint)) return notify("This grievance can no longer be edited.", "err");
+    if (!form.title.trim()) return notify("Please enter a title.", "err");
+    if (!form.description.trim()) return notify("Please enter a description.", "err");
+    if (!form.location.trim()) return notify("Please enter a location.", "err");
+    if (form.categories.length === 0) return notify("Please select at least one category.", "err");
+    if (!navigator.onLine && newPhotos.length > 0) return notify("New photo evidence needs an internet connection.", "err");
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const oldPhotoUrls = getComplaintPhotoUrls(currentComplaint);
+      const uploadedPhotoUrls = await uploadEvidencePhotos(newPhotos, {
+        ticketId: currentComplaint.ticket_id || currentComplaint.id,
+        userId: session.user.id,
+      });
+      const nextPhotoUrls = [...existingPhotoUrls, ...uploadedPhotoUrls].filter(Boolean);
+      const nextDescription = buildComplaintDescription(form);
+      const now = new Date().toISOString();
+      const nextCategory = form.categories.join(", ");
+
+      /** @type {ComplaintHistoryInsert} */
+      const historyPayload = {
+        complaint_id: currentComplaint.id,
+        user_id: session.user.id,
+        old_title: currentComplaint.title || "",
+        new_title: form.title.trim(),
+        old_description: currentComplaint.description || "",
+        new_description: nextDescription,
+        old_photo_urls: oldPhotoUrls,
+        new_photo_urls: nextPhotoUrls,
+      };
+
+      const { error: historyError } = await supabase.from("complaint_history").insert([historyPayload]);
+      if (historyError) throw historyError;
+
+      const updatePayload = {
+        title: form.title.trim(),
+        description: nextDescription,
+        location: form.location.trim(),
+        category: nextCategory,
+        photo_urls: nextPhotoUrls,
+        updated_at: now,
+        edit_count: (currentComplaint.edit_count || 0) + 1,
+      };
+
+      const { data, error: updateError } = await supabase
+        .from("complaints")
+        .update(updatePayload)
+        .eq("id", currentComplaint.id)
+        .eq("citizen_id", session.user.id)
+        .in("status", EDITABLE_STATUSES)
+        .select("*")
+        .single();
+
+      if (updateError) throw updateError;
+      notify("Grievance updated successfully");
+      const updatedComplaint = data || { ...currentComplaint, ...updatePayload };
+      setCurrentComplaint(updatedComplaint);
+      setExistingPhotoUrls(getComplaintPhotoUrls(updatedComplaint));
+      setNewPhotos([]);
+      onSaved(updatedComplaint);
+    } catch (err) {
+      const message = err?.message || "Failed to update grievance.";
+      setError(message);
+      notify(message, "err");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 2100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, backdropFilter: "blur(5px)" }}>
+      <form onSubmit={handleSave} onClick={e => e.stopPropagation()} style={{ width: "min(760px, 96vw)", maxHeight: "90vh", overflowY: "auto", background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: "0 24px 70px rgba(15,23,42,0.28)", padding: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: THEME.colors.text }}>Edit Grievance</h3>
+            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted }}>#{complaint.ticket_id || complaint.id?.slice(0, 8)}</div>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} style={{ width: 34, height: 34, borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.background, color: THEME.colors.textMuted, cursor: saving ? "wait" : "pointer", fontWeight: 900 }}>x</button>
+        </div>
+
+        <Input label={t("complaint_title")} value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
+
+        <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t("description")}</label>
+        <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} required style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, fontFamily: THEME.font, outline: "none", boxSizing: "border-box", background: THEME.colors.surface, color: THEME.colors.text, resize: "vertical", minHeight: 110, marginBottom: 18 }} />
+
+        <Input label={t("location_landmark")} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+
+        <label style={{ display: "block", marginBottom: 12, fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, fontFamily: THEME.font }}>{t('all_categories')}</label>
+        <div className="category-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10, marginBottom: 20 }}>
+          {CATEGORIES.map(c => <CategoryCard key={c.id} category={c} selected={form.categories.includes(c.id)} onClick={() => toggleCategory(c.id)} label={t(c.key)} />)}
+        </div>
+
+        <div style={{ background: THEME.colors.background, padding: 16, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, marginBottom: 20 }}>
+          <label style={{ display: "block", marginBottom: 14, fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted }}>{t('additional_details')}</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 6, color: THEME.colors.text }}>{t('how_long_problem')}</label>
+              <select value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value })} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontSize: 14, background: THEME.colors.surface, color: THEME.colors.text }}>
+                <option value="Just started">{t('just_started')}</option>
+                <option value="1-3 days">{t('one_to_three_days')}</option>
+                <option value="Over a week">{t('over_a_week')}</option>
+                <option value="Persistent/Long-term">{t('persistent_long_term')}</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 700, marginBottom: 6, color: THEME.colors.text }}>{t('estimated_people')}</label>
+              <input type="number" value={form.peopleAffected} onChange={e => setForm({ ...form, peopleAffected: e.target.value })} placeholder={t('eg_50')} style={{ width: "100%", padding: "12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontSize: 14, background: THEME.colors.surface, color: THEME.colors.text, boxSizing: "border-box" }} />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: "block", marginBottom: 8, fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, fontFamily: THEME.font }}>Existing Photo Evidence ({existingPhotoUrls.length})</label>
+          {existingPhotoUrls.length === 0 ? (
+            <div style={{ padding: 14, borderRadius: THEME.radius.sm, background: THEME.colors.background, color: THEME.colors.textMuted, fontSize: 12, textAlign: "center" }}>{t('no_photos')}</div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+              {existingPhotoUrls.map((url, index) => (
+                <div key={url} style={{ position: "relative" }}>
+                  <EvidenceThumbnail src={url} index={index} onClick={() => window.open(url, "_blank", "noopener,noreferrer")} />
+                  <button type="button" disabled={saving || removingPhotoUrls.has(url)} onClick={() => removeExistingPhoto(url)} style={{ position: "absolute", top: 4, right: 4, width: 24, height: 24, borderRadius: "50%", border: "none", background: "rgba(15,23,42,0.72)", color: "#fff", cursor: saving || removingPhotoUrls.has(url) ? "wait" : "pointer", fontWeight: 900 }}>{removingPhotoUrls.has(url) ? "..." : "x"}</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <PhotoUpload photos={newPhotos} setPhotos={setNewPhotos} disabled={saving} uploadError={error} />
+
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 20 }}>
+          <Btn type="button" variant="ghost" onClick={onClose} disabled={saving} style={{ background: THEME.colors.background }}>Cancel</Btn>
+          <Btn type="submit" disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Btn>
+        </div>
+      </form>
+    </div>
+  );
+};
 const Timeline = ({ status }) => {
   const { t } = useTranslation();
   const idx = STATUS_FLOW.indexOf(status);
@@ -784,6 +1246,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     isEmergency: false, peopleAffected: "", relatedScheme: ""
   });
   const [photos, setPhotos] = useState([]);
+  const [uploadError, setUploadError] = useState("");
 
   const sendOtp = () => {
     if (phone.length < 10) return notify("Enter a valid phone number", "err");
@@ -821,6 +1284,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     if (!phoneVerified) return notify("Please verify your phone number", "err");
     
     setLoading(true);
+    setUploadError("");
     const ticketId = generateTicketId();
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
     
@@ -839,14 +1303,18 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     };
 
     try {
-      const { error } = await supabase.from("complaints").insert([complaint]);
+      const photoUrls = await uploadEvidencePhotos(photos, { ticketId, userId: null });
+      const { error } = await supabase.from("complaints").insert([{ ...complaint, photo_urls: photoUrls }]);
       if (error) throw error;
       notify(`${t("success_submit")} Ticket: ${ticketId}`);
       navigate("track");
-    } catch (err) { 
-      notify(err.message, "err");
+    } catch (err) {
+      const message = err?.message || "Failed to submit grievance with photo evidence.";
+      setUploadError(message);
+      notify(message, "err");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   if (!phoneVerified) {
@@ -930,7 +1398,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
           <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
           
           <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
-          <PhotoUpload photos={photos} setPhotos={setPhotos} />
+          <PhotoUpload photos={photos} setPhotos={setPhotos} disabled={loading} uploadError={uploadError} />
           
           <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
             <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1, background: THEME.colors.background }}>{t('back_btn')}</Btn>
@@ -960,6 +1428,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     relatedScheme: ""
   });
   const [photos, setPhotos] = useState([]);
+  const [uploadError, setUploadError] = useState("");
   const [boundaries, setBoundaries] = useState([]);
 
   useEffect(() => {
@@ -993,6 +1462,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     if (form.categories.length === 0) return notify("Please select at least one category", "err");
     
     setLoading(true);
+    setUploadError("");
     const ticketId = generateTicketId();
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
     
@@ -1009,27 +1479,44 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       related_scheme: form.relatedScheme || null
     };
 
-    // Check if offline — save to local queue
+    // Check if offline - photos need Storage, so only text-only drafts can be queued.
     if (!navigator.onLine) {
-      addToOfflineQueue(complaint);
-      notify(`📡 ${t('saved_offline')} Ticket: ${ticketId}`);
+      if (photos.length > 0) {
+        const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
+        setUploadError(message);
+        notify(message, "err");
+        setLoading(false);
+        return;
+      }
+
+      addToOfflineQueue({ ...complaint, photo_urls: [] });
+      notify(`${t('saved_offline')} Ticket: ${ticketId}`);
       navigate("track");
       setLoading(false);
       return;
     }
 
+    let complaintWithPhotos = { ...complaint, photo_urls: [] };
     try {
-      const { error } = await supabase.from("complaints").insert([complaint]);
+      const photoUrls = await uploadEvidencePhotos(photos, { ticketId, userId: session.user.id });
+      complaintWithPhotos = { ...complaint, photo_urls: photoUrls };
+      const { error } = await supabase.from("complaints").insert([complaintWithPhotos]);
       if (error) throw error;
       notify(`${t("success_submit")} Ticket: ${ticketId}`);
       navigate("track");
-    } catch (err) { 
-      // If network fails mid-request, save offline
-      addToOfflineQueue(complaint);
-      notify(`📡 ${t('saved_offline')} Ticket: ${ticketId}`);
-      navigate("track");
+    } catch (err) {
+      const message = err?.message || "Failed to submit grievance with photo evidence.";
+      setUploadError(message);
+      if (photos.length === 0) {
+        addToOfflineQueue(complaintWithPhotos);
+        notify(`${t('saved_offline')} Ticket: ${ticketId}`);
+        navigate("track");
+      } else {
+        notify(message, "err");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
@@ -1127,7 +1614,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
           <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
           
           <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
-          <PhotoUpload photos={photos} setPhotos={setPhotos} />
+          <PhotoUpload photos={photos} setPhotos={setPhotos} disabled={loading} uploadError={uploadError} />
           
           <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
             <Btn variant="ghost" type="button" onClick={() => setStep(1)} style={{ flex: 1, background: THEME.colors.background }}>{t('back_btn')}</Btn>
@@ -1171,6 +1658,7 @@ const TrackView = ({ t, notify, session }) => {
   const [ratingForm, setRatingForm] = useState({});
   const [offlineDrafts, setOfflineDrafts] = useState(getOfflineQueue());
   const [qrItem, setQrItem] = useState(null);
+  const [editingComplaint, setEditingComplaint] = useState(null);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -1282,6 +1770,13 @@ const TrackView = ({ t, notify, session }) => {
     }
   };
 
+  const handleEditSaved = (updatedComplaint, options = {}) => {
+    setItems(prev => prev.map(item => item.id === updatedComplaint.id ? updatedComplaint : item));
+    setEditingComplaint(updatedComplaint);
+    if (!options.keepOpen) setEditingComplaint(null);
+    fetchGrievances();
+  };
+
   // Show offline drafts
 
   if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
@@ -1337,6 +1832,8 @@ const TrackView = ({ t, notify, session }) => {
           {items.map(it => {
             const existingRating = ratings[it.id];
             const rf = ratingForm[it.id] || {};
+            const editable = canEditComplaint(it);
+            const updatedLabel = it.updated_at ? new Date(it.updated_at).toLocaleString() : "Not updated yet";
             return (
               <div key={it.id} style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.sm }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
@@ -1350,11 +1847,16 @@ const TrackView = ({ t, notify, session }) => {
                   </div>
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <Badge status={it.status} priority={it.priority} />
-                    <button onClick={() => setQrItem(it)} style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.text, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Show QR Code">📱 QR</button>
+                    <button onClick={() => setQrItem(it)} style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.text, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Show QR Code">QR</button>
+                    <button disabled={!editable} onClick={() => editable && setEditingComplaint(it)} style={{ background: editable ? THEME.colors.primaryLight : THEME.colors.background, border: `1px solid ${editable ? THEME.colors.primary : THEME.colors.border}`, color: editable ? THEME.colors.primaryHover : THEME.colors.textMuted, cursor: editable ? "pointer" : "not-allowed", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 800, fontFamily: THEME.font, transition: "all 0.2s", opacity: editable ? 1 : 0.65 }} title={editable ? "Edit grievance" : "Editing is available only while Open or Assigned"}>Edit</button>
                     <button onClick={() => deleteGrievance(it.id)} style={{ background: THEME.colors.dangerBg, border: `1px solid ${THEME.colors.danger}`, color: THEME.colors.danger, cursor: "pointer", padding: "6px 12px", borderRadius: THEME.radius.sm, fontSize: 12, fontWeight: 700, fontFamily: THEME.font, transition: "all 0.2s" }} title="Delete grievance">Delete</button>
                   </div>
                 </div>
-                <p style={{ fontSize: 15, color: THEME.colors.textMuted, marginBottom: 16, lineHeight: 1.5 }}>{it.description}</p>
+                <p style={{ fontSize: 15, color: THEME.colors.textMuted, marginBottom: 10, lineHeight: 1.5 }}>{it.description}</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted }}>
+                  <span>Last Updated: {updatedLabel}</span>
+                  <span>Edits: {it.edit_count || 0}</span>
+                </div>
                 
                 {/* Upvote Button */}
                 <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
@@ -1418,6 +1920,16 @@ const TrackView = ({ t, notify, session }) => {
         </div>
       )}
       
+      {editingComplaint && (
+        <EditGrievanceModal
+          complaint={editingComplaint}
+          session={session}
+          notify={notify}
+          t={t}
+          onClose={() => setEditingComplaint(null)}
+          onSaved={handleEditSaved}
+        />
+      )}
       {qrItem && <QRCodeModal ticketId={qrItem.ticket_id} title={qrItem.title} t={t} onClose={() => setQrItem(null)} />}
     </div>
   );
@@ -1466,11 +1978,7 @@ const GalleryView = ({ t, session }) => {
     return true;
   });
 
-  const getPhotos = (item) => {
-    if (!item?.photos) return [];
-    if (Array.isArray(item.photos)) return item.photos;
-    try { return JSON.parse(item.photos); } catch { return []; }
-  };
+  const getPhotos = (item) => getComplaintPhotoUrls(item);
 
   return (
     <div>
@@ -1673,21 +2181,25 @@ const GovLinksView = ({ t }) => {
 
 const PhotoLightbox = ({ photos, startIndex, onClose, t }) => {
   const [idx, setIdx] = useState(startIndex || 0);
+  const [broken, setBroken] = useState(false);
   if (!photos || photos.length === 0) return null;
-  const photo = photos[idx];
-  const src = photo?.url || photo;
+  const src = toPhotoUrl(photos[idx]);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, backdropFilter: "blur(6px)" }}>
       <div onClick={e => e.stopPropagation()} style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-        <img src={src} alt="" style={{ maxWidth: "90vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }} />
+        {src && !broken ? (
+          <img src={src} alt="" onError={() => setBroken(true)} style={{ maxWidth: "90vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }} />
+        ) : (
+          <div style={{ width: "min(520px, 86vw)", minHeight: 260, borderRadius: 12, background: "#111827", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: THEME.font, fontWeight: 800, textAlign: "center", padding: 24, boxShadow: "0 20px 60px rgba(0,0,0,0.5)" }}>Image unavailable</div>
+        )}
         <div style={{ textAlign: "center", marginTop: 12, color: "#fff", fontFamily: THEME.font, fontWeight: 700, fontSize: 13 }}>
           {t('photo_of', { current: idx + 1, total: photos.length })}
         </div>
         {photos.length > 1 && (
           <>
-            <button onClick={() => setIdx((idx - 1 + photos.length) % photos.length)} style={{ position: "absolute", left: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>‹</button>
-            <button onClick={() => setIdx((idx + 1) % photos.length)} style={{ position: "absolute", right: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>›</button>
+            <button onClick={() => { setBroken(false); setIdx((idx - 1 + photos.length) % photos.length); }} style={{ position: "absolute", left: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>‹</button>
+            <button onClick={() => { setBroken(false); setIdx((idx + 1) % photos.length); }} style={{ position: "absolute", right: -50, top: "50%", transform: "translateY(-50%)", background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", width: 40, height: 40, borderRadius: "50%", fontSize: 20, cursor: "pointer", backdropFilter: "blur(4px)" }}>›</button>
           </>
         )}
         <button onClick={onClose} style={{ position: "absolute", top: -15, right: -15, background: "#EF4444", border: "none", color: "#fff", width: 32, height: 32, borderRadius: "50%", fontSize: 14, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(239,68,68,0.4)" }}>✕</button>
@@ -1713,7 +2225,7 @@ const AnalyticsTab = ({ list, t }) => {
     STATUS_FLOW.forEach(s => { byStatus[s] = list.filter(c => c.status === s).length; });
     const byCat = {};
     CATEGORIES.forEach(c => { byCat[c.id] = list.filter(x => (x.category || "").includes(c.id)).length; });
-    const withPhotos = list.filter(c => c.photos && ((Array.isArray(c.photos) && c.photos.length > 0) || (typeof c.photos === 'string' && c.photos !== '[]'))).length;
+    const withPhotos = list.filter(c => getComplaintPhotoUrls(c).length > 0).length;
     const urgent = list.filter(c => c.priority === "Urgent").length;
 
     // Resolution time calculation
@@ -2441,11 +2953,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     }).sort((a, b) => (upvoteCounts[b.id] || 0) - (upvoteCounts[a.id] || 0));
   }, [list, fStatus, fCategory, fSearch, fUrgent, upvoteCounts]);
 
-  const getPhotos = (item) => {
-    if (!item?.photos) return [];
-    if (Array.isArray(item.photos)) return item.photos;
-    try { return JSON.parse(item.photos); } catch { return []; }
-  };
+  const getPhotos = (item) => getComplaintPhotoUrls(item);
 
   // ── Tab buttons ──
   const tabStyle = (active) => ({
@@ -2616,16 +3124,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                       ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
                           {photos.map((p, i) => (
-                            <div key={i} onClick={() => setLightbox({ photos, index: i })} style={{ cursor: "pointer", borderRadius: THEME.radius.sm, overflow: "hidden", border: `2px solid ${THEME.colors.border}`, transition: "border-color 0.2s", position: "relative" }}
-                                 onMouseOver={e => e.currentTarget.style.borderColor = THEME.colors.primary}
-                                 onMouseOut={e => e.currentTarget.style.borderColor = THEME.colors.border}>
-                              <img src={p.url || p} style={{ width: "100%", height: 70, objectFit: "cover", display: "block" }} alt="" />
-                              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0)", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.2s" }}
-                                   onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.3)'}
-                                   onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0)'}>
-                                <span style={{ color: "#fff", fontSize: 18, opacity: 0.9 }}>🔍</span>
-                              </div>
-                            </div>
+                            <EvidenceThumbnail key={`${p}-${i}`} src={p} index={i} onClick={() => setLightbox({ photos, index: i })} />
                           ))}
                         </div>
                       )}
