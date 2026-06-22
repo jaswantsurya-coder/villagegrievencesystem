@@ -8,3 +8,4 @@ dist/
 !fix-photo-evidence-upload.sql
 !fix-complaint-history-rls.sql
 .vercel
+antigravity-skills/

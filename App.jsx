@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { supabase } from "./supabaseClient";
+import { supabase, supabaseConfigError } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -3425,6 +3425,22 @@ export default function App() {
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   
   const navigate = (v) => { setView(v); };
+
+  if (supabaseConfigError) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: THEME.colors.background, color: THEME.colors.text, fontFamily: THEME.font }}>
+        <div style={{ maxWidth: 560, width: "100%", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, padding: 28, boxShadow: THEME.shadow.md }}>
+          <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 900 }}>Supabase configuration missing</h1>
+          <p style={{ margin: "0 0 16px", color: THEME.colors.textMuted, lineHeight: 1.6 }}>{supabaseConfigError}</p>
+          <div style={{ padding: 14, borderRadius: THEME.radius.sm, background: THEME.colors.background, color: THEME.colors.text, fontSize: 13, fontWeight: 700 }}>
+            Add these in Vercel Project Settings - Environment Variables, then redeploy:
+            <div style={{ marginTop: 8, fontFamily: "monospace" }}>VITE_SUPABASE_URL</div>
+            <div style={{ fontFamily: "monospace" }}>VITE_SUPABASE_ANON_KEY</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
