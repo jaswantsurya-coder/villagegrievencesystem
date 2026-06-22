@@ -750,23 +750,23 @@ const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) 
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
         <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
-          {t('photo_evidence')} <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>optional, up to {MAX_EVIDENCE_PHOTOS}</span>
+          {t('photo_evidence')} <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>{t('optional_up_to', { count: MAX_EVIDENCE_PHOTOS })}</span>
         </label>
         <span style={{ fontSize: 12, fontWeight: 800, color: photos.length >= MAX_EVIDENCE_PHOTOS ? THEME.colors.danger : THEME.colors.primary }}>
-          {photos.length}/{MAX_EVIDENCE_PHOTOS} images
+          {t('photo_count', { current: photos.length, max: MAX_EVIDENCE_PHOTOS })}
         </span>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 12 }}>
         <button type="button" disabled={disabled || !hasRoom} onClick={() => galleryRef.current?.click()} style={actionButtonStyle(THEME.colors.primary)}>
           <AppIcon name="gallery" size={26} color={THEME.colors.primary} />
-          <span>Upload from Gallery</span>
-          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>JPG, PNG, WEBP</span>
+          <span>{t('upload_from_gallery')}</span>
+          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>{t('supported_image_types')}</span>
         </button>
         <button type="button" disabled={disabled || !hasRoom} onClick={() => cameraRef.current?.click()} style={actionButtonStyle(THEME.colors.success)}>
           <AppIcon name="camera" size={27} color={THEME.colors.success} />
-          <span>Take Photo</span>
-          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>Uses rear camera</span>
+          <span>{t('take_photo')}</span>
+          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>{t('uses_rear_camera')}</span>
         </button>
       </div>
 
@@ -776,7 +776,7 @@ const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) 
       {hasRoom && (
         <div onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files, "gallery"); }}
              style={{ border: `1.5px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "14px 16px", textAlign: "center", background: dragging ? THEME.colors.primaryLight : THEME.colors.background, color: THEME.colors.textMuted, fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}>
-          Drag images here or use the buttons above
+          {t('drag_images_hint')}
         </div>
       )}
 
@@ -797,7 +797,7 @@ const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) 
               )}
               <button type="button" aria-label={`Remove ${p.name || "image"}`} disabled={disabled} onClick={() => removePhoto(i)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,0.72)", border: "none", borderRadius: "50%", color: "#fff", width: 26, height: 26, cursor: disabled ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900 }}>x</button>
               <div style={{ position: "absolute", left: 5, bottom: 5, background: "rgba(15,23,42,0.72)", color: "#fff", borderRadius: THEME.radius.full, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>
-                {p.source === "camera" ? "Camera" : "Gallery"}
+                {p.source === "camera" ? t('camera_label') : t('gallery_label')}
               </div>
             </div>
           ))}
@@ -1490,7 +1490,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
 
           <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
           
-          <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+          <Input label={t("location_landmark")} placeholder={t("location_placeholder")} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
           <PhotoUpload photos={photos} setPhotos={setPhotos} disabled={loading} uploadError={uploadError} />
           
           <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
@@ -1706,7 +1706,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
 
           <LocationPicker t={t} initialCoords={[form.latitude, form.longitude]} boundaries={boundaries} onLocationSelect={(lat, lng) => setForm({ ...form, latitude: lat, longitude: lng })} />
           
-          <Input label={t("location_landmark")} placeholder="e.g. Near Village School" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
+          <Input label={t("location_landmark")} placeholder={t("location_placeholder")} value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} required />
           <PhotoUpload photos={photos} setPhotos={setPhotos} disabled={loading} uploadError={uploadError} />
           
           <div style={{ display: "flex", gap: 16, marginTop: 32 }}>
