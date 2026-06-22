@@ -15,7 +15,18 @@ import {
 } from 'lucide-react';
 
 const EVIDENCE_BUCKET = "complaint-evidence";
-const MAX_EVIDENCE_PHOTOS = 5;
+const MAX_EVIDENCE_PHOTOS = 10;
+const MAX_EVIDENCE_PHOTO_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_EVIDENCE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+const EVIDENCE_ACCEPT = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
+
+/** @typedef {"gallery"|"camera"} EvidencePhotoSource */
+
+/**
+ * @typedef {Object} ImageValidationResult
+ * @property {boolean} valid
+ * @property {string} error
+ */
 
 /**
  * @typedef {Object} EvidencePhoto
@@ -24,6 +35,7 @@ const MAX_EVIDENCE_PHOTOS = 5;
  * @property {string} name
  * @property {string} size
  * @property {string=} error
+ * @property {EvidencePhotoSource=} source
  */
 
 /**
@@ -646,29 +658,54 @@ const VoiceInputBtn = ({ onTranscript, lang = "en-US", notify }) => {
 
 const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) => {
   const { t } = useTranslation();
-  const fileRef = useRef();
+  const galleryRef = useRef();
+  const cameraRef = useRef();
   const [dragging, setDragging] = useState(false);
+  const [localError, setLocalError] = useState("");
 
-  const processFiles = (files) => {
+  /** @returns {ImageValidationResult} */
+  const validateImageFile = (file) => {
+    const type = (file.type || "").toLowerCase();
+    if (!ACCEPTED_EVIDENCE_TYPES.has(type)) return { valid: false, error: `${file.name}: only JPG, PNG, or WEBP images are supported.` };
+    if (file.size > MAX_EVIDENCE_PHOTO_BYTES) return { valid: false, error: `${file.name}: image must be 5MB or smaller.` };
+    return { valid: true, error: "" };
+  };
+
+  const processFiles = (files, source = "gallery") => {
     if (!files || disabled) return;
-    const remainingSlots = MAX_EVIDENCE_PHOTOS - photos.length;
+    setLocalError("");
+
     const selected = Array.from(files);
-    const valid = selected
-      .filter(file => file.type.startsWith("image/"))
-      .slice(0, remainingSlots);
+    const remainingSlots = MAX_EVIDENCE_PHOTOS - photos.length;
+    if (remainingSlots <= 0) {
+      setLocalError(`Maximum ${MAX_EVIDENCE_PHOTOS} images allowed.`);
+      return;
+    }
 
-    if (fileRef.current) fileRef.current.value = "";
-    if (remainingSlots <= 0 || valid.length === 0) return;
+    const accepted = [];
+    const errors = [];
+    selected.forEach(file => {
+      const validation = validateImageFile(file);
+      if (!validation.valid) errors.push(validation.error);
+      else if (accepted.length < remainingSlots) accepted.push(file);
+    });
 
-    valid.forEach(file => {
+    if (selected.length > remainingSlots) errors.push(`Only ${remainingSlots} more image${remainingSlots === 1 ? "" : "s"} can be added.`);
+    if (galleryRef.current) galleryRef.current.value = "";
+    if (cameraRef.current) cameraRef.current.value = "";
+    if (errors.length > 0) setLocalError(errors[0]);
+    if (accepted.length === 0) return;
+
+    accepted.forEach(file => {
       const reader = new FileReader();
       reader.onload = e => {
         /** @type {EvidencePhoto} */
         const nextPhoto = {
           file,
           previewUrl: String(e.target?.result || ""),
-          name: file.name,
+          name: file.name || `${source}-photo.jpg`,
           size: (file.size / 1024).toFixed(1),
+          source,
         };
         setPhotos(prev => [...prev, nextPhoto].slice(0, MAX_EVIDENCE_PHOTOS));
       };
@@ -676,8 +713,9 @@ const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) 
         setPhotos(prev => [...prev, {
           file,
           previewUrl: "",
-          name: file.name,
+          name: file.name || `${source}-photo.jpg`,
           size: (file.size / 1024).toFixed(1),
+          source,
           error: "Preview failed",
         }].slice(0, MAX_EVIDENCE_PHOTOS));
       };
@@ -686,41 +724,88 @@ const PhotoUpload = ({ photos, setPhotos, disabled = false, uploadError = "" }) 
   };
 
   const removePhoto = (i) => setPhotos(prev => prev.filter((_, idx) => idx !== i));
+  const errorMessage = localError || uploadError;
+  const hasRoom = photos.length < MAX_EVIDENCE_PHOTOS;
+
+  const actionButtonStyle = (activeColor) => ({
+    minHeight: 92,
+    borderRadius: THEME.radius.md,
+    border: `1.5px solid ${THEME.colors.border}`,
+    background: THEME.colors.surface,
+    color: THEME.colors.text,
+    cursor: disabled || !hasRoom ? "not-allowed" : "pointer",
+    opacity: disabled || !hasRoom ? 0.6 : 1,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    fontFamily: THEME.font,
+    fontWeight: 800,
+    fontSize: 13,
+    boxShadow: THEME.shadow.sm,
+  });
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: "block", marginBottom: 6, fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
-        {t('photo_evidence')} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>{t('optional_up_to_5')}</span>
-      </label>
-      {photos.length < MAX_EVIDENCE_PHOTOS && (
-        <div onClick={() => !disabled && fileRef.current?.click()} onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files); }}
-             style={{ border: `2px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "30px 20px", textAlign: "center", cursor: disabled ? "wait" : "pointer", background: dragging ? THEME.colors.primaryLight : THEME.colors.surface, transition: "all 0.2s", opacity: disabled ? 0.65 : 1 }}>
-          <div style={{ marginBottom: 8, display: "flex", justifyContent: "center", color: THEME.colors.primary }}><AppIcon name="camera" size={30} /></div>
-          <div style={{ fontWeight: 600, color: THEME.colors.text, fontSize: 14 }}>{disabled ? t('submitting') : t('click_to_upload')}</div>
-          <input ref={fileRef} type="file" accept="image/*" multiple disabled={disabled} style={{ display: "none" }} onChange={e => processFiles(e.target.files)} />
-        </div>
-      )}
-      {uploadError && (
-        <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: THEME.radius.sm, background: THEME.colors.dangerBg, color: THEME.colors.danger, fontSize: 12, fontWeight: 700 }}>
-          {uploadError}
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px,1fr))", gap: 10, marginTop: 12 }}>
-        {photos.map((p, i) => (
-          <div key={`${p.name}-${i}`} style={{ position: "relative", borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${p.error ? THEME.colors.danger : THEME.colors.border}`, background: THEME.colors.background }}>
-            {p.previewUrl ? (
-              <img src={p.previewUrl} style={{ width: "100%", height: 80, objectFit: "cover", display: "block" }} alt={p.name || "Evidence preview"} />
-            ) : (
-              <div style={{ height: 80, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.textMuted, fontSize: 11, fontWeight: 700, textAlign: "center", padding: 8 }}>{p.error || "Preview unavailable"}</div>
-            )}
-            <button type="button" disabled={disabled} onClick={() => removePhoto(i)} style={{ position: "absolute", top: 4, right: 4, background: "rgba(15,23,42,0.6)", border: "none", borderRadius: "50%", color: "#fff", width: 24, height: 24, cursor: disabled ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>x</button>
-          </div>
-        ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 8 }}>
+        <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, fontFamily: THEME.font }}>
+          {t('photo_evidence')} <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0, color: THEME.colors.textMuted }}>optional, up to {MAX_EVIDENCE_PHOTOS}</span>
+        </label>
+        <span style={{ fontSize: 12, fontWeight: 800, color: photos.length >= MAX_EVIDENCE_PHOTOS ? THEME.colors.danger : THEME.colors.primary }}>
+          {photos.length}/{MAX_EVIDENCE_PHOTOS} images
+        </span>
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 12 }}>
+        <button type="button" disabled={disabled || !hasRoom} onClick={() => galleryRef.current?.click()} style={actionButtonStyle(THEME.colors.primary)}>
+          <AppIcon name="gallery" size={26} color={THEME.colors.primary} />
+          <span>Upload from Gallery</span>
+          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>JPG, PNG, WEBP</span>
+        </button>
+        <button type="button" disabled={disabled || !hasRoom} onClick={() => cameraRef.current?.click()} style={actionButtonStyle(THEME.colors.success)}>
+          <AppIcon name="camera" size={27} color={THEME.colors.success} />
+          <span>Take Photo</span>
+          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>Uses rear camera</span>
+        </button>
+      </div>
+
+      <input ref={galleryRef} type="file" accept={EVIDENCE_ACCEPT} multiple disabled={disabled} style={{ display: "none" }} onChange={e => processFiles(e.target.files, "gallery")} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" disabled={disabled} style={{ display: "none" }} onChange={e => processFiles(e.target.files, "camera")} />
+
+      {hasRoom && (
+        <div onDragOver={e => { e.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={e => { e.preventDefault(); setDragging(false); processFiles(e.dataTransfer.files, "gallery"); }}
+             style={{ border: `1.5px dashed ${dragging ? THEME.colors.primary : THEME.colors.border}`, borderRadius: THEME.radius.md, padding: "14px 16px", textAlign: "center", background: dragging ? THEME.colors.primaryLight : THEME.colors.background, color: THEME.colors.textMuted, fontSize: 12, fontWeight: 700, transition: "all 0.2s" }}>
+          Drag images here or use the buttons above
+        </div>
+      )}
+
+      {errorMessage && (
+        <div style={{ marginTop: 8, padding: "10px 12px", borderRadius: THEME.radius.sm, background: THEME.colors.dangerBg, color: THEME.colors.danger, fontSize: 12, fontWeight: 700 }}>
+          {errorMessage}
+        </div>
+      )}
+
+      {photos.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px,1fr))", gap: 10, marginTop: 12 }}>
+          {photos.map((p, i) => (
+            <div key={`${p.name}-${i}`} style={{ position: "relative", borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${p.error ? THEME.colors.danger : THEME.colors.border}`, background: THEME.colors.background, minHeight: 96 }}>
+              {p.previewUrl ? (
+                <img src={p.previewUrl} style={{ width: "100%", aspectRatio: "1 / 1", objectFit: "cover", display: "block" }} alt={p.name || "Evidence preview"} />
+              ) : (
+                <div style={{ aspectRatio: "1 / 1", display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.textMuted, fontSize: 11, fontWeight: 700, textAlign: "center", padding: 8 }}>{p.error || "Preview unavailable"}</div>
+              )}
+              <button type="button" aria-label={`Remove ${p.name || "image"}`} disabled={disabled} onClick={() => removePhoto(i)} style={{ position: "absolute", top: 5, right: 5, background: "rgba(15,23,42,0.72)", border: "none", borderRadius: "50%", color: "#fff", width: 26, height: 26, cursor: disabled ? "wait" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900 }}>x</button>
+              <div style={{ position: "absolute", left: 5, bottom: 5, background: "rgba(15,23,42,0.72)", color: "#fff", borderRadius: THEME.radius.full, padding: "2px 7px", fontSize: 10, fontWeight: 800 }}>
+                {p.source === "camera" ? "Camera" : "Gallery"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
-
 const EvidenceThumbnail = ({ src, index, onClick }) => {
   const [broken, setBroken] = useState(false);
   const hasUrl = typeof src === "string" && src.trim().length > 0;
