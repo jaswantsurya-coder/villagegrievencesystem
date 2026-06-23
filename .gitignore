@@ -9,3 +9,5 @@ dist/
 !fix-complaint-history-rls.sql
 .vercel
 antigravity-skills/
+
+testsprite_tests\tmp\config.json

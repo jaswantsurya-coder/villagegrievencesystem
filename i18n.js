@@ -274,7 +274,12 @@ const resources = {
       "report_generated": "Report generated and downloaded!",
       "tab_bulk_import": "Bulk Import",
       "tab_boundaries": "Boundaries",
-      "no_data_for_month": "No complaints found for the selected month."
+      "no_data_for_month": "No complaints found for the selected month.",
+      "help": "Help",
+      "request_admin": "Request as Admin",
+      "report_bugs": "Report Bugs & Issues",
+      "feedback": "Feedback",
+      "help_link_pending": "This portal is currently unavailable (link pending)."
     }
   },
   hi: {
@@ -549,7 +554,12 @@ const resources = {
       "report_generated": "रिपोर्ट बनाई और डाउनलोड की गई!",
       "tab_bulk_import": "बल्क आयात",
       "tab_boundaries": "सीमाएँ",
-      "no_data_for_month": "चयनित महीने के लिए कोई शिकायत नहीं मिली।"
+      "no_data_for_month": "चयनित महीने के लिए कोई शिकायत नहीं मिली।",
+      "help": "सहायता",
+      "request_admin": "व्यवस्थापक (Admin) के रूप में अनुरोध करें",
+      "report_bugs": "कीड़े और समस्याओं की रिपोर्ट करें",
+      "feedback": "प्रतिक्रिया",
+      "help_link_pending": "यह पोर्टल वर्तमान में अनुपलब्ध है (लिंक लंबित है)।"
     }
   },
   te: {
@@ -824,7 +834,12 @@ const resources = {
       "report_generated": "నివేదిక సృష్టించబడింది మరియు డౌన్‌లోడ్ చేయబడింది!",
       "tab_bulk_import": "బల్క్ ఇంపోర్ట్",
       "tab_boundaries": "సరిహద్దులు",
-      "no_data_for_month": "ఎంచుకున్న నెలకు ఫిర్యాదులు కనుగొనబడలేదు."
+      "no_data_for_month": "ఎంచుకున్న నెలకు ఫిర్యాదులు కనుగొనబడలేదు.",
+      "help": "సహాయం",
+      "request_admin": "అడ్మిన్ గా అభ్యర్థించండి",
+      "report_bugs": "బగ్స్ & సమస్యలను నివేదించండి",
+      "feedback": "అభిప్రాయం",
+      "help_link_pending": "ఈ పోర్టల్ ప్రస్తుతం అందుబాటులో లేదు (లింక్ పెండింగ్‌లో ఉంది)."
     }
   }
 };

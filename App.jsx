@@ -20,6 +20,14 @@ const MAX_EVIDENCE_PHOTO_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_EVIDENCE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 const EVIDENCE_ACCEPT = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
 
+// Help feature web portal links (Phase 2)
+// Change these to real URLs (e.g. "https://request.gramseva.in", "https://support.gramseva.in") once available
+const PORTAL_LINKS = {
+  requestAdmin: import.meta.env.VITE_REQUEST_ADMIN_URL || "",
+  reportBugs: import.meta.env.VITE_REPORT_BUGS_URL || "",
+  feedback: import.meta.env.VITE_FEEDBACK_URL || "",
+};
+
 /** @typedef {"gallery"|"camera"} EvidencePhotoSource */
 
 /**
@@ -1092,12 +1100,35 @@ const Timeline = ({ status }) => {
   );
 };
 
-const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => (
-  <ShellLayout children={children} view={view} role={role} navigate={navigate} toast={toast} session={session} profile={profile} handleLogout={handleLogout} setShowLogin={setShowLogin} t={t} i18n={i18n} theme={theme} setTheme={setTheme} />
+const Shell = ({ children, view, role, navigate, toast, session, profile, handleLogout, setShowLogin, t, i18n, theme, setTheme, notify }) => (
+  <ShellLayout children={children} view={view} role={role} navigate={navigate} toast={toast} session={session} profile={profile} handleLogout={handleLogout} setShowLogin={setShowLogin} t={t} i18n={i18n} theme={theme} setTheme={setTheme} notify={notify} />
 );
 
-const ShellLayout = ({ children, view, navigate, toast, session, handleLogout, setShowLogin, t, i18n, theme, setTheme }) => {
+const ShellLayout = ({ children, view, role, navigate, toast, session, handleLogout, setShowLogin, t, i18n, theme, setTheme, notify }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
+  const [mobileHelpOpen, setMobileHelpOpen] = useState(false);
+  const helpDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (helpDropdownRef.current && !helpDropdownRef.current.contains(event.target)) {
+        setHelpMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleHelpClick = (option) => {
+    const url = PORTAL_LINKS[option];
+    if (url && url.startsWith("http")) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      notify(t('help_link_pending') || "This portal is currently unavailable (link pending).", "err");
+    }
+  };
+
   const goTo = (nextView) => {
     navigate(nextView);
     setMobileMenuOpen(false);
@@ -1126,6 +1157,109 @@ const ShellLayout = ({ children, view, navigate, toast, session, handleLogout, s
           <button key={v} onClick={() => goTo(v)} style={navButtonStyle(view === v)}>{label}</button>
         ))}
         <button onClick={() => goTo("gov-links")} style={navButtonStyle(view === "gov-links")}>{t('govt_links')}</button>
+
+        {/* Desktop Help Dropdown */}
+        <div ref={helpDropdownRef} style={{ position: "relative" }}>
+          <button 
+            onClick={() => setHelpMenuOpen(!helpMenuOpen)} 
+            style={{
+              ...navButtonStyle(helpMenuOpen),
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            ❓ {t('help')} <span style={{ fontSize: 9 }}>▼</span>
+          </button>
+          {helpMenuOpen && (
+            <div style={{
+              position: "absolute",
+              top: "100%",
+              right: 0,
+              marginTop: 8,
+              width: 220,
+              background: THEME.colors.surface,
+              border: `1px solid ${THEME.colors.border}`,
+              borderRadius: THEME.radius.md,
+              boxShadow: THEME.shadow.lg,
+              padding: "6px 0",
+              zIndex: 1000,
+              display: "flex",
+              flexDirection: "column"
+            }}>
+              <button 
+                onClick={() => { handleHelpClick('requestAdmin'); setHelpMenuOpen(false); }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  textAlign: "left",
+                  padding: "10px 16px",
+                  color: THEME.colors.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  fontFamily: THEME.font
+                }}
+                onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                onMouseOut={e => e.currentTarget.style.background = "transparent"}
+              >
+                🔑 {t('request_admin')}
+              </button>
+              <button 
+                onClick={() => { handleHelpClick('reportBugs'); setHelpMenuOpen(false); }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  textAlign: "left",
+                  padding: "10px 16px",
+                  color: THEME.colors.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  fontFamily: THEME.font
+                }}
+                onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                onMouseOut={e => e.currentTarget.style.background = "transparent"}
+              >
+                🐛 {t('report_bugs')}
+              </button>
+              <button 
+                onClick={() => { handleHelpClick('feedback'); setHelpMenuOpen(false); }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  textAlign: "left",
+                  padding: "10px 16px",
+                  color: THEME.colors.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  fontFamily: THEME.font
+                }}
+                onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                onMouseOut={e => e.currentTarget.style.background = "transparent"}
+              >
+                💬 {t('feedback')}
+              </button>
+            </div>
+          )}
+        </div>
+
         {session && (
           <button onClick={() => goTo("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
         )}
@@ -1149,6 +1283,42 @@ const ShellLayout = ({ children, view, navigate, toast, session, handleLogout, s
       {mobileMenuOpen && (
         <div className="mobile-nav-menu">
           {navItems.map(([v, label]) => <button key={v} onClick={() => goTo(v)} className={view === v ? "mobile-nav-item active" : "mobile-nav-item"}>{label}</button>)}
+          
+          {/* Mobile Help Accordion */}
+          <button 
+            onClick={() => setMobileHelpOpen(!mobileHelpOpen)} 
+            className="mobile-nav-item"
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <span>❓ {t('help')}</span>
+            <span style={{ fontSize: 10 }}>{mobileHelpOpen ? "▲" : "▼"}</span>
+          </button>
+          {mobileHelpOpen && (
+            <div style={{ paddingLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+              <button 
+                onClick={() => { handleHelpClick('requestAdmin'); setMobileMenuOpen(false); setMobileHelpOpen(false); }}
+                className="mobile-nav-item"
+                style={{ fontSize: 13, minHeight: 40, borderLeft: `2.5px solid ${THEME.colors.border}`, borderRadius: "0 8px 8px 0" }}
+              >
+                🔑 {t('request_admin')}
+              </button>
+              <button 
+                onClick={() => { handleHelpClick('reportBugs'); setMobileMenuOpen(false); setMobileHelpOpen(false); }}
+                className="mobile-nav-item"
+                style={{ fontSize: 13, minHeight: 40, borderLeft: `2.5px solid ${THEME.colors.border}`, borderRadius: "0 8px 8px 0" }}
+              >
+                🐛 {t('report_bugs')}
+              </button>
+              <button 
+                onClick={() => { handleHelpClick('feedback'); setMobileMenuOpen(false); setMobileHelpOpen(false); }}
+                className="mobile-nav-item"
+                style={{ fontSize: 13, minHeight: 40, borderLeft: `2.5px solid ${THEME.colors.border}`, borderRadius: "0 8px 8px 0" }}
+              >
+                💬 {t('feedback')}
+              </button>
+            </div>
+          )}
+
           {session && <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('admin_nav')}</button>}
           {session && <button onClick={() => goTo("profile")} className={view === "profile" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('my_account')}</button>}
           {session ? <button onClick={handleLogout} className="mobile-nav-item danger">{t('logout')}</button> : <button onClick={() => { setMobileMenuOpen(false); setShowLogin(true); }} className="mobile-nav-item primary">{t('login')}</button>}
