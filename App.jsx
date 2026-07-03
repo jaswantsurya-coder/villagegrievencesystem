@@ -2785,8 +2785,14 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       textTransform: "uppercase",
       fontFamily: THEME.font
     };
-    if (role === "admin") {
-      return <span style={{ ...s, background: THEME.colors.dangerBg, color: THEME.colors.danger, border: `1.5px solid ${STATUS_META.Open.border}` }}>{t('badge_admin')}</span>;
+    if (role === "super_admin") {
+      return <span style={{ ...s, background: "#fdf2f8", color: "#be185d", border: `1.5px solid #f9a8d4` }}>{t('badge_super_admin') || '⚡ Super Admin'}</span>;
+    }
+    if (role === "district_admin") {
+      return <span style={{ ...s, background: "#fef3c7", color: "#b45309", border: `1.5px solid #fcd34d` }}>{t('badge_district_admin') || '🏛 District Admin'}</span>;
+    }
+    if (role === "village_admin") {
+      return <span style={{ ...s, background: THEME.colors.dangerBg, color: THEME.colors.danger, border: `1.5px solid ${STATUS_META.Open.border}` }}>{t('badge_admin') || '🔑 Village Admin'}</span>;
     }
     if (role === "officer") {
       return <span style={{ ...s, background: THEME.colors.successBg, color: THEME.colors.success, border: `1.5px solid ${STATUS_META.Resolved.border}` }}>{t('badge_officer')}</span>;
@@ -2892,7 +2898,8 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                 >
                                   <option value="citizen">{t('role_citizen')}</option>
                                   <option value="officer">{t('role_officer')}</option>
-                                  <option value="admin">{t('role_admin')}</option>
+                                  <option value="village_admin">{t('role_village_admin') || 'Village Admin'}</option>
+                                  <option value="district_admin">{t('role_district_admin') || 'District Admin'}</option>
                                 </select>
                               </>
                             )}
@@ -3254,7 +3261,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
         <div className="admin-tabs" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
           <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
-          {!t_officer && profile?.role === "admin" && (
+          {!t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) && (
             <>
               <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
               <button style={tabStyle(tab === "bulk_import")} onClick={() => setTab("bulk_import")}>📁 {t('tab_bulk_import')}</button>
@@ -3265,11 +3272,11 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
         </div>
       </div>
 
-      {tab === "users" && !t_officer && profile?.role === "admin" ? (
+      {tab === "users" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <StaffManagementTab t={t} notify={notify} session={session} currentProfile={profile} />
-      ) : tab === "bulk_import" && !t_officer && profile?.role === "admin" ? (
+      ) : tab === "bulk_import" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <BulkImportTab t={t} notify={notify} />
-      ) : tab === "boundaries" && !t_officer && profile?.role === "admin" ? (
+      ) : tab === "boundaries" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <BoundariesTab t={t} notify={notify} />
       ) : tab === "analytics" ? (
         <AnalyticsTab list={list} t={t} />
@@ -3515,6 +3522,7 @@ import { SignInPage } from "./components/ui/sign-in";
 
 const LoginModal = ({ onLogin, onClose, notify, t }) => {
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgot, setIsForgot] = useState(false);
   const [loading, setLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState(null);
 
@@ -3558,6 +3566,67 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
     setLoading(false);
   };
 
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setAuthMessage(null);
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email") || "").trim().toLowerCase();
+
+    if (!email) return notify("Please enter your email address.", "err");
+
+    setLoading(true);
+    try {
+      const redirectTo = window.location.origin + window.location.pathname + '?reset=true';
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      setAuthMessage({ type: "success", text: "✅ Password reset link sent! Check your email inbox (and spam folder) for the reset link." });
+    } catch (err) {
+      const msg = err?.message || "Failed to send reset email.";
+      setAuthMessage({ type: "error", text: msg });
+      notify(msg, "err");
+    }
+    setLoading(false);
+  };
+
+  // Forgot password view
+  if (isForgot) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "white" }}>
+        <div className="min-h-[100dvh] flex items-center justify-center px-5 py-16 font-sans bg-white text-gray-900">
+          <div className="w-full max-w-md">
+            <div className="flex flex-col gap-6">
+              <h1 className="text-3xl sm:text-4xl font-semibold leading-tight">Reset Password</h1>
+              <p className="text-gray-500">Enter the email address associated with your account. We'll send you a link to create a new password.</p>
+              {authMessage && (
+                <div role="status" className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${authMessage.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                  {authMessage.text}
+                </div>
+              )}
+              <form className="space-y-5" onSubmit={handleForgotPassword}>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Email Address</label>
+                  <div className="rounded-2xl border border-gray-200 bg-black/5 backdrop-blur-sm transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
+                    <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required />
+                  </div>
+                </div>
+                <button type="submit" disabled={loading} className="w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
+                  {loading ? "Sending..." : "Send Reset Link"}
+                </button>
+              </form>
+              <p className="text-center text-sm leading-6 text-gray-500 mt-2">
+                Remember your password?{" "}
+                <a href="#" onClick={(e) => { e.preventDefault(); setIsForgot(false); setAuthMessage(null); }} className="text-violet-600 font-medium hover:underline transition-colors">
+                  Back to Login
+                </a>
+              </p>
+            </div>
+          </div>
+        </div>
+        <button className="login-modal-close" onClick={onClose} aria-label="Close" style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "white" }}>
       <SignInPage 
@@ -3566,6 +3635,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         heroImageSrc="/images/login-abstract-background.jpg"
         onSignIn={handleAuth}
         onSwitchMode={() => { setIsSignUp(prev => !prev); setAuthMessage(null); }}
+        onForgotPassword={() => { setIsForgot(true); setAuthMessage(null); }}
         isSignUp={isSignUp}
         loading={loading}
         message={authMessage?.text}
@@ -3575,6 +3645,83 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         switchLabel={isSignUp ? t('login') : t('sign_up')}
       />
       <button className="login-modal-close" onClick={onClose} aria-label="Close login" style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
+    </div>
+  );
+};
+
+// ─── Reset Password Modal (shown after user clicks email reset link) ──────────
+
+const ResetPasswordModal = ({ onComplete, notify, t }) => {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setMessage(null);
+    const formData = new FormData(e.currentTarget);
+    const newPassword = formData.get("newPassword");
+    const confirmPassword = formData.get("confirmPassword");
+
+    if (!newPassword || !confirmPassword) {
+      setMessage({ type: "error", text: "Please fill in both fields." });
+      return;
+    }
+    if (newPassword.length < 6) {
+      setMessage({ type: "error", text: "Password must be at least 6 characters." });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: "error", text: "Passwords do not match." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      setMessage({ type: "success", text: "✅ Password updated successfully! You can now log in." });
+      notify("Password updated successfully! ✅");
+      setTimeout(() => onComplete(), 2000);
+    } catch (err) {
+      const msg = err?.message || "Failed to update password.";
+      setMessage({ type: "error", text: msg });
+      notify(msg, "err");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ background: "white", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font }}>🔐 Set New Password</h2>
+        <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 20px", lineHeight: 1.6 }}>Enter your new password below. Make sure it's at least 6 characters long.</p>
+        
+        {message && (
+          <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600, lineHeight: 1.5, background: message.type === "error" ? "#fef2f2" : "#ecfdf5", color: message.type === "error" ? "#b91c1c" : "#047857", border: `1px solid ${message.type === "error" ? "#fecaca" : "#a7f3d0"}` }}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleReset}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>New Password</label>
+            <div style={{ position: "relative" }}>
+              <input name="newPassword" type={showPassword ? "text" : "password"} placeholder="Enter new password" required minLength={6} style={{ width: "100%", padding: "12px 44px 12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+          </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Confirm Password</label>
+            <input name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="Confirm new password" required minLength={6} style={{ width: "100%", padding: "12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }} />
+          </div>
+          <button type="submit" disabled={loading} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "#111827", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
+            {loading ? "Updating..." : "Update Password"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 };
@@ -3720,7 +3867,7 @@ export default function App() {
         setProfile(data); 
         setRole(data.role); 
         if (!data.name) setShowProfileSetup(true);
-        if (data.role === "admin" || data.role === "officer") navigate("admin");
+        if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) navigate("admin");
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
@@ -3745,7 +3892,7 @@ export default function App() {
       case "gov-links": return <GovLinksView {...shared} />;
       case "gallery": return <GalleryView {...shared} />;
       case "admin":
-        if (role === "admin") return <AdminView {...shared} />;
+        if (['village_admin', 'district_admin', 'super_admin'].includes(role)) return <AdminView {...shared} />;
         if (role === "officer") return <AdminView {...shared} t_officer />;
         if (session) return (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16, fontFamily: THEME.font }}>
@@ -3760,7 +3907,7 @@ export default function App() {
             <button
               onClick={async () => {
                 const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
-                if (data) { setRole(data.role); setProfile(data); if (data.role === "admin" || data.role === "officer") navigate("admin"); }
+                if (data) { setRole(data.role); setProfile(data); if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) navigate("admin"); }
               }}
               style={{ background: "linear-gradient(135deg,#047857,#10B981)", color: "#fff", border: "none", padding: "12px 28px", borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: "pointer" }}
             >

@@ -13,6 +13,7 @@ export const SignInPage = ({
   heroImageSrc,
   onSignIn,
   onSwitchMode,
+  onForgotPassword,
   isSignUp = false,
   loading = false,
   submitLabel = "Sign In",
@@ -57,11 +58,14 @@ export const SignInPage = ({
                 </GlassInputWrapper>
               </div>
 
-              {!isSignUp && <div className="animate-element animate-delay-500 flex items-center text-sm">
+              {!isSignUp && <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-600" />
                   <span className="text-gray-700">Keep me signed in</span>
                 </label>
+                {onForgotPassword && (
+                  <a href="#" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} className="text-violet-600 font-medium hover:underline transition-colors">Forgot password?</a>
+                )}
               </div>}
 
               <button type="submit" disabled={loading} className="animate-element animate-delay-600 w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
