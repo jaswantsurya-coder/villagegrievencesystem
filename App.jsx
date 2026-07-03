@@ -3738,6 +3738,7 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   
@@ -3769,10 +3770,17 @@ export default function App() {
       setSession(session);
       if (session) fetchProfile(session.user.id);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
-      else { setProfile(null); setRole(null); setShowProfileSetup(false); }
+      if (event === "PASSWORD_RECOVERY") {
+        setShowResetPassword(true);
+      } else if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+        setRole(null);
+        setShowProfileSetup(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -3933,6 +3941,20 @@ export default function App() {
             setSession(s); 
             setShowLogin(false); 
           }} 
+        />
+      )}
+
+      {showResetPassword && (
+        <ResetPasswordModal 
+          t={t}
+          notify={notify}
+          onComplete={async () => {
+            setShowResetPassword(false);
+            await supabase.auth.signOut();
+            setShowLogin(true);
+            // Clear URL hash & params to clean up the reset state
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }}
         />
       )}
 
