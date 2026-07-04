@@ -3574,16 +3574,33 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
 
     if (!email) return notify("Please enter your email address.", "err");
 
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setAuthMessage({ type: "error", text: "Please enter a valid email address." });
+      return;
+    }
+
     setLoading(true);
     try {
-      const redirectTo = window.location.origin + window.location.pathname + '?reset=true';
+      // Redirect back to the same app root — the app detects recovery hash and auto-shows password form
+      const redirectTo = window.location.origin;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
-      setAuthMessage({ type: "success", text: "✅ Password reset link sent! Check your email inbox (and spam folder) for the reset link." });
+      // Always show the same message regardless of whether email exists (security best practice)
+      setAuthMessage({ type: "success", text: "If an account exists for this email, a password reset link has been sent. Please check your inbox and spam folder." });
     } catch (err) {
-      const msg = err?.message || "Failed to send reset email.";
-      setAuthMessage({ type: "error", text: msg });
-      notify(msg, "err");
+      const msg = err?.message || "";
+      const normalized = msg.toLowerCase();
+      // Rate limit or network errors should be surfaced; other errors get the generic message
+      if (normalized.includes("rate limit") || normalized.includes("too many")) {
+        setAuthMessage({ type: "error", text: "Too many requests. Please wait a few minutes before trying again." });
+      } else if (normalized.includes("failed to fetch") || normalized.includes("networkerror")) {
+        setAuthMessage({ type: "error", text: "Network error. Please check your connection and try again." });
+      } else {
+        // For security, show the same success message even on error (email not found, etc.)
+        setAuthMessage({ type: "success", text: "If an account exists for this email, a password reset link has been sent. Please check your inbox and spam folder." });
+      }
     }
     setLoading(false);
   };
@@ -3595,7 +3612,10 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
         <div className="min-h-[100dvh] flex items-center justify-center px-5 py-16 font-sans bg-white text-gray-900">
           <div className="w-full max-w-md">
             <div className="flex flex-col gap-6">
-              <h1 className="text-3xl sm:text-4xl font-semibold leading-tight">Reset Password</h1>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 36 }}>🔒</span>
+                <h1 className="text-3xl sm:text-4xl font-semibold leading-tight">Forgot Password</h1>
+              </div>
               <p className="text-gray-500">Enter the email address associated with your account. We'll send you a link to create a new password.</p>
               {authMessage && (
                 <div role="status" className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${authMessage.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
@@ -3606,7 +3626,7 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Email Address</label>
                   <div className="rounded-2xl border border-gray-200 bg-black/5 backdrop-blur-sm transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
-                    <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required />
+                    <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required autoFocus />
                   </div>
                 </div>
                 <button type="submit" disabled={loading} className="w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
@@ -3655,20 +3675,57 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordErrors, setPasswordErrors] = useState([]);
+  const [linkExpired, setLinkExpired] = useState(false);
+
+  // Validate password in real-time
+  const validatePassword = (pw, confirmPw) => {
+    const errors = [];
+    if (pw.length > 0 && pw.length < 8) errors.push("Must be at least 8 characters");
+    if (confirmPw.length > 0 && pw !== confirmPw) errors.push("Passwords do not match");
+    return errors;
+  };
+
+  const handlePasswordChange = (val) => {
+    setNewPassword(val);
+    setPasswordErrors(validatePassword(val, confirmPassword));
+  };
+
+  const handleConfirmChange = (val) => {
+    setConfirmPassword(val);
+    setPasswordErrors(validatePassword(newPassword, val));
+  };
+
+  const getPasswordStrength = (pw) => {
+    if (!pw) return { label: "", color: "transparent", width: "0%" };
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    if (score <= 1) return { label: "Weak", color: "#ef4444", width: "20%" };
+    if (score <= 2) return { label: "Fair", color: "#f59e0b", width: "40%" };
+    if (score <= 3) return { label: "Good", color: "#3b82f6", width: "60%" };
+    if (score <= 4) return { label: "Strong", color: "#22c55e", width: "80%" };
+    return { label: "Very Strong", color: "#059669", width: "100%" };
+  };
+
+  const strength = getPasswordStrength(newPassword);
+  const canSubmit = newPassword.length >= 8 && newPassword === confirmPassword && !loading;
 
   const handleReset = async (e) => {
     e.preventDefault();
     setMessage(null);
-    const formData = new FormData(e.currentTarget);
-    const newPassword = formData.get("newPassword");
-    const confirmPassword = formData.get("confirmPassword");
 
     if (!newPassword || !confirmPassword) {
       setMessage({ type: "error", text: "Please fill in both fields." });
       return;
     }
-    if (newPassword.length < 6) {
-      setMessage({ type: "error", text: "Password must be at least 6 characters." });
+    if (newPassword.length < 8) {
+      setMessage({ type: "error", text: "Password must be at least 8 characters." });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -3680,22 +3737,63 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
-      setMessage({ type: "success", text: "✅ Password updated successfully! You can now log in." });
+
+      setMessage({ type: "success", text: "✅ Password updated successfully. Redirecting to login..." });
       notify("Password updated successfully! ✅");
-      setTimeout(() => onComplete(), 2000);
+
+      // Sign user out and redirect to login
+      setTimeout(async () => {
+        await supabase.auth.signOut();
+        onComplete("Password changed successfully. Please login using your new password.");
+      }, 1500);
     } catch (err) {
-      const msg = err?.message || "Failed to update password.";
-      setMessage({ type: "error", text: msg });
-      notify(msg, "err");
+      const msg = err?.message || "";
+      const normalized = msg.toLowerCase();
+      if (normalized.includes("session") || normalized.includes("expired") || normalized.includes("invalid") || normalized.includes("not authorized") || normalized.includes("refresh_token")) {
+        setLinkExpired(true);
+        setMessage({ type: "error", text: "This password reset link has expired or is invalid. Please request a new one." });
+      } else if (normalized.includes("weak") || normalized.includes("short")) {
+        setMessage({ type: "error", text: "Password is too weak. Use at least 8 characters with a mix of letters, numbers, and symbols." });
+      } else {
+        setMessage({ type: "error", text: msg || "Failed to update password. Please try again." });
+      }
+      notify(msg || "Failed to update password.", "err");
     }
     setLoading(false);
   };
 
+  // Expired link state — offer to go back and request a new link
+  if (linkExpired) {
+    return (
+      <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div style={{ background: "white", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>⏰</div>
+          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font }}>Link Expired</h2>
+          <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+            This password reset link has expired or is invalid. Please request a new one.
+          </p>
+          <button
+            onClick={() => {
+              window.history.replaceState({}, document.title, window.location.pathname);
+              onComplete();
+            }}
+            style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "#111827", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+          >
+            Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ background: "white", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-        <h2 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font }}>🔐 Set New Password</h2>
-        <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 20px", lineHeight: 1.6 }}>Enter your new password below. Make sure it's at least 6 characters long.</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <span style={{ fontSize: 28 }}>🔐</span>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: THEME.font }}>Create New Password</h2>
+        </div>
+        <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 20px", lineHeight: 1.6 }}>Enter your new password below. Must be at least 8 characters.</p>
         
         {message && (
           <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600, lineHeight: 1.5, background: message.type === "error" ? "#fef2f2" : "#ecfdf5", color: message.type === "error" ? "#b91c1c" : "#047857", border: `1px solid ${message.type === "error" ? "#fecaca" : "#a7f3d0"}` }}>
@@ -3707,18 +3805,56 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>New Password</label>
             <div style={{ position: "relative" }}>
-              <input name="newPassword" type={showPassword ? "text" : "password"} placeholder="Enter new password" required minLength={6} style={{ width: "100%", padding: "12px 44px 12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }} />
+              <input
+                name="newPassword"
+                type={showPassword ? "text" : "password"}
+                placeholder="Enter new password (min 8 characters)"
+                required
+                minLength={8}
+                value={newPassword}
+                onChange={(e) => handlePasswordChange(e.target.value)}
+                style={{ width: "100%", padding: "12px 44px 12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }}
+                autoFocus
+              />
               <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
                 {showPassword ? "🙈" : "👁️"}
               </button>
             </div>
+            {/* Password strength indicator */}
+            {newPassword.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ height: 4, borderRadius: 2, background: "#f1f5f9", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: strength.width, background: strength.color, borderRadius: 2, transition: "all 0.3s ease" }} />
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: strength.color, marginTop: 4, display: "block" }}>{strength.label}</span>
+              </div>
+            )}
           </div>
-          <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 6 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Confirm Password</label>
-            <input name="confirmPassword" type={showPassword ? "text" : "password"} placeholder="Confirm new password" required minLength={6} style={{ width: "100%", padding: "12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }} />
+            <input
+              name="confirmPassword"
+              type={showPassword ? "text" : "password"}
+              placeholder="Confirm new password"
+              required
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => handleConfirmChange(e.target.value)}
+              style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${confirmPassword.length > 0 && newPassword !== confirmPassword ? "#fca5a5" : "#e5e7eb"}`, borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa", transition: "border-color 0.2s" }}
+            />
           </div>
-          <button type="submit" disabled={loading} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "#111827", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
-            {loading ? "Updating..." : "Update Password"}
+          {/* Inline validation errors */}
+          {passwordErrors.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              {passwordErrors.map((err, i) => (
+                <div key={i} style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                  <span>⚠</span> {err}
+                </div>
+              ))}
+            </div>
+          )}
+          <button type="submit" disabled={!canSubmit} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: canSubmit ? "#111827" : "#9ca3af", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.6, transition: "all 0.2s", marginTop: 10 }}>
+            {loading ? "Saving..." : "Save Password"}
           </button>
         </form>
       </div>
@@ -3766,14 +3902,54 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    // ─── Detect Supabase recovery hash fragments on page load ──────────────
+    // When users click the password reset link from email, Supabase redirects
+    // back with tokens in the URL hash: #access_token=...&type=recovery
+    // We need to detect this BEFORE calling getSession to ensure the recovery
+    // session is properly established.
+    const detectRecoveryFromHash = () => {
+      try {
+        const hash = window.location.hash;
+        if (hash && hash.includes('type=recovery')) {
+          // The hash contains a recovery token — Supabase JS client will
+          // automatically parse it. We just need to flag it so we show
+          // the reset form once onAuthStateChange fires.
+          console.log('[Auth] Recovery hash detected in URL');
+          return true;
+        }
+        // Also check for recovery in URL search params (some Supabase versions)
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('type') === 'recovery') {
+          console.log('[Auth] Recovery param detected in URL');
+          return true;
+        }
+      } catch (e) {
+        console.error('[Auth] Error detecting recovery hash:', e);
+      }
+      return false;
+    };
+
+    const hasRecoveryHash = detectRecoveryFromHash();
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) fetchProfile(session.user.id);
+      if (hasRecoveryHash && session) {
+        // Recovery session detected from hash — show the reset form
+        console.log('[Auth] Recovery session established from hash, showing reset form');
+        setShowResetPassword(true);
+      } else if (session) {
+        fetchProfile(session.user.id);
+      }
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] onAuthStateChange:', event);
       setSession(session);
       if (event === "PASSWORD_RECOVERY") {
+        // Supabase detected the recovery session — show reset password form
         setShowResetPassword(true);
+        // Close login modal if open
+        setShowLogin(false);
       } else if (session) {
         fetchProfile(session.user.id);
       } else {
@@ -3948,12 +4124,15 @@ export default function App() {
         <ResetPasswordModal 
           t={t}
           notify={notify}
-          onComplete={async () => {
+          onComplete={(successMsg) => {
             setShowResetPassword(false);
-            await supabase.auth.signOut();
-            setShowLogin(true);
             // Clear URL hash & params to clean up the reset state
             window.history.replaceState({}, document.title, window.location.pathname);
+            // Show login with success message
+            setShowLogin(true);
+            if (successMsg) {
+              notify(successMsg);
+            }
           }}
         />
       )}
