@@ -2715,28 +2715,152 @@ const AnalyticsTab = ({ list, t }) => {
 // ─── Staff / User Management Tab Component ──────────────────────────────────
 const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [invitations, setInvitations] = useState([]);
+  const [acceptedProfiles, setAcceptedProfiles] = useState({});
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingInvites, setLoadingInvites] = useState(false);
   const [search, setSearch] = useState("");
+  const [activeSubTab, setActiveSubTab] = useState("staff"); // staff | citizens | invitations
+  
+  // Invite Form Modal
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteRole, setInviteRole] = useState("citizen");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [submittingInvite, setSubmittingInvite] = useState(false);
+  const [generatedInvite, setGeneratedInvite] = useState(null);
+
+  // Pagination & Filtering
   const [updatingId, setUpdatingId] = useState(null);
   const [policyError, setPolicyError] = useState(false);
+  const [staffRoleFilter, setStaffRoleFilter] = useState("");
+  const [inviteStatusFilter, setInviteStatusFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 8;
 
   useEffect(() => {
     fetchUsers();
-  }, []);
+    fetchInvitations();
+  }, [currentProfile?.village_id]);
+
+  useEffect(() => {
+    setCurrentPage(1); // Reset page on tab change
+  }, [activeSubTab, search, staffRoleFilter, inviteStatusFilter]);
 
   const fetchUsers = async () => {
-    setLoading(true);
+    if (!currentProfile?.village_id) return;
+    setLoadingUsers(true);
+    // Scope search strictly to members of the admin's village
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
+      .eq("village_id", currentProfile.village_id)
       .order("created_at", { ascending: false });
 
     if (error) {
       notify(error.message, "err");
     } else {
-      setUsers(data || []);
+      // Exclude super_admins and district_admins from staff & citizen directories
+      const filtered = (data || []).filter(u => u.role !== 'super_admin' && u.role !== 'district_admin');
+      setUsers(filtered);
     }
-    setLoading(false);
+    setLoadingUsers(false);
+  };
+
+  const fetchInvitations = async () => {
+    if (!currentProfile?.village_id) return;
+    setLoadingInvites(true);
+    
+    // Fetch invitations for the current village
+    const { data, error } = await supabase
+      .from("invitations")
+      .select("*")
+      .eq("village_id", currentProfile.village_id)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error(error);
+    } else {
+      setInvitations(data || []);
+      
+      // Batch fetch profile names for invitations that were accepted
+      const acceptedUserIds = (data || [])
+        .filter(i => i.accepted_by)
+        .map(i => i.accepted_by);
+        
+      if (acceptedUserIds.length > 0) {
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, name, email")
+          .in("id", acceptedUserIds);
+          
+        const profileMap = {};
+        if (profilesData) {
+          profilesData.forEach(p => {
+            profileMap[p.id] = p;
+          });
+        }
+        setAcceptedProfiles(profileMap);
+      }
+    }
+    setLoadingInvites(false);
+  };
+
+  const handleCreateInvitation = async (e) => {
+    e.preventDefault();
+    setSubmittingInvite(true);
+    setGeneratedInvite(null);
+
+    const token = session?.access_token;
+    if (!token) {
+      notify("No active session. Please log in again.", "err");
+      setSubmittingInvite(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/invitations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          role: inviteRole,
+          email: inviteEmail ? inviteEmail.trim().toLowerCase() : undefined,
+          villageId: currentProfile?.village_id,
+        }),
+      });
+
+      const resData = await response.json();
+
+      if (resData.success) {
+        setGeneratedInvite(resData);
+        notify("Invitation link generated successfully! 🔗");
+        setInviteEmail("");
+        fetchInvitations();
+      } else {
+        notify(resData.error || "Failed to generate invitation link.", "err");
+      }
+    } catch (err) {
+      notify(err?.message || "Network error. Please try again.", "err");
+    }
+    setSubmittingInvite(false);
+  };
+
+  const handleRevokeInvitation = async (inviteId) => {
+    if (!window.confirm("Are you sure you want to revoke this invitation? The link will immediately stop working.")) return;
+    
+    const { error } = await supabase
+      .from("invitations")
+      .update({ status: "revoked" })
+      .eq("id", inviteId);
+
+    if (error) {
+      notify(error.message, "err");
+    } else {
+      notify("Invitation link revoked successfully! ✓");
+      fetchInvitations();
+    }
   };
 
   const updateUserRole = async (userId, newRole) => {
@@ -2766,13 +2890,50 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
     setUpdatingId(null);
   };
 
-  const filteredUsers = users.filter(u => {
-    const term = search.toLowerCase();
-    const nameMatch = u.name?.toLowerCase().includes(term);
-    const phoneMatch = u.phone?.toLowerCase().includes(term);
-    const roleMatch = u.role?.toLowerCase().includes(term);
-    return nameMatch || phoneMatch || roleMatch;
+  // --- Filtering Logic ---
+  const term = search.toLowerCase();
+
+  const staffUsers = users.filter(u => {
+    const isStaff = u.role === "village_admin" || u.role === "officer";
+    if (!isStaff) return false;
+    
+    const matchesSearch = (u.name || "").toLowerCase().includes(term) || 
+                          (u.phone || "").toLowerCase().includes(term);
+    const matchesRole = staffRoleFilter ? u.role === staffRoleFilter : true;
+    
+    return matchesSearch && matchesRole;
   });
+
+  const citizenUsers = users.filter(u => {
+    const isCitizen = u.role === "citizen";
+    if (!isCitizen) return false;
+    
+    return (u.name || "").toLowerCase().includes(term) || 
+           (u.phone || "").toLowerCase().includes(term);
+  });
+
+  const filteredInvites = invitations.filter(i => {
+    const matchesSearch = i.role.includes(term) || (i.email && i.email.toLowerCase().includes(term));
+    const matchesStatus = inviteStatusFilter ? i.status === inviteStatusFilter : true;
+    return matchesSearch && matchesStatus;
+  });
+
+  // --- Pagination Logic ---
+  const getPaginatedItems = (items) => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return items.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  };
+
+  const getPageCount = (items) => Math.ceil(items.length / ITEMS_PER_PAGE);
+
+  // --- Stats Calculators ---
+  const totalStaff = users.filter(u => u.role === "village_admin" || u.role === "officer").length;
+  const adminCount = users.filter(u => u.role === "village_admin").length;
+  const officerCount = users.filter(u => u.role === "officer").length;
+  const totalCitizens = users.filter(u => u.role === "citizen").length;
+  
+  const pendingInvites = invitations.filter(i => i.status === "pending" && new Date(i.expires_at) > new Date()).length;
+  const acceptedInvites = invitations.filter(i => i.status === "accepted").length;
 
   const getRoleBadge = (role) => {
     const s = {
@@ -2786,12 +2947,6 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       textTransform: "uppercase",
       fontFamily: THEME.font
     };
-    if (role === "super_admin") {
-      return <span style={{ ...s, background: "#fdf2f8", color: "#be185d", border: `1.5px solid #f9a8d4` }}>{t('badge_super_admin') || '⚡ Super Admin'}</span>;
-    }
-    if (role === "district_admin") {
-      return <span style={{ ...s, background: "#fef3c7", color: "#b45309", border: `1.5px solid #fcd34d` }}>{t('badge_district_admin') || '🏛 District Admin'}</span>;
-    }
     if (role === "village_admin") {
       return <span style={{ ...s, background: THEME.colors.dangerBg, color: THEME.colors.danger, border: `1.5px solid ${STATUS_META.Open.border}` }}>{t('badge_admin') || '🔑 Village Admin'}</span>;
     }
@@ -2801,8 +2956,18 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
     return <span style={{ ...s, background: THEME.colors.background, color: THEME.colors.textMuted, border: `1.5px solid ${THEME.colors.border}` }}>{t('badge_citizen')}</span>;
   };
 
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    notify("Copied to clipboard! 📋");
+  };
+
+  // Check if target user has a protected role (e.g. self-lockout prevention)
+  const isUserProtected = (targetUser) => {
+    return targetUser.id === session?.user?.id;
+  };
+
   return (
-    <div style={{ fontFamily: THEME.font }}>
+    <div style={{ fontFamily: THEME.font, maxWidth: "100%", margin: "0 auto" }}>
       {policyError && (
         <div style={{ background: THEME.colors.dangerBg, border: `1px solid ${STATUS_META.Open.border}`, borderRadius: THEME.radius.md, padding: "16px 20px", marginBottom: 20, color: THEME.colors.danger, fontSize: 13, lineHeight: 1.6 }}>
           <strong style={{ fontSize: 14 }}>⚠️ Row Level Security (RLS) Policy Missing</strong><br/>
@@ -2810,84 +2975,267 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         </div>
       )}
 
-      {/* Control Bar */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder={t('search_users_placeholder')}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            padding: "10px 16px",
-            borderRadius: THEME.radius.md,
-            border: `1.5px solid ${THEME.colors.border}`,
-            fontSize: 13,
-            fontWeight: 700,
-            color: THEME.colors.text,
-            flex: 1,
-            minWidth: 260,
-            outline: "none"
-          }}
-        />
-        <Btn variant="outline" onClick={fetchUsers} disabled={loading} style={{ padding: "10px 20px" }}>
-          {loading ? t('refreshing') : t('reload_staff_list')}
+      {/* Modern Top Header / Stats Row */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+        {activeSubTab === "staff" && (
+          <>
+            <div style={{ flex: "1 1 200px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Total Staff Members</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: THEME.colors.text }}>{totalStaff}</div>
+            </div>
+            <div style={{ flex: "1 1 200px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Village Admins</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: THEME.colors.primary }}>{adminCount}</div>
+            </div>
+            <div style={{ flex: "1 1 200px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Officers</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: THEME.colors.success }}>{officerCount}</div>
+            </div>
+          </>
+        )}
+        {activeSubTab === "citizens" && (
+          <div style={{ flex: "1 1 300px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Registered Citizens</div>
+            <div style={{ fontSize: 28, fontWeight: 900, color: THEME.colors.text }}>{totalCitizens}</div>
+          </div>
+        )}
+        {activeSubTab === "invitations" && (
+          <>
+            <div style={{ flex: "1 1 240px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Pending Invitations</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#f59e0b" }}>{pendingInvites}</div>
+            </div>
+            <div style={{ flex: "1 1 240px", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 16, padding: "20px 24px", boxShadow: THEME.shadow.sm }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Accepted Invitations</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#10b981" }}>{acceptedInvites}</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Sub-tab Navigation */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2.5px solid ${THEME.colors.border}`, marginBottom: 24, gap: 16, flexWrap: "wrap", paddingBottom: 2 }}>
+        <div style={{ display: "flex", gap: 20 }}>
+          <button
+            onClick={() => setActiveSubTab("staff")}
+            style={{
+              padding: "12px 4px",
+              background: "none",
+              border: "none",
+              borderBottom: activeSubTab === "staff" ? `3px solid ${THEME.colors.primary}` : "3px solid transparent",
+              fontWeight: 800,
+              fontSize: 15,
+              color: activeSubTab === "staff" ? THEME.colors.text : THEME.colors.textMuted,
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            👥 Village Staff ({totalStaff})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("citizens")}
+            style={{
+              padding: "12px 4px",
+              background: "none",
+              border: "none",
+              borderBottom: activeSubTab === "citizens" ? `3px solid ${THEME.colors.primary}` : "3px solid transparent",
+              fontWeight: 800,
+              fontSize: 15,
+              color: activeSubTab === "citizens" ? THEME.colors.text : THEME.colors.textMuted,
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            🏠 Village Citizens ({totalCitizens})
+          </button>
+          <button
+            onClick={() => setActiveSubTab("invitations")}
+            style={{
+              padding: "12px 4px",
+              background: "none",
+              border: "none",
+              borderBottom: activeSubTab === "invitations" ? `3px solid ${THEME.colors.primary}` : "3px solid transparent",
+              fontWeight: 800,
+              fontSize: 15,
+              color: activeSubTab === "invitations" ? THEME.colors.text : THEME.colors.textMuted,
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            ✉️ Invitation Links
+          </button>
+        </div>
+
+        {/* Action Button */}
+        {activeSubTab === "invitations" && (
+          <button
+            onClick={() => { setShowInviteModal(true); setGeneratedInvite(null); }}
+            style={{
+              background: "linear-gradient(135deg, #111827, #1f2937)",
+              color: "white",
+              border: "none",
+              padding: "10px 18px",
+              borderRadius: 12,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.15)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            ➕ Invite Member
+          </button>
+        )}
+      </div>
+
+      {/* Search / Filter Control Bar */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ position: "relative", flex: 1, minWidth: 260 }}>
+          <input
+            type="text"
+            placeholder={
+              activeSubTab === "staff"
+                ? "Search staff by name or phone..."
+                : activeSubTab === "citizens"
+                ? "Search citizens by name or phone..."
+                : "Search invitations by role or email..."
+            }
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px 16px 12px 40px",
+              borderRadius: 14,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontSize: 13,
+              fontWeight: 700,
+              color: THEME.colors.text,
+              outline: "none",
+              boxSizing: "border-box",
+              background: THEME.colors.surface
+            }}
+          />
+          <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#9ca3af" }}>🔍</span>
+        </div>
+
+        {/* Filters */}
+        {activeSubTab === "staff" && (
+          <select
+            value={staffRoleFilter}
+            onChange={e => setStaffRoleFilter(e.target.value)}
+            style={{
+              padding: "11px 16px",
+              borderRadius: 14,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontSize: 13,
+              fontWeight: 700,
+              color: THEME.colors.text,
+              outline: "none",
+              cursor: "pointer",
+              background: THEME.colors.surface
+            }}
+          >
+            <option value="">All Roles</option>
+            <option value="village_admin">Village Admins</option>
+            <option value="officer">Officers</option>
+          </select>
+        )}
+
+        {activeSubTab === "invitations" && (
+          <select
+            value={inviteStatusFilter}
+            onChange={e => setInviteStatusFilter(e.target.value)}
+            style={{
+              padding: "11px 16px",
+              borderRadius: 14,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontSize: 13,
+              fontWeight: 700,
+              color: THEME.colors.text,
+              outline: "none",
+              cursor: "pointer",
+              background: THEME.colors.surface
+            }}
+          >
+            <option value="">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="accepted">Accepted</option>
+            <option value="revoked">Revoked</option>
+            <option value="expired">Expired</option>
+          </select>
+        )}
+
+        <Btn
+          variant="outline"
+          onClick={activeSubTab === "invitations" ? fetchInvitations : fetchUsers}
+          disabled={loadingUsers || loadingInvites}
+          style={{ padding: "10px 20px", borderRadius: 14, minHeight: 44 }}
+        >
+          {loadingUsers || loadingInvites ? t('refreshing') : "🔄 Refresh"}
         </Btn>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: "center", padding: "60px 0", color: THEME.colors.textMuted }}>
-          <div style={{ fontSize: 32, animation: "urgentPulse 2s infinite" }}>👥</div>
-          <p style={{ fontWeight: 800, marginTop: 12 }}>{t('loading_users')}</p>
+      {/* --- Main Tab Content Renderers --- */}
+
+      {loadingUsers || loadingInvites ? (
+        // Premium Loading Skeleton
+        <div style={{ background: THEME.colors.surface, borderRadius: 20, border: `1px solid ${THEME.colors.border}`, padding: 32, textAlign: "center" }}>
+          <div style={{ display: "inline-block", width: 48, height: 48, border: `4px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+          <p style={{ fontWeight: 800, marginTop: 16, color: THEME.colors.textMuted }}>Retrieving directory details...</p>
         </div>
-      ) : filteredUsers.length === 0 ? (
-        <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 48, textAlign: "center" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('no_users_match')}</h3>
-          <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('try_checking_spelling')}</p>
-        </div>
-      ) : (
-        <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_current_role')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
-                  <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsers.map(u => {
-                  const isSelf = u.id === session?.user?.id;
-                  const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
-                  return (
-                    <tr key={u.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: isSelf ? THEME.colors.background : THEME.colors.surface, transition: "background 0.2s" }}>
-                      <td style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.text }}>
-                        {u.name || t('unnamed_user')} {isSelf && <span style={{ color: THEME.colors.success, fontSize: 11, background: THEME.colors.successBg, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
-                      </td>
-                      <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
-                      <td style={{ padding: "16px 20px" }}>{getRoleBadge(u.role)}</td>
-                      <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
-                      <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                        {isSelf ? (
-                          <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "8px 12px", background: THEME.colors.background, borderRadius: THEME.radius.sm, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            {t('lock_protection')}
-                          </span>
-                        ) : (
-                          <div style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-                            {updatingId === u.id ? (
-                              <span style={{ fontSize: 12, color: THEME.colors.success, fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
-                            ) : (
-                              <>
+      ) : activeSubTab === "staff" ? (
+        /* ==================== TAB 1: STAFF DIRECTORY ==================== */
+        staffUsers.length === 0 ? (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Staff Members Found</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>Try checking the filters or create a new Staff/Officer invitation.</p>
+          </div>
+        ) : (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_current_role')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getPaginatedItems(staffUsers).map(u => {
+                    const isSelf = u.id === session?.user?.id;
+                    const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
+                    
+                    return (
+                      <tr key={u.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: isSelf ? THEME.colors.background : THEME.colors.surface, transition: "background 0.2s" }}>
+                        <td style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.text }}>
+                          {u.name || t('unnamed_user')} {isSelf && <span style={{ color: THEME.colors.success, fontSize: 11, background: THEME.colors.successBg, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
+                        </td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
+                        <td style={{ padding: "18px 24px" }}>{getRoleBadge(u.role)}</td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
+                        <td style={{ padding: "18px 24px", textAlign: "right" }}>
+                          {isSelf ? (
+                            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "8px 12px", background: THEME.colors.background, borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              🔒 Protected Account
+                            </span>
+                          ) : (
+                            <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                              {updatingId === u.id ? (
+                                <span style={{ fontSize: 12, color: THEME.colors.success, fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
+                              ) : (
                                 <select
-                                  value={u.role || "citizen"}
+                                  value={u.role || "officer"}
                                   onChange={e => updateUserRole(u.id, e.target.value)}
                                   disabled={updatingId !== null}
                                   style={{
-                                    padding: "6px 10px",
-                                    borderRadius: THEME.radius.sm,
+                                    padding: "8px 12px",
+                                    borderRadius: 10,
                                     border: `1.5px solid ${THEME.colors.border}`,
                                     fontSize: 12,
                                     fontWeight: 700,
@@ -2897,21 +3245,342 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                     background: THEME.colors.surface
                                   }}
                                 >
-                                  <option value="citizen">{t('role_citizen')}</option>
-                                  <option value="officer">{t('role_officer')}</option>
-                                  <option value="village_admin">{t('role_village_admin') || 'Village Admin'}</option>
-                                  <option value="district_admin">{t('role_district_admin') || 'District Admin'}</option>
+                                  <option value="citizen">Demote to Citizen</option>
+                                  <option value="officer">Officer</option>
+                                  <option value="village_admin">Village Admin</option>
                                 </select>
-                              </>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pagination Controls */}
+            {getPageCount(staffUsers) > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
+                  Showing Page {currentPage} of {getPageCount(staffUsers)}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(staffUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      ) : activeSubTab === "citizens" ? (
+        /* ==================== TAB 2: CITIZEN DIRECTORY ==================== */
+        citizenUsers.length === 0 ? (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Citizens Found</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>There are no registered citizens in this village matching your query.</p>
+          </div>
+        ) : (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Current Status</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getPaginatedItems(citizenUsers).map(u => {
+                    const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
+                    return (
+                      <tr key={u.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: THEME.colors.surface, transition: "background 0.2s" }}>
+                        <td style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.text }}>
+                          {u.name || t('unnamed_user')}
+                        </td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
+                        <td style={{ padding: "18px 24px" }}>
+                          <span style={{ display: "inline-flex", padding: "4px 10px", borderRadius: 8, background: "#f3f4f6", color: "#374151", fontSize: 11, fontWeight: 700 }}>Citizen</span>
+                        </td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
+                        <td style={{ padding: "18px 24px", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
+                            {updatingId === u.id ? (
+                              <span style={{ fontSize: 12, color: THEME.colors.success, fontWeight: 800, animation: "urgentPulse 1.5s infinite" }}>{t('updating')}</span>
+                            ) : (
+                              <select
+                                value="citizen"
+                                onChange={e => updateUserRole(u.id, e.target.value)}
+                                disabled={updatingId !== null}
+                                style={{
+                                  padding: "8px 12px",
+                                  borderRadius: 10,
+                                  border: `1.5px solid ${THEME.colors.border}`,
+                                  fontSize: 12,
+                                  fontWeight: 700,
+                                  color: THEME.colors.text,
+                                  outline: "none",
+                                  cursor: "pointer",
+                                  background: THEME.colors.surface
+                                }}
+                              >
+                                <option value="citizen">Citizen</option>
+                                <option value="officer">Promote to Officer</option>
+                                <option value="village_admin">Promote to Admin</option>
+                              </select>
                             )}
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {getPageCount(citizenUsers) > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
+                  Showing Page {currentPage} of {getPageCount(citizenUsers)}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(citizenUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        /* ==================== TAB 3: INVITATIONS ==================== */
+        filteredInvites.length === 0 ? (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Invitations Created</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>Click "Invite Member" at the top right to generate onboarding links.</p>
+          </div>
+        ) : (
+          <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Role Type</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Restricted Email</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Link Expiry</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Status</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getPaginatedItems(filteredInvites).map(i => {
+                    const protocol = window.location.protocol;
+                    const host = window.location.host;
+                    const inviteUrl = `${protocol}//${host}/invite/${i.token}`;
+                    
+                    const isExpired = new Date(i.expires_at) < new Date();
+                    const statusText = i.status === "pending" && isExpired ? "expired" : i.status;
+                    
+                    let badgeColor = "#9ca3af";
+                    let badgeBg = "#f3f4f6";
+                    if (statusText === "pending") {
+                      badgeColor = "#d97706";
+                      badgeBg = "#fffbeb";
+                    } else if (statusText === "accepted") {
+                      badgeColor = "#059669";
+                      badgeBg = "#ecfdf5";
+                    } else if (statusText === "revoked" || statusText === "expired") {
+                      badgeColor = "#dc2626";
+                      badgeBg = "#fef2f2";
+                    }
+
+                    const expiryDate = new Date(i.expires_at).toLocaleDateString(undefined, { dateStyle: "medium" });
+
+                    return (
+                      <tr key={i.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: THEME.colors.surface, transition: "background 0.2s" }}>
+                        <td style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.text, textTransform: "capitalize" }}>
+                          {i.role === "village_admin" ? "Village Admin" : i.role}
+                        </td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>
+                          {i.email || "Any Email (Public Link)"}
+                        </td>
+                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{expiryDate}</td>
+                        <td style={{ padding: "18px 24px" }}>
+                          <span style={{ display: "inline-flex", padding: "4px 10px", borderRadius: 8, background: badgeBg, color: badgeColor, fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+                            {statusText}
+                          </span>
+                        </td>
+                        <td style={{ padding: "18px 24px", textAlign: "right" }}>
+                          <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                            {statusText === "pending" ? (
+                              <>
+                                <button
+                                  onClick={() => copyToClipboard(inviteUrl)}
+                                  style={{ background: "none", border: "none", color: THEME.colors.primary, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: "6px 10px", borderRadius: 8 }}
+                                  onMouseOver={e => e.currentTarget.style.background = "#f3f4f6"}
+                                  onMouseOut={e => e.currentTarget.style.background = "none"}
+                                >
+                                  🔗 Copy Link
+                                </button>
+                                <button
+                                  onClick={() => handleRevokeInvitation(i.id)}
+                                  style={{ background: "none", border: "none", color: THEME.colors.danger, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: "6px 10px", borderRadius: 8 }}
+                                  onMouseOver={e => e.currentTarget.style.background = "#fef2f2"}
+                                  onMouseOut={e => e.currentTarget.style.background = "none"}
+                                >
+                                  Revoke
+                                </button>
+                              </>
+                            ) : statusText === "accepted" && acceptedProfiles[i.accepted_by] ? (
+                              <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700 }}>
+                                Accepted by: <strong>{acceptedProfiles[i.accepted_by].name || "Unnamed"}</strong>
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>No actions available</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {getPageCount(filteredInvites) > 1 && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
+                  Showing Page {currentPage} of {getPageCount(filteredInvites)}
+                </span>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(filteredInvites)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      )}
+
+      {/* --- Invite Member Modal --- */}
+      {showInviteModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "white", borderRadius: 24, padding: 32, maxWidth: 460, width: "100%", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: "#111827" }}>Create Invitation Link</h3>
+              <button
+                onClick={() => { setShowInviteModal(false); setGeneratedInvite(null); }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#9ca3af" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {!generatedInvite ? (
+              <form onSubmit={handleCreateInvitation}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Target Onboarding Role</label>
+                  <select
+                    value={inviteRole}
+                    onChange={e => setInviteRole(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: "1.5px solid #e5e7eb",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      outline: "none",
+                      background: "#f9fafb"
+                    }}
+                  >
+                    <option value="citizen">Citizen (Village Member)</option>
+                    <option value="officer">Officer (Grievance Resolver)</option>
+                    <option value="village_admin">Village Admin (Sarpanch/Clerk)</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Restricted Email (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. sarpanch@village.gov.in"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: "1.5px solid #e5e7eb",
+                      fontSize: 14,
+                      outline: "none",
+                      boxSizing: "border-box",
+                      background: "#f9fafb"
+                    }}
+                  />
+                  <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
+                    If specified, only an account registered with this email can accept the link.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submittingInvite}
+                  style={{
+                    width: "100%",
+                    padding: "14px 20px",
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg, #111827, #1f2937)",
+                    color: "white",
+                    border: "none",
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: submittingInvite ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8
+                  }}
+                >
+                  {submittingInvite ? "Generating..." : "🔗 Generate Invitation"}
+                </button>
+              </form>
+            ) : (
+              <div style={{ textAlign: "center", padding: "10px 0" }}>
+                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ecfdf5", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>✓</div>
+                <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 6px", color: "#111827" }}>Invitation Ready!</h4>
+                <p style={{ color: "#6b7280", fontSize: 13, margin: "0 0 16px", lineHeight: 1.5 }}>
+                  Share this unique URL with the invitee. It will expire in 7 days.
+                </p>
+
+                <div style={{ display: "flex", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, alignItems: "center", gap: 10, marginBottom: 20 }}>
+                  <code style={{ fontSize: 12, fontFamily: "monospace", flex: 1, overflowX: "auto", textAlign: "left", whiteSpace: "nowrap", color: "#374151" }}>
+                    {generatedInvite.url}
+                  </code>
+                  <button
+                    onClick={() => copyToClipboard(generatedInvite.url)}
+                    style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => { setShowInviteModal(false); setGeneratedInvite(null); }}
+                  style={{ width: "100%", padding: "12px 20px", borderRadius: 12, background: "#f3f4f6", color: "#374151", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Close Panel
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3740,7 +4409,7 @@ const AdminPasswordResetTab = ({ t, notify, session }) => {
 import { SignInPage } from "./components/ui/sign-in";
 
 const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [isForgot, setIsForgot] = useState(initialMode === 'forgot');
   const [loading, setLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState(null);
@@ -4337,6 +5006,223 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
+
+// ─── Invitation Onboarding Accept View ─────────────────────────────────────────
+
+const InvitationAcceptView = ({ t, notify, navigate, session, token, onAccept, setShowLogin, setInitialLoginMode }) => {
+  const [loading, setLoading] = useState(true);
+  const [inviteInfo, setInviteInfo] = useState(null);
+  const [accepting, setAccepting] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (token) {
+      lookupInvite();
+    } else {
+      setError("No invitation token provided.");
+      setLoading(false);
+    }
+  }, [token]);
+
+  const lookupInvite = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc("lookup_invitation", { p_token: token });
+      if (rpcError) throw rpcError;
+      
+      if (data && data.valid) {
+        setInviteInfo(data);
+      } else {
+        setError(data?.error || "This invitation link is invalid or expired.");
+      }
+    } catch (err) {
+      setError(err?.message || "Error verifying invitation.");
+    }
+    setLoading(false);
+  };
+
+  const handleAccept = async () => {
+    if (!session) {
+      notify("Please log in or register to accept the invitation.", "err");
+      return;
+    }
+    setAccepting(true);
+    setError(null);
+    try {
+      const { data, error: rpcError } = await supabase.rpc("accept_invitation", { p_token: token });
+      if (rpcError) throw rpcError;
+      
+      if (data && data.success) {
+        setSuccess(true);
+        notify(`Welcome to ${data.village_name}! ✓`);
+        // Clean URL to root
+        window.history.replaceState({}, document.title, "/");
+        // Trigger profile update and navigation
+        setTimeout(() => {
+          onAccept();
+        }, 2000);
+      } else {
+        setError(data?.error || "Failed to accept invitation.");
+        notify(data?.error || "Failed to accept invitation.", "err");
+      }
+    } catch (err) {
+      setError(err?.message || "Error accepting invitation.");
+      notify(err?.message || "Error accepting invitation.", "err");
+    }
+    setAccepting(false);
+  };
+
+  const containerStyle = {
+    minHeight: "70vh",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "40px 20px",
+    background: THEME.colors.background,
+    fontFamily: THEME.font,
+  };
+
+  const cardStyle = {
+    background: THEME.colors.surface,
+    borderRadius: 24,
+    padding: "40px 32px",
+    maxWidth: 480,
+    width: "100%",
+    boxShadow: THEME.shadow.md,
+    border: `1px solid ${THEME.colors.border}`,
+    textAlign: "center",
+  };
+
+  const roleText = inviteInfo?.role === "village_admin" 
+    ? "Village Admin (Sarpanch/Clerk)" 
+    : inviteInfo?.role === "officer" 
+    ? "Officer (Grievance Resolver)" 
+    : "Citizen Member";
+
+  if (loading) {
+    return (
+      <div style={containerStyle}>
+        <div style={cardStyle}>
+          <div style={{ display: "inline-block", width: 40, height: 40, border: `3.5px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 16 }} />
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>Verifying Onboarding Link</h3>
+          <p style={{ color: THEME.colors.textMuted, fontSize: 13, marginTop: 6 }}>Checking security token validity...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !inviteInfo) {
+    return (
+      <div style={containerStyle}>
+        <div style={cardStyle}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#fef2f2", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>⚠️</div>
+          <h3 style={{ fontSize: 20, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Link Expired or Invalid</h3>
+          <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+            {error || "This invitation has expired, been revoked, or is incorrect."}
+          </p>
+          <Btn onClick={() => navigate("home")} style={{ width: "100%", padding: "12px 20px" }}>Go to Homepage</Btn>
+        </div>
+      </div>
+    );
+  }
+
+  if (success) {
+    return (
+      <div style={containerStyle}>
+        <div style={cardStyle}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>🎉</div>
+          <h3 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Welcome Onboard!</h3>
+          <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 16px", lineHeight: 1.6 }}>
+            You have successfully joined <strong>{inviteInfo.village_name}</strong> as a <strong>{roleText}</strong>.
+          </p>
+          <p style={{ color: THEME.colors.primary, fontSize: 13, fontWeight: 700 }}>Redirecting to your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={containerStyle}>
+      <div style={cardStyle}>
+        <div style={{ width: 64, height: 64, borderRadius: 20, background: "linear-gradient(135deg, #3b82f6, #60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", boxShadow: "0 8px 20px rgba(59, 130, 246, 0.2)" }}>
+          <span style={{ fontSize: 30 }}>✉️</span>
+        </div>
+        <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Village Invitation</h2>
+        <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+          You have been invited to join <strong>{inviteInfo.village_name}</strong> ({inviteInfo.district}) as a <strong style={{ color: THEME.colors.primary }}>{roleText}</strong>.
+        </p>
+
+        {session ? (
+          <button
+            onClick={handleAccept}
+            disabled={accepting}
+            style={{
+              width: "100%",
+              padding: "14px 20px",
+              borderRadius: 14,
+              background: "linear-gradient(135deg, #111827, #1f2937)",
+              color: "white",
+              border: "none",
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: accepting ? "not-allowed" : "pointer",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {accepting ? "Joining Village..." : `Accept & Join ${inviteInfo.village_name}`}
+          </button>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: 12, fontSize: 12, color: "#1e3a8a", lineHeight: 1.5, fontWeight: 600, textAlign: "left", marginBottom: 8 }}>
+              💡 An account is required to join. Please sign up or log in first. The invitation will be applied automatically after authenticating.
+            </div>
+            <button
+              onClick={() => {
+                setInitialLoginMode("signup");
+                setShowLogin(true);
+              }}
+              style={{
+                padding: "12px 20px",
+                borderRadius: 12,
+                background: THEME.colors.primary,
+                color: "white",
+                border: "none",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              📝 Register & Join
+            </button>
+            <button
+              onClick={() => {
+                setInitialLoginMode("login");
+                setShowLogin(true);
+              }}
+              style={{
+                padding: "12px 20px",
+                borderRadius: 12,
+                background: "transparent",
+                color: THEME.colors.text,
+                border: `1.5px solid ${THEME.colors.border}`,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              🔑 Log In to Account
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const { t, i18n } = useTranslation();
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
@@ -4349,6 +5235,7 @@ export default function App() {
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [initialLoginMode, setInitialLoginMode] = useState(null);
+  const [inviteToken, setInviteToken] = useState(null);
 
   // ─── URL path-based routing for auth pages ─────────────────────────────────
   useEffect(() => {
@@ -4358,6 +5245,10 @@ export default function App() {
       setInitialLoginMode('forgot');
     } else if (path === '/login') {
       setShowLogin(true);
+    } else if (path.startsWith('/invite/')) {
+      const token = path.split('/invite/')[1];
+      setInviteToken(token);
+      setView("invite");
     }
     // /reset-password is handled by recovery detection in the auth state change listener
   }, []);
@@ -4561,6 +5452,9 @@ export default function App() {
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
       case "gallery": return <GalleryView {...shared} />;
+      case "invite": return <InvitationAcceptView {...shared} token={inviteToken} onAccept={() => {
+        if (session?.user?.id) fetchProfile(session.user.id);
+      }} setShowLogin={setShowLogin} setInitialLoginMode={setInitialLoginMode} />;
       case "admin":
         if (['village_admin', 'district_admin', 'super_admin'].includes(role)) return <AdminView {...shared} />;
         if (role === "officer") return <AdminView {...shared} t_officer />;
