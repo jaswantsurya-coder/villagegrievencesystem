@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import ReactDOM from "react-dom";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
@@ -3136,7 +3137,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   const [selected, setSelected] = useState(null);
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("complaints"); // complaints | analytics | users
+  const [tab, setTab] = useState("complaints"); // complaints | analytics | users | admin_reset
   const [lightbox, setLightbox] = useState(null);
   const [upvoteCounts, setUpvoteCounts] = useState({});
 
@@ -3266,6 +3267,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
               <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
               <button style={tabStyle(tab === "bulk_import")} onClick={() => setTab("bulk_import")}>📁 {t('tab_bulk_import')}</button>
               <button style={tabStyle(tab === "boundaries")} onClick={() => setTab("boundaries")}>🗺️ {t('tab_boundaries')}</button>
+              <button style={tabStyle(tab === "admin_reset")} onClick={() => setTab("admin_reset")}>🔑 Reset Password</button>
             </>
           )}
           <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
@@ -3278,6 +3280,8 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
         <BulkImportTab t={t} notify={notify} />
       ) : tab === "boundaries" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <BoundariesTab t={t} notify={notify} />
+      ) : tab === "admin_reset" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
+        <AdminPasswordResetTab t={t} notify={notify} session={session} />
       ) : tab === "analytics" ? (
         <AnalyticsTab list={list} t={t} />
       ) : (
@@ -3518,11 +3522,226 @@ const ProfileSetupModal = ({ session, onComplete, notify, t }) => {
   );
 };
 
+// ─── Admin Password Reset Tab ─────────────────────────────────────────────────
+
+const AdminPasswordResetTab = ({ t, notify, session }) => {
+  const [userId, setUserId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  const getPasswordStrength = (pw) => {
+    if (!pw) return { label: "", color: "transparent", width: "0%" };
+    let score = 0;
+    if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    if (score <= 1) return { label: "Weak", color: "#ef4444", width: "20%" };
+    if (score <= 2) return { label: "Fair", color: "#f59e0b", width: "40%" };
+    if (score <= 3) return { label: "Good", color: "#3b82f6", width: "60%" };
+    if (score <= 4) return { label: "Strong", color: "#22c55e", width: "80%" };
+    return { label: "Very Strong", color: "#059669", width: "100%" };
+  };
+
+  const strength = getPasswordStrength(newPassword);
+
+  const isValidUUID = UUID_REGEX.test(userId.trim());
+  const hasUpper = /[A-Z]/.test(newPassword);
+  const hasLower = /[a-z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+  const isLongEnough = newPassword.length >= 8;
+  const canSubmit = isValidUUID && isLongEnough && hasUpper && hasLower && hasNumber && hasSpecial && !loading;
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setResult(null);
+
+    if (!isValidUUID) {
+      setResult({ type: "error", text: "Invalid User ID format. Must be a valid UUID." });
+      return;
+    }
+    if (!isLongEnough || !hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+      setResult({ type: "error", text: "Password does not meet strength requirements." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = session?.access_token;
+      if (!token) {
+        setResult({ type: "error", text: "No active session. Please log in again." });
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch("/api/admin-reset-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: userId.trim(),
+          newPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setResult({
+          type: "success",
+          text: `✅ Password updated for user ${data.user?.email || data.user?.id || userId}`,
+        });
+        notify("Password reset successful! ✅");
+        setNewPassword("");
+        setUserId("");
+      } else {
+        setResult({ type: "error", text: data.error || "Failed to reset password." });
+        notify(data.error || "Failed to reset password.", "err");
+      }
+    } catch (err) {
+      const msg = err?.message || "Network error. Please try again.";
+      setResult({ type: "error", text: msg });
+      notify(msg, "err");
+    }
+    setLoading(false);
+  };
+
+  const checkStyle = (pass) => ({
+    fontSize: 12,
+    fontWeight: 600,
+    color: pass ? "#22c55e" : "#9ca3af",
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+  });
+
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto" }}>
+      <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, padding: 28, boxShadow: THEME.shadow.md }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <span style={{ fontSize: 28 }}>🔑</span>
+          <h3 style={{ fontSize: 22, fontWeight: 800, margin: 0, fontFamily: THEME.font, color: THEME.colors.text }}>Admin Password Reset</h3>
+        </div>
+        <p style={{ color: THEME.colors.textMuted, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>
+          Reset a user's password using their User ID (UUID). This action is logged and requires admin privileges.
+        </p>
+
+        {/* Security notice */}
+        <div style={{ background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "12px 16px", marginBottom: 20, fontSize: 12, color: "#92400E", lineHeight: 1.6, fontWeight: 600 }}>
+          ⚠️ This bypasses the user's normal password reset flow. Use only when the user cannot reset their own password via email.
+        </div>
+
+        {result && (
+          <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600, lineHeight: 1.5, background: result.type === "error" ? "#fef2f2" : "#ecfdf5", color: result.type === "error" ? "#b91c1c" : "#047857", border: `1px solid ${result.type === "error" ? "#fecaca" : "#a7f3d0"}` }}>
+            {result.text}
+          </div>
+        )}
+
+        <form onSubmit={handleReset}>
+          <div style={{ marginBottom: 18 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, marginBottom: 6 }}>User ID (UUID)</label>
+            <input
+              type="text"
+              placeholder="e.g. 5be68c5b-bf17-4063-a3ac-7c095833ef70"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${userId.length > 0 && !isValidUUID ? "#fca5a5" : THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box", background: THEME.colors.background, color: THEME.colors.text, transition: "border-color 0.2s" }}
+            />
+            {userId.length > 0 && !isValidUUID && (
+              <span style={{ fontSize: 11, color: "#ef4444", fontWeight: 600, marginTop: 4, display: "block" }}>⚠ Invalid UUID format</span>
+            )}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, marginBottom: 6 }}>New Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="Minimum 8 characters, mixed case, number, special char"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{ width: "100%", padding: "12px 44px 12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, outline: "none", boxSizing: "border-box", background: THEME.colors.background, color: THEME.colors.text, transition: "border-color 0.2s" }}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+
+            {/* Password strength indicator */}
+            {newPassword.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ height: 4, borderRadius: 2, background: "#f1f5f9", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: strength.width, background: strength.color, borderRadius: 2, transition: "all 0.3s ease" }} />
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600, color: strength.color, marginTop: 4, display: "block" }}>{strength.label}</span>
+              </div>
+            )}
+
+            {/* Password requirements checklist */}
+            {newPassword.length > 0 && (
+              <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 12px" }}>
+                <span style={checkStyle(isLongEnough)}>{isLongEnough ? "✓" : "○"} 8+ characters</span>
+                <span style={checkStyle(hasUpper)}>{hasUpper ? "✓" : "○"} Uppercase</span>
+                <span style={checkStyle(hasLower)}>{hasLower ? "✓" : "○"} Lowercase</span>
+                <span style={checkStyle(hasNumber)}>{hasNumber ? "✓" : "○"} Number</span>
+                <span style={checkStyle(hasSpecial)}>{hasSpecial ? "✓" : "○"} Special char</span>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            style={{
+              width: "100%",
+              padding: "14px 20px",
+              borderRadius: THEME.radius.sm,
+              background: canSubmit ? "#111827" : "#9ca3af",
+              color: "white",
+              border: "none",
+              fontSize: 14,
+              fontWeight: 700,
+              fontFamily: THEME.font,
+              cursor: canSubmit ? "pointer" : "not-allowed",
+              opacity: canSubmit ? 1 : 0.6,
+              transition: "all 0.2s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            {loading ? "Resetting..." : "🔑 Reset User Password"}
+          </button>
+        </form>
+      </div>
+
+      {/* API documentation card */}
+      <div style={{ background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, padding: 24, marginTop: 16, boxShadow: THEME.shadow.sm }}>
+        <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 8px", color: THEME.colors.text, fontFamily: THEME.font }}>📡 API Endpoint</h4>
+        <code style={{ display: "block", padding: "10px 14px", borderRadius: 8, background: THEME.colors.background, fontSize: 12, fontFamily: "monospace", color: THEME.colors.textMuted, wordBreak: "break-all", lineHeight: 1.6 }}>
+          POST /api/admin-reset-password<br />
+          Authorization: Bearer {'<'}your-jwt-token{'>'}<br />
+          Body: {'{'} "userId": "uuid", "newPassword": "..." {'}'}
+        </code>
+      </div>
+    </div>
+  );
+};
+
 import { SignInPage } from "./components/ui/sign-in";
 
-const LoginModal = ({ onLogin, onClose, notify, t }) => {
+const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [isForgot, setIsForgot] = useState(false);
+  const [isForgot, setIsForgot] = useState(initialMode === 'forgot');
   const [loading, setLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState(null);
 
@@ -3583,8 +3802,8 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
 
     setLoading(true);
     try {
-      // Redirect back to the same app root — the app detects recovery hash and auto-shows password form
-      const redirectTo = window.location.origin;
+      // Redirect to /reset-password — the app detects recovery session and shows the reset form
+      const redirectTo = `${window.location.origin}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       // Always show the same message regardless of whether email exists (security best practice)
@@ -3670,82 +3889,89 @@ const LoginModal = ({ onLogin, onClose, notify, t }) => {
 };
 
 // ─── Reset Password Modal (shown after user clicks email reset link) ──────────
+// BUG FIX: Uses ReactDOM.createPortal to render outside Shell's stacking context,
+// stopPropagation on the card to prevent Shell's handleClickOutside from stealing focus,
+// and explicit pointer-events management to ensure inputs are interactive.
 
 const ResetPasswordModal = ({ onComplete, notify, t }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordErrors, setPasswordErrors] = useState([]);
   const [linkExpired, setLinkExpired] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const formRef = useRef(null);
+  const passwordInputRef = useRef(null);
 
-  // Validate password in real-time
-  const validatePassword = (pw, confirmPw) => {
-    const errors = [];
-    if (pw.length > 0 && pw.length < 8) errors.push("Must be at least 8 characters");
-    if (confirmPw.length > 0 && pw !== confirmPw) errors.push("Passwords do not match");
-    return errors;
-  };
+  // Auto-focus the first password input on mount
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      passwordInputRef.current?.focus();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const handlePasswordChange = (val) => {
-    setNewPassword(val);
-    setPasswordErrors(validatePassword(val, confirmPassword));
+  // Password validation checks
+  const checks = {
+    length: newPassword.length >= 8,
+    match: confirmPassword.length > 0 ? newPassword === confirmPassword : true,
   };
-
-  const handleConfirmChange = (val) => {
-    setConfirmPassword(val);
-    setPasswordErrors(validatePassword(newPassword, val));
-  };
+  const allValid = checks.length && newPassword === confirmPassword && confirmPassword.length > 0;
+  const canSubmit = allValid && !loading;
 
   const getPasswordStrength = (pw) => {
-    if (!pw) return { label: "", color: "transparent", width: "0%" };
+    if (!pw) return { label: "", color: "transparent", width: "0%", score: 0 };
     let score = 0;
     if (pw.length >= 8) score++;
     if (pw.length >= 12) score++;
     if (/[A-Z]/.test(pw)) score++;
     if (/[0-9]/.test(pw)) score++;
     if (/[^A-Za-z0-9]/.test(pw)) score++;
-    if (score <= 1) return { label: "Weak", color: "#ef4444", width: "20%" };
-    if (score <= 2) return { label: "Fair", color: "#f59e0b", width: "40%" };
-    if (score <= 3) return { label: "Good", color: "#3b82f6", width: "60%" };
-    if (score <= 4) return { label: "Strong", color: "#22c55e", width: "80%" };
-    return { label: "Very Strong", color: "#059669", width: "100%" };
+    if (score <= 1) return { label: "Weak", color: "#ef4444", width: "20%", score };
+    if (score <= 2) return { label: "Fair", color: "#f59e0b", width: "40%", score };
+    if (score <= 3) return { label: "Good", color: "#3b82f6", width: "60%", score };
+    if (score <= 4) return { label: "Strong", color: "#22c55e", width: "80%", score };
+    return { label: "Very Strong", color: "#059669", width: "100%", score };
   };
 
   const strength = getPasswordStrength(newPassword);
-  const canSubmit = newPassword.length >= 8 && newPassword === confirmPassword && !loading;
 
   const handleReset = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     setMessage(null);
 
-    if (!newPassword || !confirmPassword) {
-      setMessage({ type: "error", text: "Please fill in both fields." });
+    const trimmedPassword = newPassword.trim();
+    const trimmedConfirm = confirmPassword.trim();
+
+    if (!trimmedPassword || !trimmedConfirm) {
+      setMessage({ type: "error", text: "Please fill in both password fields." });
       return;
     }
-    if (newPassword.length < 8) {
+    if (trimmedPassword.length < 8) {
       setMessage({ type: "error", text: "Password must be at least 8 characters." });
       return;
     }
-    if (newPassword !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirm) {
       setMessage({ type: "error", text: "Passwords do not match." });
       return;
     }
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password: trimmedPassword });
       if (error) throw error;
 
-      setMessage({ type: "success", text: "✅ Password updated successfully. Redirecting to login..." });
+      setSuccess(true);
       notify("Password updated successfully! ✅");
 
       // Sign user out and redirect to login
       setTimeout(async () => {
         await supabase.auth.signOut();
         onComplete("Password changed successfully. Please login using your new password.");
-      }, 1500);
+      }, 2000);
     } catch (err) {
       const msg = err?.message || "";
       const normalized = msg.toLowerCase();
@@ -3762,104 +3988,351 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
     setLoading(false);
   };
 
-  // Expired link state — offer to go back and request a new link
+  // ─── Shared modal styles ────────────────────────────────────────────────────
+  const backdropStyle = {
+    position: "fixed",
+    inset: 0,
+    zIndex: 9999,
+    background: "rgba(0, 0, 0, 0.65)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    pointerEvents: "auto",
+  };
+
+  const cardStyle = {
+    background: "white",
+    borderRadius: 24,
+    padding: "36px 32px",
+    maxWidth: 480,
+    width: "100%",
+    boxShadow: "0 25px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1)",
+    position: "relative",
+    pointerEvents: "auto",
+    animation: "resetCardIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+  };
+
+  const inputContainerStyle = {
+    position: "relative",
+    marginBottom: 20,
+  };
+
+  const labelStyle = {
+    display: "block",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#374151",
+    marginBottom: 8,
+    fontFamily: THEME.font,
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "14px 48px 14px 16px",
+    border: "1.5px solid #e5e7eb",
+    borderRadius: 14,
+    fontSize: 15,
+    fontFamily: THEME.font,
+    outline: "none",
+    boxSizing: "border-box",
+    background: "#f9fafb",
+    color: "#111827",
+    transition: "border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease",
+    WebkitAppearance: "none",
+    appearance: "none",
+  };
+
+  const inputFocusProps = {
+    onFocus: (e) => {
+      e.target.style.borderColor = "#818cf8";
+      e.target.style.boxShadow = "0 0 0 3px rgba(129, 140, 248, 0.15)";
+      e.target.style.background = "#fff";
+    },
+    onBlur: (e) => {
+      e.target.style.borderColor = "#e5e7eb";
+      e.target.style.boxShadow = "none";
+      e.target.style.background = "#f9fafb";
+    },
+  };
+
+  const toggleBtnStyle = {
+    position: "absolute",
+    right: 14,
+    top: "50%",
+    transform: "translateY(-50%)",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    padding: 4,
+    borderRadius: 8,
+    color: "#9ca3af",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    transition: "color 0.2s, background 0.2s",
+    zIndex: 2,
+  };
+
+  // Stop propagation on the card so Shell's handleClickOutside doesn't steal focus
+  const stopBubble = (e) => { e.stopPropagation(); };
+
+  // ─── Success state ──────────────────────────────────────────────────────────
+  if (success) {
+    const successContent = (
+      <div style={backdropStyle} onMouseDown={stopBubble} onClick={stopBubble}>
+        <div style={{ ...cardStyle, textAlign: "center", padding: "48px 32px" }} onMouseDown={stopBubble}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #10b981, #059669)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", animation: "resetCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font, color: "#111827" }}>Password Changed!</h2>
+          <p style={{ color: "#6b7280", fontSize: 15, margin: "0 0 4px", lineHeight: 1.6 }}>Your password has been updated successfully.</p>
+          <p style={{ color: "#9ca3af", fontSize: 13, margin: 0 }}>Redirecting to login...</p>
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
+            <div style={{ width: 32, height: 4, borderRadius: 2, background: "#e5e7eb", overflow: "hidden" }}>
+              <div style={{ width: "100%", height: "100%", background: "#10b981", borderRadius: 2, animation: "resetProgress 2s linear forwards" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+    return typeof document !== 'undefined' ? ReactDOM.createPortal(successContent, document.body) : successContent;
+  }
+
+  // ─── Expired link state ─────────────────────────────────────────────────────
   if (linkExpired) {
-    return (
-      <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div style={{ background: "white", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>⏰</div>
-          <h2 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font }}>Link Expired</h2>
+    const expiredContent = (
+      <div style={backdropStyle} onMouseDown={stopBubble} onClick={stopBubble}>
+        <div style={{ ...cardStyle, textAlign: "center", padding: "40px 32px" }} onMouseDown={stopBubble}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #f59e0b, #d97706)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 8px", fontFamily: THEME.font, color: "#111827" }}>Link Expired</h2>
           <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
-            This password reset link has expired or is invalid. Please request a new one.
+            This password reset link has expired or is invalid.<br />Please request a new one.
           </p>
           <button
             onClick={() => {
-              window.history.replaceState({}, document.title, window.location.pathname);
-              onComplete();
+              window.history.replaceState({}, document.title, '/forgot-password');
+              onComplete('forgot');
             }}
-            style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: "#111827", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            style={{ width: "100%", padding: "15px 20px", borderRadius: 14, background: "#111827", color: "white", border: "none", fontSize: 15, fontWeight: 700, fontFamily: THEME.font, cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.15)"; }}
+            onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
           >
-            Back to Login
+            Request New Reset Link
           </button>
         </div>
       </div>
     );
+    return typeof document !== 'undefined' ? ReactDOM.createPortal(expiredContent, document.body) : expiredContent;
   }
 
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ background: "white", borderRadius: 20, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-          <span style={{ fontSize: 28 }}>🔐</span>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: 0, fontFamily: THEME.font }}>Create New Password</h2>
+  // ─── Main reset form ────────────────────────────────────────────────────────
+  const formContent = (
+    <div style={backdropStyle} onMouseDown={stopBubble} onClick={stopBubble}>
+      <div
+        style={cardStyle}
+        onMouseDown={stopBubble}
+        onClick={stopBubble}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Reset Password"
+      >
+        {/* Header */}
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ width: 64, height: 64, borderRadius: 20, background: "linear-gradient(135deg, #6366f1, #818cf8)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: "0 8px 24px rgba(99, 102, 241, 0.25)" }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, margin: "0 0 6px", fontFamily: THEME.font, color: "#111827", letterSpacing: "-0.02em" }}>Create New Password</h2>
+          <p style={{ color: "#6b7280", fontSize: 14, margin: 0, lineHeight: 1.6 }}>
+            Enter your new password below.<br />Must be at least 8 characters.
+          </p>
         </div>
-        <p style={{ color: "#6b7280", fontSize: 14, margin: "0 0 20px", lineHeight: 1.6 }}>Enter your new password below. Must be at least 8 characters.</p>
-        
+
+        {/* Error/Success message */}
         {message && (
-          <div style={{ marginBottom: 16, padding: "12px 16px", borderRadius: 12, fontSize: 13, fontWeight: 600, lineHeight: 1.5, background: message.type === "error" ? "#fef2f2" : "#ecfdf5", color: message.type === "error" ? "#b91c1c" : "#047857", border: `1px solid ${message.type === "error" ? "#fecaca" : "#a7f3d0"}` }}>
-            {message.text}
+          <div style={{
+            marginBottom: 18,
+            padding: "14px 16px",
+            borderRadius: 14,
+            fontSize: 13,
+            fontWeight: 600,
+            lineHeight: 1.5,
+            background: message.type === "error" ? "#fef2f2" : "#ecfdf5",
+            color: message.type === "error" ? "#b91c1c" : "#047857",
+            border: `1px solid ${message.type === "error" ? "#fecaca" : "#a7f3d0"}`,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+          }}>
+            <span style={{ fontSize: 16, flexShrink: 0, marginTop: -1 }}>{message.type === "error" ? "⚠️" : "✅"}</span>
+            <span>{message.text}</span>
           </div>
         )}
 
-        <form onSubmit={handleReset}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>New Password</label>
+        <form ref={formRef} onSubmit={handleReset} onMouseDown={stopBubble}>
+          {/* New Password */}
+          <div style={inputContainerStyle}>
+            <label htmlFor="reset-new-password" style={labelStyle}>New Password</label>
             <div style={{ position: "relative" }}>
               <input
+                ref={passwordInputRef}
+                id="reset-new-password"
                 name="newPassword"
                 type={showPassword ? "text" : "password"}
-                placeholder="Enter new password (min 8 characters)"
+                placeholder="Enter new password"
+                autoComplete="new-password"
                 required
                 minLength={8}
                 value={newPassword}
-                onChange={(e) => handlePasswordChange(e.target.value)}
-                style={{ width: "100%", padding: "12px 44px 12px 14px", border: "1.5px solid #e5e7eb", borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa" }}
-                autoFocus
+                onChange={(e) => setNewPassword(e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={inputStyle}
+                {...inputFocusProps}
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
-                {showPassword ? "🙈" : "👁️"}
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowPassword(!showPassword); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={toggleBtnStyle}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={-1}
+                onMouseOver={(e) => { e.currentTarget.style.color = "#6b7280"; e.currentTarget.style.background = "#f3f4f6"; }}
+                onMouseOut={(e) => { e.currentTarget.style.color = "#9ca3af"; e.currentTarget.style.background = "none"; }}
+              >
+                {showPassword ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
               </button>
             </div>
-            {/* Password strength indicator */}
+
+            {/* Password strength meter */}
             {newPassword.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <div style={{ height: 4, borderRadius: 2, background: "#f1f5f9", overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: strength.width, background: strength.color, borderRadius: 2, transition: "all 0.3s ease" }} />
+              <div style={{ marginTop: 10 }}>
+                <div style={{ height: 4, borderRadius: 4, background: "#f1f5f9", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: strength.width, background: strength.color, borderRadius: 4, transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)" }} />
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600, color: strength.color, marginTop: 4, display: "block" }}>{strength.label}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: strength.color }}>{strength.label}</span>
+                  <span style={{ fontSize: 11, color: checks.length ? "#22c55e" : "#9ca3af", fontWeight: 600 }}>
+                    {checks.length ? "✓" : "○"} 8+ characters
+                  </span>
+                </div>
               </div>
             )}
           </div>
-          <div style={{ marginBottom: 6 }}>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#6b7280", marginBottom: 6 }}>Confirm Password</label>
-            <input
-              name="confirmPassword"
-              type={showPassword ? "text" : "password"}
-              placeholder="Confirm new password"
-              required
-              minLength={8}
-              value={confirmPassword}
-              onChange={(e) => handleConfirmChange(e.target.value)}
-              style={{ width: "100%", padding: "12px 14px", border: `1.5px solid ${confirmPassword.length > 0 && newPassword !== confirmPassword ? "#fca5a5" : "#e5e7eb"}`, borderRadius: 12, fontSize: 14, outline: "none", boxSizing: "border-box", background: "#fafafa", transition: "border-color 0.2s" }}
-            />
-          </div>
-          {/* Inline validation errors */}
-          {passwordErrors.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              {passwordErrors.map((err, i) => (
-                <div key={i} style={{ fontSize: 12, color: "#ef4444", fontWeight: 600, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                  <span>⚠</span> {err}
-                </div>
-              ))}
+
+          {/* Confirm Password */}
+          <div style={inputContainerStyle}>
+            <label htmlFor="reset-confirm-password" style={labelStyle}>Confirm Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="reset-confirm-password"
+                name="confirmPassword"
+                type={showConfirm ? "text" : "password"}
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={{
+                  ...inputStyle,
+                  borderColor: confirmPassword.length > 0 && !checks.match ? "#fca5a5" : "#e5e7eb",
+                }}
+                onFocus={(e) => {
+                  const borderColor = confirmPassword.length > 0 && !checks.match ? "#f87171" : "#818cf8";
+                  e.target.style.borderColor = borderColor;
+                  e.target.style.boxShadow = confirmPassword.length > 0 && !checks.match
+                    ? "0 0 0 3px rgba(248, 113, 113, 0.15)"
+                    : "0 0 0 3px rgba(129, 140, 248, 0.15)";
+                  e.target.style.background = "#fff";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = confirmPassword.length > 0 && !checks.match ? "#fca5a5" : "#e5e7eb";
+                  e.target.style.boxShadow = "none";
+                  e.target.style.background = "#f9fafb";
+                }}
+              />
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setShowConfirm(!showConfirm); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                style={toggleBtnStyle}
+                aria-label={showConfirm ? "Hide password" : "Show password"}
+                tabIndex={-1}
+                onMouseOver={(e) => { e.currentTarget.style.color = "#6b7280"; e.currentTarget.style.background = "#f3f4f6"; }}
+                onMouseOut={(e) => { e.currentTarget.style.color = "#9ca3af"; e.currentTarget.style.background = "none"; }}
+              >
+                {showConfirm ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
+              </button>
             </div>
-          )}
-          <button type="submit" disabled={!canSubmit} style={{ width: "100%", padding: "14px 20px", borderRadius: 12, background: canSubmit ? "#111827" : "#9ca3af", color: "white", border: "none", fontSize: 14, fontWeight: 700, cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.6, transition: "all 0.2s", marginTop: 10 }}>
-            {loading ? "Saving..." : "Save Password"}
+
+            {/* Match indicator */}
+            {confirmPassword.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: checks.match ? "#22c55e" : "#ef4444", display: "flex", alignItems: "center", gap: 4 }}>
+                {checks.match ? (
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Passwords match</>
+                ) : (
+                  <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Passwords do not match</>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Submit button */}
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              padding: "16px 20px",
+              borderRadius: 14,
+              background: canSubmit ? "linear-gradient(135deg, #111827, #1f2937)" : "#d1d5db",
+              color: "white",
+              border: "none",
+              fontSize: 16,
+              fontWeight: 700,
+              fontFamily: THEME.font,
+              cursor: canSubmit ? "pointer" : "not-allowed",
+              transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              marginTop: 4,
+              boxShadow: canSubmit ? "0 4px 14px rgba(0,0,0,0.15)" : "none",
+            }}
+            onMouseOver={(e) => { if (canSubmit) { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.2)"; }}}
+            onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = canSubmit ? "0 4px 14px rgba(0,0,0,0.15)" : "none"; }}
+          >
+            {loading ? (
+              <>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                Saving...
+              </>
+            ) : (
+              "Save Password"
+            )}
           </button>
         </form>
       </div>
     </div>
   );
+
+  // Portal to document.body to escape Shell's stacking context
+  return typeof document !== 'undefined' ? ReactDOM.createPortal(formContent, document.body) : formContent;
 };
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
@@ -3875,6 +4348,19 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [initialLoginMode, setInitialLoginMode] = useState(null);
+
+  // ─── URL path-based routing for auth pages ─────────────────────────────────
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path === '/forgot-password') {
+      setShowLogin(true);
+      setInitialLoginMode('forgot');
+    } else if (path === '/login') {
+      setShowLogin(true);
+    }
+    // /reset-password is handled by recovery detection in the auth state change listener
+  }, []);
 
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   
@@ -4111,11 +4597,14 @@ export default function App() {
       {showLogin && (
         <LoginModal 
           t={t}
-          notify={notify} 
-          onClose={() => setShowLogin(false)} 
+          notify={notify}
+          initialMode={initialLoginMode}
+          onClose={() => { setShowLogin(false); setInitialLoginMode(null); window.history.replaceState({}, document.title, '/'); }} 
           onLogin={(s) => { 
             setSession(s); 
-            setShowLogin(false); 
+            setShowLogin(false);
+            setInitialLoginMode(null);
+            window.history.replaceState({}, document.title, '/');
           }} 
         />
       )}
@@ -4124,14 +4613,20 @@ export default function App() {
         <ResetPasswordModal 
           t={t}
           notify={notify}
-          onComplete={(successMsg) => {
+          onComplete={(successMsgOrMode) => {
             setShowResetPassword(false);
             // Clear URL hash & params to clean up the reset state
-            window.history.replaceState({}, document.title, window.location.pathname);
-            // Show login with success message
-            setShowLogin(true);
-            if (successMsg) {
-              notify(successMsg);
+            window.history.replaceState({}, document.title, '/login');
+            // If 'forgot' mode was requested (from expired link), open forgot password view
+            if (successMsgOrMode === 'forgot') {
+              setInitialLoginMode('forgot');
+              setShowLogin(true);
+            } else {
+              // Show login with success message
+              setShowLogin(true);
+              if (successMsgOrMode) {
+                notify(successMsgOrMode);
+              }
             }
           }}
         />
