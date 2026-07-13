@@ -2810,36 +2810,56 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
     setSubmittingInvite(true);
     setGeneratedInvite(null);
 
-    const token = session?.access_token;
-    if (!token) {
+    if (!session?.user?.id) {
       notify("No active session. Please log in again.", "err");
       setSubmittingInvite(false);
       return;
     }
 
     try {
-      const response = await fetch("/api/invitations", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+      // Generate a secure random token client-side (64 hex chars = 32 bytes)
+      const randomBytes = new Uint8Array(32);
+      crypto.getRandomValues(randomBytes);
+      const token = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const expiresAt = new Date();
+      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Never expires
+
+      const targetVillageId = currentProfile?.village_id;
+      if (!targetVillageId) {
+        notify("Your admin account is not associated with any village.", "err");
+        setSubmittingInvite(false);
+        return;
+      }
+
+      const { data: inviteData, error: inviteError } = await supabase
+        .from("invitations")
+        .insert({
+          token,
+          village_id: targetVillageId,
           role: inviteRole,
-          email: inviteEmail ? inviteEmail.trim().toLowerCase() : undefined,
-          villageId: currentProfile?.village_id,
-        }),
-      });
+          email: inviteEmail ? inviteEmail.trim().toLowerCase() : null,
+          created_by: session.user.id,
+          expires_at: expiresAt.toISOString(),
+          status: "pending",
+        })
+        .select()
+        .single();
 
-      const resData = await response.json();
-
-      if (resData.success) {
-        setGeneratedInvite(resData);
+      if (inviteError) {
+        notify(inviteError.message || "Failed to create invitation.", "err");
+      } else {
+        const invitationUrl = `${window.location.origin}/invite/${token}`;
+        setGeneratedInvite({
+          success: true,
+          token,
+          url: invitationUrl,
+          expires_at: inviteData.expires_at,
+          invitation: inviteData,
+        });
         notify("Invitation link generated successfully! 🔗");
         setInviteEmail("");
         fetchInvitations();
-      } else {
-        notify(resData.error || "Failed to generate invitation link.", "err");
       }
     } catch (err) {
       notify(err?.message || "Network error. Please try again.", "err");
