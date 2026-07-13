@@ -1261,7 +1261,7 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
           )}
         </div>
 
-        {session && (
+        {session && ['village_admin', 'district_admin', 'super_admin', 'officer'].includes(role) && (
           <button onClick={() => goTo("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
         )}
         {session && (
@@ -1320,7 +1320,7 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
             </div>
           )}
 
-          {session && <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('admin_nav')}</button>}
+          {session && ['village_admin', 'district_admin', 'super_admin', 'officer'].includes(role) && <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('admin_nav')}</button>}
           {session && <button onClick={() => goTo("profile")} className={view === "profile" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('my_account')}</button>}
           {session ? <button onClick={handleLogout} className="mobile-nav-item danger">{t('logout')}</button> : <button onClick={() => { setMobileMenuOpen(false); setShowLogin(true); }} className="mobile-nav-item primary">{t('login')}</button>}
         </div>
