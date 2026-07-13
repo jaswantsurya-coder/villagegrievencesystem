@@ -111,10 +111,13 @@ export default async function handler(req, res) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    console.error('[admin-reset-password] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    const missing = [];
+    if (!supabaseUrl) missing.push('SUPABASE_URL');
+    if (!serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+    console.error(`[admin-reset-password] Missing env vars: ${missing.join(', ')}`);
     return res.status(500).json({
       success: false,
-      error: 'Server configuration error. Contact the administrator.',
+      error: `Server configuration error: missing ${missing.join(' and ')}. Set these in Vercel Dashboard → Project Settings → Environment Variables.`,
     });
   }
 
