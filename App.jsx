@@ -4344,16 +4344,60 @@ const AdminPasswordResetTab = ({ t, notify, session }) => {
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, marginBottom: 6 }}>New Password</label>
-            <div style={{ position: "relative" }}>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Minimum 8 characters, mixed case, number, special char"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                style={{ width: "100%", padding: "12px 44px 12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, outline: "none", boxSizing: "border-box", background: THEME.colors.background, color: THEME.colors.text, transition: "border-color 0.2s" }}
+                style={{ width: "100%", padding: "12px 48px 12px 14px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 14, outline: "none", boxSizing: "border-box", background: THEME.colors.background, color: THEME.colors.text, transition: "border-color 0.2s" }}
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "#9ca3af", padding: 0 }}>
-                {showPassword ? "🙈" : "👁️"}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? "Hide password" : "Show password"}
+                style={{
+                  position: "absolute",
+                  right: 4,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  padding: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 36,
+                  height: 36,
+                  transition: "all 0.2s ease",
+                  color: THEME.colors.textMuted,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+                  e.currentTarget.style.borderColor = THEME.colors.border;
+                  e.currentTarget.style.color = THEME.colors.text;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                  e.currentTarget.style.borderColor = "transparent";
+                  e.currentTarget.style.color = THEME.colors.textMuted;
+                }}
+              >
+                {showPassword ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                    <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                )}
               </button>
             </div>
 
