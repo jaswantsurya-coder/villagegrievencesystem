@@ -21,8 +21,12 @@ export const SignInPage = ({
   switchLabel = "Create Account",
   message,
   messageType = "success",
+  t,
 }) => {
   const [showPassword, setShowPassword] = useState(false);
+
+  // Helper: use t() if available, otherwise use fallback
+  const tr = (key, fallback) => (t ? t(key) : fallback);
 
   return (
     <div className="min-h-[100dvh] flex flex-col md:flex-row font-sans w-full bg-white text-gray-900 overflow-y-auto">
@@ -40,17 +44,17 @@ export const SignInPage = ({
 
             <form className="space-y-5" onSubmit={onSignIn}>
               <div className="animate-element animate-delay-300">
-                <label className="text-sm font-medium text-gray-500">Email Address</label>
+                <label className="text-sm font-medium text-gray-500">{tr('email_label', 'Email Address')}</label>
                 <GlassInputWrapper>
-                  <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required />
+                  <input name="email" type="email" placeholder={tr('email_placeholder', 'Enter your email address')} className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required />
                 </GlassInputWrapper>
               </div>
 
               <div className="animate-element animate-delay-400">
-                <label className="text-sm font-medium text-gray-500">Password</label>
+                <label className="text-sm font-medium text-gray-500">{tr('password_label', 'Password')}</label>
                 <GlassInputWrapper>
                   <div className="relative">
-                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-gray-900" required />
+                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder={tr('password_placeholder', 'Enter your password')} className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-gray-900" required />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
                       {showPassword ? <EyeOff className="w-5 h-5 text-gray-400 hover:text-gray-700 transition-colors" /> : <Eye className="w-5 h-5 text-gray-400 hover:text-gray-700 transition-colors" />}
                     </button>
@@ -61,15 +65,15 @@ export const SignInPage = ({
               {!isSignUp && <div className="animate-element animate-delay-500 flex items-center justify-between text-sm">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-600" />
-                  <span className="text-gray-700">Keep me signed in</span>
+                  <span className="text-gray-700">{tr('keep_signed_in', 'Keep me signed in')}</span>
                 </label>
                 {onForgotPassword && (
-                  <a href="#" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} className="text-violet-600 font-medium hover:underline transition-colors">Forgot password?</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); onForgotPassword(); }} className="text-violet-600 font-medium hover:underline transition-colors">{tr('forgot_password', 'Forgot password?')}</a>
                 )}
               </div>}
 
               <button type="submit" disabled={loading} className="animate-element animate-delay-600 w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
-                {loading ? "Please wait..." : submitLabel}
+                {loading ? tr('please_wait', 'Please wait...') : submitLabel}
               </button>
             </form>
 

@@ -115,7 +115,7 @@ const THEME = {
     md: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
     lg: "0 10px 25px -5px rgba(0, 0, 0, 0.05)"
   },
-  font: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif"
+  font: "'Inter', 'Noto Sans', 'Noto Sans Devanagari', 'Noto Sans Telugu', -apple-system, BlinkMacSystemFont, sans-serif"
 };
 
 const CATEGORIES = [
@@ -3030,7 +3030,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               transition: "all 0.2s ease"
             }}
           >
-            👥 Village Staff ({totalStaff})
+            👥 {t('staff_tab')} ({totalStaff})
           </button>
           <button
             onClick={() => setActiveSubTab("citizens")}
@@ -3046,7 +3046,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               transition: "all 0.2s ease"
             }}
           >
-            🏠 Village Citizens ({totalCitizens})
+            🏠 {t('citizens_tab')} ({totalCitizens})
           </button>
           <button
             onClick={() => setActiveSubTab("invitations")}
@@ -3062,7 +3062,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               transition: "all 0.2s ease"
             }}
           >
-            ✉️ Invitation Links
+            ✉️ {t('invite_links_tab')}
           </button>
         </div>
 
@@ -3085,7 +3085,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               gap: 6
             }}
           >
-            ➕ Invite Member
+            ➕ {t('invite_member')}
           </button>
         )}
       </div>
@@ -3097,10 +3097,10 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             type="text"
             placeholder={
               activeSubTab === "staff"
-                ? "Search staff by name or phone..."
+                ? t('search_staff_placeholder')
                 : activeSubTab === "citizens"
-                ? "Search citizens by name or phone..."
-                : "Search invitations by role or email..."
+                ? t('search_citizens_placeholder')
+                : t('search_invitations_placeholder')
             }
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -3137,9 +3137,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               background: THEME.colors.surface
             }}
           >
-            <option value="">All Roles</option>
-            <option value="village_admin">Village Admins</option>
-            <option value="officer">Officers</option>
+            <option value="">{t('filter_all_roles')}</option>
+            <option value="village_admin">{t('filter_village_admins')}</option>
+            <option value="officer">{t('filter_officers')}</option>
           </select>
         )}
 
@@ -3159,11 +3159,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               background: THEME.colors.surface
             }}
           >
-            <option value="">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="accepted">Accepted</option>
-            <option value="revoked">Revoked</option>
-            <option value="expired">Expired</option>
+            <option value="">{t('filter_all_roles')}</option>
+            <option value="pending">{t('filter_pending')}</option>
+            <option value="accepted">{t('filter_accepted')}</option>
+            <option value="revoked">{t('filter_revoked')}</option>
+            <option value="expired">{t('filter_expired')}</option>
           </select>
         )}
 
@@ -3183,15 +3183,15 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         // Premium Loading Skeleton
         <div style={{ background: THEME.colors.surface, borderRadius: 20, border: `1px solid ${THEME.colors.border}`, padding: 32, textAlign: "center" }}>
           <div style={{ display: "inline-block", width: 48, height: 48, border: `4px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-          <p style={{ fontWeight: 800, marginTop: 16, color: THEME.colors.textMuted }}>Retrieving directory details...</p>
+          <p style={{ fontWeight: 800, marginTop: 16, color: THEME.colors.textMuted }}>{t('retrieving_details')}</p>
         </div>
       ) : activeSubTab === "staff" ? (
         /* ==================== TAB 1: STAFF DIRECTORY ==================== */
         staffUsers.length === 0 ? (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Staff Members Found</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>Try checking the filters or create a new Staff/Officer invitation.</p>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('no_staff_found')}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('no_staff_hint')}</p>
           </div>
         ) : (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
@@ -3222,7 +3222,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                         <td style={{ padding: "18px 24px", textAlign: "right" }}>
                           {isSelf ? (
                             <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "8px 12px", background: THEME.colors.background, borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                              🔒 Protected Account
+                              🔒 {t('protected_account')}
                             </span>
                           ) : (
                             <div style={{ display: "inline-flex", gap: 6, alignItems: "center", justifyContent: "flex-end" }}>
@@ -3245,9 +3245,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                     background: THEME.colors.surface
                                   }}
                                 >
-                                  <option value="citizen">Demote to Citizen</option>
-                                  <option value="officer">Officer</option>
-                                  <option value="village_admin">Village Admin</option>
+                                  <option value="citizen">{t('demote_citizen')}</option>
+                                  <option value="officer">{t('officer_label')}</option>
+                                  <option value="village_admin">{t('village_admin_label')}</option>
                                 </select>
                               )}
                             </div>
@@ -3264,11 +3264,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             {getPageCount(staffUsers) > 1 && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
-                  Showing Page {currentPage} of {getPageCount(staffUsers)}
+                  {t('showing_page', { current: currentPage, total: getPageCount(staffUsers) })}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
-                  <Btn variant="outline" disabled={currentPage === getPageCount(staffUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>{t('previous')}</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(staffUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>{t('next')}</Btn>
                 </div>
               </div>
             )}
@@ -3279,8 +3279,8 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         citizenUsers.length === 0 ? (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Citizens Found</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>There are no registered citizens in this village matching your query.</p>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('no_citizens_found')}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('no_citizens_hint')}</p>
           </div>
         ) : (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
@@ -3290,7 +3290,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                   <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
                     <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
                     <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Current Status</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('current_status')}</th>
                     <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
                     <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
                   </tr>
@@ -3305,7 +3305,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                         </td>
                         <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
                         <td style={{ padding: "18px 24px" }}>
-                          <span style={{ display: "inline-flex", padding: "4px 10px", borderRadius: 8, background: "#f3f4f6", color: "#374151", fontSize: 11, fontWeight: 700 }}>Citizen</span>
+                          <span style={{ display: "inline-flex", padding: "4px 10px", borderRadius: 8, background: "#f3f4f6", color: "#374151", fontSize: 11, fontWeight: 700 }}>{t('citizen_label')}</span>
                         </td>
                         <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
                         <td style={{ padding: "18px 24px", textAlign: "right" }}>
@@ -3329,9 +3329,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                   background: THEME.colors.surface
                                 }}
                               >
-                                <option value="citizen">Citizen</option>
-                                <option value="officer">Promote to Officer</option>
-                                <option value="village_admin">Promote to Admin</option>
+                                <option value="citizen">{t('citizen_label')}</option>
+                                <option value="officer">{t('promote_officer')}</option>
+                                <option value="village_admin">{t('promote_admin')}</option>
                               </select>
                             )}
                           </div>
@@ -3347,11 +3347,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             {getPageCount(citizenUsers) > 1 && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
-                  Showing Page {currentPage} of {getPageCount(citizenUsers)}
+                  {t('showing_page', { current: currentPage, total: getPageCount(citizenUsers) })}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
-                  <Btn variant="outline" disabled={currentPage === getPageCount(citizenUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>{t('previous')}</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(citizenUsers)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>{t('next')}</Btn>
                 </div>
               </div>
             )}
@@ -3362,8 +3362,8 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         filteredInvites.length === 0 ? (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>✉️</div>
-            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>No Invitations Created</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>Click "Invite Member" at the top right to generate onboarding links.</p>
+            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('invite_no_invitations')}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('invite_no_invitations_hint')}</p>
           </div>
         ) : (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
@@ -3371,11 +3371,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Role Type</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Restricted Email</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Link Expiry</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>Status</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>Actions</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('invite_role_type')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('invite_restricted_email')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('invite_link_expiry')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('status_label')}</th>
+                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('actions_label')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3405,10 +3405,10 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                     return (
                       <tr key={i.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: THEME.colors.surface, transition: "background 0.2s" }}>
                         <td style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.text, textTransform: "capitalize" }}>
-                          {i.role === "village_admin" ? "Village Admin" : i.role}
+                          {i.role === "village_admin" ? t('village_admin_label') : i.role === "officer" ? t('officer_label') : t('citizen_label')}
                         </td>
                         <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>
-                          {i.email || "Any Email (Public Link)"}
+                          {i.email || t('invite_any_email')}
                         </td>
                         <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{expiryDate}</td>
                         <td style={{ padding: "18px 24px" }}>
@@ -3426,7 +3426,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                   onMouseOver={e => e.currentTarget.style.background = "#f3f4f6"}
                                   onMouseOut={e => e.currentTarget.style.background = "none"}
                                 >
-                                  🔗 Copy Link
+                                  🔗 {t('invite_copy_link')}
                                 </button>
                                 <button
                                   onClick={() => handleRevokeInvitation(i.id)}
@@ -3434,15 +3434,15 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                   onMouseOver={e => e.currentTarget.style.background = "#fef2f2"}
                                   onMouseOut={e => e.currentTarget.style.background = "none"}
                                 >
-                                  Revoke
+                                  {t('invite_revoke')}
                                 </button>
                               </>
                             ) : statusText === "accepted" && acceptedProfiles[i.accepted_by] ? (
                               <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700 }}>
-                                Accepted by: <strong>{acceptedProfiles[i.accepted_by].name || "Unnamed"}</strong>
+                                {t('invite_accepted_by')}: <strong>{acceptedProfiles[i.accepted_by].name || "Unnamed"}</strong>
                               </span>
                             ) : (
-                              <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>No actions available</span>
+                              <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>{t('invite_no_actions')}</span>
                             )}
                           </div>
                         </td>
@@ -3457,11 +3457,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             {getPageCount(filteredInvites) > 1 && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 24px", background: THEME.colors.background, borderTop: `1px solid ${THEME.colors.border}` }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted }}>
-                  Showing Page {currentPage} of {getPageCount(filteredInvites)}
+                  {t('showing_page', { current: currentPage, total: getPageCount(filteredInvites) })}
                 </span>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>Previous</Btn>
-                  <Btn variant="outline" disabled={currentPage === getPageCount(filteredInvites)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>Next</Btn>
+                  <Btn variant="outline" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} style={{ padding: "6px 12px", fontSize: 12 }}>{t('previous')}</Btn>
+                  <Btn variant="outline" disabled={currentPage === getPageCount(filteredInvites)} onClick={() => setCurrentPage(p => p + 1)} style={{ padding: "6px 12px", fontSize: 12 }}>{t('next')}</Btn>
                 </div>
               </div>
             )}
@@ -3471,14 +3471,16 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
 
       {/* --- Invite Member Modal --- */}
       {showInviteModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "white", borderRadius: 24, padding: 32, maxWidth: 460, width: "100%", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(0,0,0,0.65)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: THEME.colors.surface, borderRadius: 24, padding: 32, maxWidth: 460, width: "100%", border: `1px solid ${THEME.colors.border}`, boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
             
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: "#111827" }}>Create Invitation Link</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+              <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t('invite_create_title')}</h3>
               <button
                 onClick={() => { setShowInviteModal(false); setGeneratedInvite(null); }}
-                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "#9ca3af" }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: THEME.colors.textMuted, display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", transition: "background 0.2s" }}
+                onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                onMouseOut={e => e.currentTarget.style.background = "none"}
               >
                 ✕
               </button>
@@ -3486,48 +3488,51 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
 
             {!generatedInvite ? (
               <form onSubmit={handleCreateInvitation}>
-                <div style={{ marginBottom: 16 }}>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Target Onboarding Role</label>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>{t('invite_target_role')}</label>
                   <select
                     value={inviteRole}
                     onChange={e => setInviteRole(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border: "1.5px solid #e5e7eb",
+                      padding: "12px 16px",
+                      borderRadius: 14,
+                      border: `1.5px solid ${THEME.colors.border}`,
                       fontSize: 14,
                       fontWeight: 700,
                       outline: "none",
-                      background: "#f9fafb"
+                      background: THEME.colors.background,
+                      color: THEME.colors.text,
+                      cursor: "pointer"
                     }}
                   >
-                    <option value="citizen">Citizen (Village Member)</option>
-                    <option value="officer">Officer (Grievance Resolver)</option>
-                    <option value="village_admin">Village Admin (Sarpanch/Clerk)</option>
+                    <option value="citizen">{t('invite_role_citizen')}</option>
+                    <option value="officer">{t('invite_role_officer')}</option>
+                    <option value="village_admin">{t('invite_role_admin')}</option>
                   </select>
                 </div>
 
-                <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Restricted Email (Optional)</label>
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>{t('invite_restricted_email')}</label>
                   <input
                     type="email"
-                    placeholder="e.g. sarpanch@village.gov.in"
+                    placeholder={t('invite_email_placeholder')}
                     value={inviteEmail}
                     onChange={e => setInviteEmail(e.target.value)}
                     style={{
                       width: "100%",
-                      padding: "12px 14px",
-                      borderRadius: 12,
-                      border: "1.5px solid #e5e7eb",
+                      padding: "12px 16px",
+                      borderRadius: 14,
+                      border: `1.5px solid ${THEME.colors.border}`,
                       fontSize: 14,
                       outline: "none",
                       boxSizing: "border-box",
-                      background: "#f9fafb"
+                      background: THEME.colors.background,
+                      color: THEME.colors.text
                     }}
                   />
-                  <span style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, display: "block" }}>
-                    If specified, only an account registered with this email can accept the link.
+                  <span style={{ fontSize: 11, color: THEME.colors.textMuted, marginTop: 6, display: "block", lineHeight: 1.4 }}>
+                    {t('invite_email_hint')}
                   </span>
                 </div>
 
@@ -3537,47 +3542,55 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                   style={{
                     width: "100%",
                     padding: "14px 20px",
-                    borderRadius: 12,
-                    background: "linear-gradient(135deg, #111827, #1f2937)",
+                    borderRadius: 14,
+                    background: THEME.colors.primary,
                     color: "white",
                     border: "none",
                     fontSize: 14,
-                    fontWeight: 700,
+                    fontWeight: 800,
                     cursor: submittingInvite ? "not-allowed" : "pointer",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    gap: 8
+                    gap: 8,
+                    boxShadow: THEME.shadow.sm,
+                    transition: "all 0.2s ease"
                   }}
+                  onMouseOver={e => { if (!submittingInvite) e.currentTarget.style.background = THEME.colors.primaryHover; }}
+                  onMouseOut={e => { if (!submittingInvite) e.currentTarget.style.background = THEME.colors.primary; }}
                 >
-                  {submittingInvite ? "Generating..." : "🔗 Generate Invitation"}
+                  {submittingInvite ? t('invite_generating') : `🔗 ${t('invite_generate_btn')}`}
                 </button>
               </form>
             ) : (
               <div style={{ textAlign: "center", padding: "10px 0" }}>
-                <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#ecfdf5", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24 }}>✓</div>
-                <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 6px", color: "#111827" }}>Invitation Ready!</h4>
-                <p style={{ color: "#6b7280", fontSize: 13, margin: "0 0 16px", lineHeight: 1.5 }}>
-                  Share this unique URL with the invitee. It will expire in 7 days.
+                <div style={{ width: 64, height: 64, borderRadius: "50%", background: THEME.colors.successBg, color: THEME.colors.success, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 28 }}>✓</div>
+                <h4 style={{ fontSize: 18, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>{t('invite_ready_title')}</h4>
+                <p style={{ color: THEME.colors.textMuted, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>
+                  {t('invite_share_desc')}
                 </p>
 
-                <div style={{ display: "flex", background: "#f3f4f6", border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, alignItems: "center", gap: 10, marginBottom: 20 }}>
-                  <code style={{ fontSize: 12, fontFamily: "monospace", flex: 1, overflowX: "auto", textAlign: "left", whiteSpace: "nowrap", color: "#374151" }}>
+                <div style={{ display: "flex", background: THEME.colors.background, border: `1.5px solid ${THEME.colors.border}`, borderRadius: 14, padding: 12, alignItems: "center", gap: 10, marginBottom: 24 }}>
+                  <code style={{ fontSize: 12, fontFamily: "monospace", flex: 1, overflowX: "auto", textAlign: "left", whiteSpace: "nowrap", color: THEME.colors.text }}>
                     {generatedInvite.url}
                   </code>
                   <button
                     onClick={() => copyToClipboard(generatedInvite.url)}
-                    style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                    style={{ background: THEME.colors.surface, border: `1.5px solid ${THEME.colors.border}`, color: THEME.colors.text, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0, transition: "background 0.2s" }}
+                    onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                    onMouseOut={e => e.currentTarget.style.background = THEME.colors.surface}
                   >
-                    Copy
+                    {t('invite_copy')}
                   </button>
                 </div>
 
                 <button
                   onClick={() => { setShowInviteModal(false); setGeneratedInvite(null); }}
-                  style={{ width: "100%", padding: "12px 20px", borderRadius: 12, background: "#f3f4f6", color: "#374151", border: "none", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                  style={{ width: "100%", padding: "12px 20px", borderRadius: 14, background: THEME.colors.background, color: THEME.colors.text, border: `1.5px solid ${THEME.colors.border}`, fontSize: 13, fontWeight: 800, cursor: "pointer", transition: "background 0.2s" }}
+                  onMouseOver={e => e.currentTarget.style.background = THEME.colors.border}
+                  onMouseOut={e => e.currentTarget.style.background = THEME.colors.background}
                 >
-                  Close Panel
+                  {t('invite_close_panel')}
                 </button>
               </div>
             )}
@@ -4502,9 +4515,9 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
             <div className="flex flex-col gap-6">
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <span style={{ fontSize: 36 }}>🔒</span>
-                <h1 className="text-3xl sm:text-4xl font-semibold leading-tight">Forgot Password</h1>
+                <h1 className="text-3xl sm:text-4xl font-semibold leading-tight">{t('forgot_password_title')}</h1>
               </div>
-              <p className="text-gray-500">Enter the email address associated with your account. We'll send you a link to create a new password.</p>
+              <p className="text-gray-500">{t('forgot_password_desc')}</p>
               {authMessage && (
                 <div role="status" className={`rounded-2xl border px-4 py-3 text-sm leading-6 ${authMessage.type === "error" ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
                   {authMessage.text}
@@ -4512,19 +4525,19 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
               )}
               <form className="space-y-5" onSubmit={handleForgotPassword}>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Email Address</label>
+                  <label className="text-sm font-medium text-gray-500">{t('email_label')}</label>
                   <div className="rounded-2xl border border-gray-200 bg-black/5 backdrop-blur-sm transition-colors focus-within:border-violet-400/70 focus-within:bg-violet-500/10">
-                    <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required autoFocus />
+                    <input name="email" type="email" placeholder={t('email_placeholder')} className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-gray-900" required autoFocus />
                   </div>
                 </div>
                 <button type="submit" disabled={loading} className="w-full min-h-14 rounded-2xl bg-gray-900 px-4 py-4 font-medium text-white hover:bg-gray-800 transition-colors disabled:cursor-not-allowed disabled:opacity-60">
-                  {loading ? "Sending..." : "Send Reset Link"}
+                  {loading ? t('sending') : t('send_reset_link')}
                 </button>
               </form>
               <p className="text-center text-sm leading-6 text-gray-500 mt-2">
-                Remember your password?{" "}
+                {t('remember_password')}{" "}
                 <a href="#" onClick={(e) => { e.preventDefault(); setIsForgot(false); setAuthMessage(null); }} className="text-violet-600 font-medium hover:underline transition-colors">
-                  Back to Login
+                  {t('back_to_login')}
                 </a>
               </p>
             </div>
@@ -4551,6 +4564,7 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
         submitLabel={isSignUp ? t('sign_up') : t('login')}
         switchPrompt={isSignUp ? t('auth_existing_prompt') : t('auth_new_prompt')}
         switchLabel={isSignUp ? t('login') : t('sign_up')}
+        t={t}
       />
       <button className="login-modal-close" onClick={onClose} aria-label="Close login" style={{ position: "absolute", top: 24, right: 24, zIndex: 1010, background: "rgba(0,0,0,0.5)", color: "white", width: 44, height: 44, borderRadius: "50%", border: "none", cursor: "pointer", fontSize: 20 }}>✕</button>
     </div>
