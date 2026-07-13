@@ -127,7 +127,7 @@ export default async function handler(req, res) {
 
     // Invitation record insertion
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiration
+    expiresAt.setFullYear(expiresAt.getFullYear() + 100); // 100 years expiration (never expires)
 
     const { data: inviteData, error: inviteError } = await supabaseAdmin
       .from('invitations')

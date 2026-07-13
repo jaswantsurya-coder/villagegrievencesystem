@@ -5009,12 +5009,21 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
 
 // ─── Invitation Onboarding Accept View ─────────────────────────────────────────
 
-const InvitationAcceptView = ({ t, notify, navigate, session, token, onAccept, setShowLogin, setInitialLoginMode }) => {
+const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, onAccept, setShowLogin, setInitialLoginMode }) => {
   const [loading, setLoading] = useState(true);
   const [inviteInfo, setInviteInfo] = useState(null);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // Helper to check if user has already accepted or is member of a village
+  useEffect(() => {
+    // If user is logged in and already has a village, redirect directly to account dashboard
+    if (session && profile?.village_id) {
+      console.log("[Invite] User already associated with a village. Redirecting to account...");
+      navigate("home");
+    }
+  }, [session, profile, navigate]);
 
   useEffect(() => {
     if (token) {
@@ -5024,6 +5033,22 @@ const InvitationAcceptView = ({ t, notify, navigate, session, token, onAccept, s
       setLoading(false);
     }
   }, [token]);
+
+  // Auto-login or auto-accept trigger based on lookup results and auth state
+  useEffect(() => {
+    if (loading || !inviteInfo) return;
+
+    if (!session) {
+      // If user not logged in, automatically open login page for them immediately
+      console.log("[Invite] User not logged in. Auto-opening login page...");
+      setInitialLoginMode("login");
+      setShowLogin(true);
+    } else if (profile && !profile.village_id) {
+      // If user is logged in but doesn't have a village assigned, auto-accept invitation
+      console.log("[Invite] User logged in but has no village. Auto-accepting invite...");
+      handleAccept();
+    }
+  }, [loading, inviteInfo, session, profile]);
 
   const lookupInvite = async () => {
     setLoading(true);
@@ -5044,10 +5069,7 @@ const InvitationAcceptView = ({ t, notify, navigate, session, token, onAccept, s
   };
 
   const handleAccept = async () => {
-    if (!session) {
-      notify("Please log in or register to accept the invitation.", "err");
-      return;
-    }
+    if (accepting || success) return;
     setAccepting(true);
     setError(null);
     try {
