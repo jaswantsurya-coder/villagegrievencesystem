@@ -120,11 +120,12 @@ BEGIN
   -- Set local setting to bypass trigger role modification check
   PERFORM set_config('app.bypass_profile_role_check', 'true', true);
 
-  -- Update the user's profile: assign village + role
-  UPDATE public.profiles
-  SET village_id = v_invitation.village_id,
-      role = v_invitation.role
-  WHERE id = v_user_id;
+  -- Upsert the user's profile: assign village + role
+  INSERT INTO public.profiles (id, village_id, role)
+  VALUES (v_user_id, v_invitation.village_id, v_invitation.role)
+  ON CONFLICT (id) DO UPDATE
+  SET village_id = EXCLUDED.village_id,
+      role = EXCLUDED.role;
 
   -- Reset bypass setting
   PERFORM set_config('app.bypass_profile_role_check', 'false', true);
