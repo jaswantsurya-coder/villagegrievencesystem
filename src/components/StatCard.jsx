@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, ChevronRight } from 'lucide-react'
 
 export default function StatCard({
   title,
@@ -14,6 +14,7 @@ export default function StatCard({
   badgeColor,
   sparklineData = [12, 18, 15, 25, 22, 30, 28, 38, 35, 45],
   sparklineColor = '#3B82F6',
+  onClick,
 }) {
   // Generate SVG path for sparkline
   const width = 100
@@ -21,7 +22,7 @@ export default function StatCard({
   const max = Math.max(...sparklineData, 1)
   const min = Math.min(...sparklineData, 0)
   const range = max - min || 1
-  
+
   const points = sparklineData
     .map((val, i) => {
       const x = (i / (sparklineData.length - 1)) * width
@@ -34,18 +35,23 @@ export default function StatCard({
   const areaD = `M 0,${height} L ${points} L ${width},${height} Z`
 
   return (
-    <div style={styles.card} className="stat-card-container">
+    <div
+      onClick={onClick}
+      style={styles.card}
+      className={`stat-card-container ${onClick ? 'stat-card-interactive' : ''}`}
+      title={onClick ? `Click to view detailed ${title} analytics` : title}
+    >
       {/* Top Header Row */}
       <div style={styles.topRow}>
         <div style={{ ...styles.iconBox, background: iconBg, color: iconColor }}>
           {Icon && <Icon style={{ width: 18, height: 18 }} />}
         </div>
-        
+
         <div style={styles.titleGroup}>
           <span style={styles.cardTitle}>{title}</span>
         </div>
 
-        {badgeText && (
+        {badgeText ? (
           <span
             style={{
               ...styles.badge,
@@ -55,6 +61,8 @@ export default function StatCard({
           >
             {badgeText}
           </span>
+        ) : (
+          onClick && <ChevronRight style={{ width: 14, height: 14, color: '#CBD5E1' }} />
         )}
       </div>
 
@@ -68,12 +76,12 @@ export default function StatCard({
         <div style={styles.sparklineContainer}>
           <svg width={width} height={height} style={{ overflow: 'visible' }}>
             <defs>
-              <linearGradient id={`grad-${title.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
+              <linearGradient id={`grad-${title.replace(/[^a-zA-Z0-9]/g, '')}`} x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor={sparklineColor} stopOpacity="0.25" />
                 <stop offset="100%" stopColor={sparklineColor} stopOpacity="0.0" />
               </linearGradient>
             </defs>
-            <path d={areaD} fill={`url(#grad-${title.replace(/\s+/g, '')})`} />
+            <path d={areaD} fill={`url(#grad-${title.replace(/[^a-zA-Z0-9]/g, '')})`} />
             <path d={pathD} fill="none" stroke={sparklineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
@@ -111,7 +119,6 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     position: 'relative',
     overflow: 'hidden',
   },
@@ -129,7 +136,6 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-    boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.6)',
   },
   titleGroup: {
     flex: 1,

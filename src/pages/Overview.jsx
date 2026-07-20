@@ -11,6 +11,7 @@ import HelpDeskCard from '../components/HelpDeskCard'
 import AIInsightsCard from '../components/AIInsightsCard'
 import RecentApprovalsCard from '../components/RecentApprovalsCard'
 import AdminRequestModal from '../components/AdminRequestModal'
+import StatDetailModal from '../components/StatDetailModal'
 import { useNavigate } from 'react-router-dom'
 import {
   Building2,
@@ -48,6 +49,7 @@ export default function Overview() {
   const [recentRequests, setRecentRequests] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedRequest, setSelectedRequest] = useState(null)
+  const [selectedStat, setSelectedStat] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
 
   useEffect(() => {
@@ -80,7 +82,6 @@ export default function Overview() {
       if (requestsRes.data && requestsRes.data.length > 0) {
         setRecentRequests(requestsRes.data)
       } else {
-        // Mock fallback requests if table is empty
         setRecentRequests([
           { id: 'req-1', full_name: 'Ramesh Babu', village_name: 'Peddapudi', district: 'Prakasam', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
           { id: 'req-2', full_name: 'Lakshmi Narayana', village_name: 'Thummala palli', district: 'Kurnool', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
@@ -157,7 +158,7 @@ export default function Overview() {
       </section>
 
       {/* ANALYTICS STAT CARDS — ROW 1 */}
-      <section style={styles.statsGridSix}>
+      <section className="stats-grid-six">
         <StatCard
           title="Villages Registered"
           value={stats.villages.toLocaleString()}
@@ -169,6 +170,23 @@ export default function Overview() {
           iconColor="#2563EB"
           sparklineData={[420, 435, 450, 442, 460, 472, 486]}
           sparklineColor="#2563EB"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Villages Registered',
+              value: stats.villages.toLocaleString(),
+              subtitle: '▲ 24 added this month',
+              icon: Building2,
+              iconBg: '#EFF6FF',
+              iconColor: '#2563EB',
+              targetPath: '/villages',
+              details: [
+                { label: 'Active Panchayats', value: '486 Villages' },
+                { label: 'Growth this month', value: '+24 new villages' },
+                { label: 'Health Index', value: '98.2% Optimal' },
+                { label: 'Join Codes Active', value: '486 Codes Issued' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -182,6 +200,23 @@ export default function Overview() {
           iconColor="#3B82F6"
           sparklineData={[21000, 22200, 23100, 23900, 24892]}
           sparklineColor="#3B82F6"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Citizens Network',
+              value: stats.citizens.toLocaleString(),
+              subtitle: '▲ 1,246 registered this month',
+              icon: Users,
+              iconBg: '#EFF6FF',
+              iconColor: '#3B82F6',
+              targetPath: '/citizens',
+              details: [
+                { label: 'Total Registered Citizens', value: '24,892 Users' },
+                { label: 'Active This Week', value: '18,450 Citizens' },
+                { label: 'Awaiting Village Join', value: '342 Citizens' },
+                { label: 'Verification Rate', value: '99.4% Verified' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -195,6 +230,23 @@ export default function Overview() {
           iconColor="#8B5CF6"
           sparklineData={[1120, 1150, 1180, 1210, 1248]}
           sparklineColor="#8B5CF6"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Village Officers',
+              value: stats.officers.toLocaleString(),
+              subtitle: '▲ 56 assigned this month',
+              icon: ShieldCheck,
+              iconBg: '#F3E8FF',
+              iconColor: '#8B5CF6',
+              targetPath: '/officers',
+              details: [
+                { label: 'Total Field Inspectors', value: '1,248 Officers' },
+                { label: 'Currently On Duty', value: '1,102 Active' },
+                { label: 'Pending Assignments', value: '46 Villages' },
+                { label: 'Avg SLA Speed', value: '4.6 Days' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -208,6 +260,22 @@ export default function Overview() {
           iconColor="#D97706"
           sparklineData={[420, 438, 452, 470, 486]}
           sparklineColor="#F59E0B"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Sarpanch Network',
+              value: stats.sarpanchs.toLocaleString(),
+              subtitle: '▲ 18 verified this month',
+              icon: Award,
+              iconBg: '#FEF3C7',
+              iconColor: '#D97706',
+              targetPath: '/approvals',
+              details: [
+                { label: 'Verified Sarpanchs', value: '486 Leaders' },
+                { label: 'Pending Approvals', value: '12 Applicants' },
+                { label: 'Verification Method', value: 'Aadhaar + GP Seal' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -221,6 +289,22 @@ export default function Overview() {
           iconColor="#2563EB"
           sparklineData={[14000, 15200, 16800, 17900, 18573]}
           sparklineColor="#2563EB"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Total Complaints',
+              value: stats.complaints.toLocaleString(),
+              subtitle: '▲ 2,153 filed this month',
+              icon: ClipboardList,
+              iconBg: '#EFF6FF',
+              iconColor: '#2563EB',
+              targetPath: '/complaints',
+              details: [
+                { label: 'Total Tracked Complaints', value: '18,573 Tickets' },
+                { label: 'Resolved Complaints', value: '10,465 (56.3%)' },
+                { label: 'Top Category', value: 'Roads & Infrastructure' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -234,11 +318,27 @@ export default function Overview() {
           iconColor="#166534"
           sparklineData={[78, 80, 82, 85, 87.6]}
           sparklineColor="#22C55E"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Resolution Rate & SLA',
+              value: `${stats.resolutionRate}%`,
+              subtitle: '▲ 5.3% improvement vs last month',
+              icon: TrendingUp,
+              iconBg: '#DCFCE7',
+              iconColor: '#166534',
+              targetPath: '/analytics',
+              details: [
+                { label: 'Resolution Rate', value: '87.6%' },
+                { label: 'Average Resolution Time', value: '4.6 Days' },
+                { label: 'SLA Success Target', value: '94.2%' },
+              ],
+            })
+          }
         />
       </section>
 
       {/* ANALYTICS STAT CARDS — ROW 2 */}
-      <section style={{ ...styles.statsGridSix, marginTop: 16 }}>
+      <section className="stats-grid-six" style={{ marginTop: 16 }}>
         <StatCard
           title="Open Complaints"
           value={stats.openComplaints.toLocaleString()}
@@ -251,6 +351,22 @@ export default function Overview() {
           badgeColor="#1D4ED8"
           sparklineData={[4800, 4600, 4400, 4300, 4218]}
           sparklineColor="#3B82F6"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Open Complaints',
+              value: stats.openComplaints.toLocaleString(),
+              subtitle: '22.7% of total complaints',
+              icon: AlertCircle,
+              iconBg: '#EFF6FF',
+              iconColor: '#3B82F6',
+              targetPath: '/complaints',
+              details: [
+                { label: 'Active Open Issues', value: '4,218 Tickets' },
+                { label: 'Priority High', value: '1,120 Tickets' },
+                { label: 'Assigned to Officers', value: '3,890 Tickets' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -265,6 +381,22 @@ export default function Overview() {
           badgeColor="#B45309"
           sparklineData={[3200, 3400, 3550, 3654]}
           sparklineColor="#F59E0B"
+          onClick={() =>
+            setSelectedStat({
+              title: 'In Progress Issues',
+              value: stats.inProgress.toLocaleString(),
+              subtitle: '19.7% of total complaints',
+              icon: Clock,
+              iconBg: '#FEF3C7',
+              iconColor: '#D97706',
+              targetPath: '/complaints',
+              details: [
+                { label: 'Work Orders Active', value: '3,654 Tickets' },
+                { label: 'On-site Field Work', value: '2,890 Tickets' },
+                { label: 'Expected Close', value: '< 48 Hours' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -278,6 +410,21 @@ export default function Overview() {
           iconColor="#15803D"
           sparklineData={[650, 720, 780, 842]}
           sparklineColor="#22C55E"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Resolved Today',
+              value: stats.resolvedToday.toLocaleString(),
+              subtitle: '▲ 12.5% increase vs yesterday',
+              icon: CheckCircle2,
+              iconBg: '#DCFCE7',
+              iconColor: '#15803D',
+              targetPath: '/complaints',
+              details: [
+                { label: 'Closed Today', value: '842 Complaints' },
+                { label: 'Citizen Satisfaction', value: '96.4% Positive' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -292,6 +439,22 @@ export default function Overview() {
           badgeColor="#B91C1C"
           sparklineData={[280, 260, 250, 236]}
           sparklineColor="#EF4444"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Escalated Cases',
+              value: stats.escalated.toLocaleString(),
+              subtitle: 'Requires immediate Super Admin attention',
+              icon: TriangleAlert,
+              iconBg: '#FEE2E2',
+              iconColor: '#B91C1C',
+              targetPath: '/complaints',
+              details: [
+                { label: 'Overdue Complaints (>48h)', value: '236 Cases' },
+                { label: 'Department Escalations', value: 'Water & Electricity' },
+                { label: 'Action Required', value: 'Reassign Field Officer' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -301,11 +464,27 @@ export default function Overview() {
           icon={UserRoundCog}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
-          badgeText="12 Action"
+          badgeText={`${stats.pendingRequests} Action`}
           badgeBg="#DBEAFE"
           badgeColor="#1D4ED8"
           sparklineData={[18, 15, 14, 12]}
           sparklineColor="#2563EB"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Pending Admin Requests',
+              value: stats.pendingRequests.toLocaleString(),
+              subtitle: 'Sarpanch onboarding requests waiting for verification',
+              icon: UserRoundCog,
+              iconBg: '#EFF6FF',
+              iconColor: '#2563EB',
+              targetPath: '/approvals',
+              details: [
+                { label: 'Unreviewed Applications', value: `${stats.pendingRequests} Requests` },
+                { label: 'Documents Uploaded', value: 'Aadhaar & Panchayat Proof' },
+                { label: 'Avg Review Time', value: '1.2 Hours' },
+              ],
+            })
+          }
         />
 
         <StatCard
@@ -320,6 +499,22 @@ export default function Overview() {
           badgeColor="#15803D"
           sparklineData={[980, 1020, 1060, 1102]}
           sparklineColor="#22C55E"
+          onClick={() =>
+            setSelectedStat({
+              title: 'Active Field Officers',
+              value: stats.activeOfficers.toLocaleString(),
+              subtitle: '88.3% on duty across Panchayats',
+              icon: ShieldCheck,
+              iconBg: '#DCFCE7',
+              iconColor: '#15803D',
+              targetPath: '/officers',
+              details: [
+                { label: 'Officers Currently Active', value: '1,102 Inspectors' },
+                { label: 'Off-duty / Leave', value: '146 Inspectors' },
+                { label: 'Top Department', value: 'Roads & Infrastructure' },
+              ],
+            })
+          }
         />
       </section>
 
@@ -338,12 +533,10 @@ export default function Overview() {
 
       {/* LIVE PLATFORM ACTIVITY & ADMIN REQUESTS & LEADERBOARD — ROW 4 */}
       <section style={styles.threeGridRow}>
-        {/* Live Activity Feed */}
         <div style={{ flex: 1, minWidth: 300 }}>
           <LiveActivityFeed />
         </div>
 
-        {/* Recent Admin Requests */}
         <div style={{ flex: 1.4, minWidth: 380 }}>
           <div style={styles.card}>
             <div style={styles.cardHeader}>
@@ -351,7 +544,7 @@ export default function Overview() {
                 <h3 style={styles.cardTitle}>Recent Admin Requests</h3>
                 <p style={styles.cardSubtitle}>Sarpanch onboarding approvals</p>
               </div>
-              <button onClick={() => navigate('/approvals')} style={styles.viewAllBtn}>
+              <button onClick={() => navigate('/approvals')} style={styles.viewAllBtn} className="btn-interactive">
                 View All
               </button>
             </div>
@@ -393,6 +586,7 @@ export default function Overview() {
                           <button
                             onClick={() => setSelectedRequest(r)}
                             style={styles.actionIconBtn}
+                            className="btn-interactive"
                             title="View Verification Details"
                           >
                             <Eye style={{ width: 14, height: 14, color: '#2563EB' }} />
@@ -402,14 +596,16 @@ export default function Overview() {
                               <button
                                 onClick={() => handleApproveRequest(r, 'Approved from Dashboard')}
                                 style={{ ...styles.actionIconBtn, background: '#DCFCE7' }}
-                                title="Approve"
+                                className="btn-interactive"
+                                title="Approve Request"
                               >
                                 <Check style={{ width: 14, height: 14, color: '#166534' }} />
                               </button>
                               <button
                                 onClick={() => handleRejectRequest(r, 'Rejected from Dashboard')}
                                 style={{ ...styles.actionIconBtn, background: '#FEE2E2' }}
-                                title="Reject"
+                                className="btn-interactive"
+                                title="Reject Request"
                               >
                                 <X style={{ width: 14, height: 14, color: '#B91C1C' }} />
                               </button>
@@ -425,7 +621,6 @@ export default function Overview() {
           </div>
         </div>
 
-        {/* Best Performing Villages */}
         <div style={{ flex: 1.1, minWidth: 320 }}>
           <BestPerformingVillages onViewAll={() => navigate('/villages')} />
         </div>
@@ -452,6 +647,14 @@ export default function Overview() {
           onApprove={handleApproveRequest}
           onReject={handleRejectRequest}
           loading={actionLoading}
+        />
+      )}
+
+      {/* STAT DETAIL MODAL */}
+      {selectedStat && (
+        <StatDetailModal
+          data={selectedStat}
+          onClose={() => setSelectedStat(null)}
         />
       )}
     </div>
@@ -502,11 +705,6 @@ const styles = {
   healthWrapper: {
     flex: 1.2,
     minWidth: 340,
-  },
-  statsGridSix: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: 14,
   },
   chartsRow: {
     display: 'flex',

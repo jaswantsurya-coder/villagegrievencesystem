@@ -30,7 +30,7 @@
   --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px 0 rgba(15, 23, 42, 0.02);
   --shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.03);
   --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.09), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
-  --shadow-hover: 0 14px 30px -4px rgba(37, 99, 235, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  --shadow-hover: 0 14px 30px -4px rgba(37, 99, 235, 0.15), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
   --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
@@ -108,31 +108,59 @@ input, textarea, select {
   animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Table styles */
-.custom-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+/* Interactive Stat Card Styles */
+.stat-card-interactive {
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease !important;
 }
 
-.custom-table th {
-  text-align: left;
-  padding: 10px 14px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted-text);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border);
-  background: #F8FAFC;
+.stat-card-interactive:hover {
+  transform: translateY(-4px) scale(1.015) !important;
+  box-shadow: 0 12px 24px -4px rgba(37, 99, 235, 0.15), 0 4px 12px -2px rgba(15, 23, 42, 0.04) !important;
+  border-color: #93C5FD !important;
 }
 
-.custom-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text);
+.stat-card-interactive:active {
+  transform: translateY(-1px) scale(0.99) !important;
 }
 
-.custom-table tr:hover td {
-  background: #F8FAFC;
+/* Responsive Grid Breakpoints */
+.stats-grid-six {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 1380px) {
+  .stats-grid-six {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stats-grid-six {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid-six {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Button Ripple & Active Touch Feedback */
+.btn-interactive {
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.btn-interactive:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.btn-interactive:active {
+  transform: translateY(0.5px);
+  filter: brightness(0.95);
 }
