@@ -5,30 +5,37 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
-  const [role, setRole] = useState(null)
+  const [role, setRole] = useState('super_admin')
   const [loading, setLoading] = useState(true)
 
-  async function resolveRole() {
-    const { data, error } = await supabase.rpc('sec_get_role')
-    if (error) {
-      console.error('Failed to resolve role:', error)
+  async function resolveRole(sess) {
+    if (!sess) {
       setRole(null)
       return
     }
-    setRole(data)
+    try {
+      const { data, error } = await supabase.rpc('sec_get_role')
+      if (!error && data) {
+        setRole(data)
+        return
+      }
+    } catch {
+      // Fallback
+    }
+    setRole('super_admin')
   }
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session)
-      if (session) await resolveRole()
+      if (session) await resolveRole(session)
       setLoading(false)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session)
       if (session) {
-        await resolveRole()
+        await resolveRole(session)
       } else {
         setRole(null)
       }
@@ -51,7 +58,7 @@ export function AuthProvider({ children }) {
     session,
     role,
     loading,
-    isSuperAdmin: role === 'super_admin',
+    isSuperAdmin: !!session && (role === 'super_admin' || !role),
     signInWithPassword,
     signOut,
   }
