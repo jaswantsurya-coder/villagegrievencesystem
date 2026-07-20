@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAux } from '../lib/supabase'
 import StatCard from '../components/StatCard'
 import PlatformHealth from '../components/PlatformHealth'
 import ComplaintTrendChart from '../components/ComplaintTrendChart'
@@ -59,11 +59,15 @@ export default function Overview() {
   async function loadData() {
     setLoading(true)
     try {
-      const [villagesRes, pendingRes, complaintsRes, escalatedRes, requestsRes] = await Promise.all([
-        supabase.from('villages').select('id', { count: 'exact', head: true }),
+      // Fetch real data from dtucrczgagpzjbbrwqit (villages, profiles, complaints)
+      const [villagesRes, profilesRes, officersRes, complaintsRes, escalatedRes, inProgressRes, pendingRes, requestsRes] = await Promise.all([
+        supabaseAux.from('villages').select('id', { count: 'exact', head: true }),
+        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'citizen'),
+        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'officer'),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).eq('is_escalated', true),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
         supabase.from('admin_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('complaints').select('id', { count: 'exact', head: true }),
-        supabase.from('complaints').select('id', { count: 'exact', head: true }).eq('is_escalated', true),
         supabase
           .from('admin_requests')
           .select('*')
@@ -74,9 +78,12 @@ export default function Overview() {
       setStats((prev) => ({
         ...prev,
         villages: villagesRes.count || prev.villages,
-        pendingRequests: pendingRes.count !== null ? pendingRes.count : prev.pendingRequests,
+        citizens: profilesRes.count || prev.citizens,
+        officers: officersRes.count || prev.officers,
         complaints: complaintsRes.count || prev.complaints,
         escalated: escalatedRes.count || prev.escalated,
+        inProgress: inProgressRes.count || prev.inProgress,
+        pendingRequests: pendingRes.count !== null ? pendingRes.count : prev.pendingRequests,
       }))
 
       if (requestsRes.data && requestsRes.data.length > 0) {

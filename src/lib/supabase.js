@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://sompzqwvegygtp
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_t1MdRtkflIW6Lfuq7KBotA_IeP5poRA'
 
 const supabaseAuxUrl = import.meta.env.VITE_SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co'
-const supabaseAuxAnonKey = import.meta.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_t1MdRtkflIW6Lfuq7KBotA_IeP5poRA'
+const supabaseAuxAnonKey = import.meta.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK'
 
 // Primary Supabase Client (sompzqwvegygtpsrlhzt - SuperAdmin & Auth)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
