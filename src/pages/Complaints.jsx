@@ -1,63 +1,143 @@
 import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { AlertCircle, Search, Eye, Filter } from 'lucide-react'
+import { supabaseAux } from '../lib/supabase'
+import { AlertCircle, Search, Eye, Filter, RefreshCw, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 
 export default function Complaints() {
   const [complaints, setComplaints] = useState([])
+  const [villages, setVillages] = useState({})
+  const [profiles, setProfiles] = useState({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
 
   useEffect(() => {
-    loadComplaints()
+    loadComplaintsData()
   }, [])
 
-  async function loadComplaints() {
+  async function loadComplaintsData() {
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('complaints').select('*').limit(20)
-      if (!error && data && data.length > 0) {
-        setComplaints(data)
-      } else {
-        // Fallback mock complaints matching prompt table columns
-        setComplaints([
-          { id: 'GS-2025-18573', village: 'Vizianagaram', category: 'Roads & Infrastructure', priority: 'High', department: 'Public Works', status: 'In Progress', officer: 'Insp. V. Ramesh', created: '17 May 2025' },
-          { id: 'GS-2025-18572', village: 'Srikakulam', category: 'Water Supply', priority: 'High', department: 'Water Board', status: 'Open', officer: 'Eng. K. Suresh', created: '17 May 2025' },
-          { id: 'GS-2025-18571', village: 'West Godavari', category: 'Drainage & Sewage', priority: 'Medium', department: 'Sanitation', status: 'Resolved', officer: 'Off. M. Prasad', created: '16 May 2025' },
-          { id: 'GS-2025-18570', village: 'YSR Kadapa', category: 'Electricity', priority: 'Low', department: 'Electricity Board', status: 'In Progress', officer: 'Insp. V. Ramesh', created: '16 May 2025' },
-          { id: 'GS-2025-18569', village: 'Krishna', category: 'Street Lights', priority: 'High', department: 'Municipal Corp', status: 'Escalated', officer: 'Panchayat Lead', created: '15 May 2025' },
-        ])
+      // Fetch villages and profiles for reference
+      const [villageRes, profileRes, complaintRes] = await Promise.all([
+        supabaseAux.from('villages').select('id, village_name, district'),
+        supabaseAux.from('profiles').select('id, name, phone, role'),
+        supabaseAux.from('complaints').select('*').order('created_at', { ascending: false }),
+      ])
+
+      const vMap = {}
+      if (villageRes.data) {
+        villageRes.data.forEach((v) => { vMap[v.id] = v })
+      }
+      setVillages(vMap)
+
+      const pMap = {}
+      if (profileRes.data) {
+        profileRes.data.forEach((p) => { pMap[p.id] = p })
+      }
+      setProfiles(pMap)
+
+      if (complaintRes.data) {
+        setComplaints(complaintRes.data)
       }
     } catch (err) {
-      console.error(err)
+      console.error('Error loading complaints:', err)
     } finally {
       setLoading(false)
     }
   }
 
-  const filtered = complaints.filter(
-    (c) =>
-      (statusFilter === 'All' || c.status === statusFilter) &&
-      (c.id.toLowerCase().includes(search.toLowerCase()) ||
-        c.village.toLowerCase().includes(search.toLowerCase()) ||
-        c.category.toLowerCase().includes(search.toLowerCase()))
-  )
+  function formatDate(iso) {
+    if (!iso) return '—'
+    return new Date(iso).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    })
+  }
+
+  const filtered = complaints.filter((c) => {
+    const statusMatch =
+      statusFilter === 'All'
+        ? true
+        : statusFilter === 'Escalated'
+        ? c.is_escalated
+        : c.status?.toLowerCase() === statusFilter.toLowerCase()
+
+    const vName = villages[c.village_id]?.village_name || ''
+    const cName = profiles[c.citizen_id]?.name || ''
+    const q = search.toLowerCase()
+
+    const searchMatch =
+      (c.id || '').toLowerCase().includes(q) ||
+      (c.title || '').toLowerCase().includes(q) ||
+      (c.category || '').toLowerCase().includes(q) ||
+      vName.toLowerCase().includes(q) ||
+      cName.toLowerCase().includes(q)
+
+    return statusMatch && searchMatch
+  })
+
+  const totalCount = complaints.length
+  const openCount = complaints.filter((c) => c.status === 'Open' || c.status === 'Submitted' || c.status === 'Pending').length
+  const inProgressCount = complaints.filter((c) => c.status === 'In Progress').length
+  const resolvedCount = complaints.filter((c) => c.status === 'Resolved').length
+  const escalatedCount = complaints.filter((c) => c.is_escalated).length
 
   return (
     <div style={styles.container}>
+      {/* Header */}
       <div style={styles.header}>
         <div>
           <h1 style={styles.pageTitle}>Complaint Center</h1>
-          <p style={styles.pageSubtitle}>Centralized Citizen Telemetry & SLA Resolution Tracker</p>
+          <p style={styles.pageSubtitle}>
+            Centralized Citizen Telemetry & Resolution Tracker
+            <span style={styles.dbTag}>LIVE · dtucrczgagpzjbbrwqit</span>
+          </p>
+        </div>
+        <button onClick={loadComplaintsData} style={styles.refreshBtn} className="btn-interactive">
+          <RefreshCw style={{ width: 14, height: 14 }} /> Refresh
+        </button>
+      </div>
+
+      {/* Summary Row */}
+      <div style={styles.summaryRow}>
+        <div style={styles.summaryCard}>
+          <AlertCircle style={{ width: 18, height: 18, color: '#2563EB' }} />
+          <div>
+            <div style={styles.summaryVal}>{totalCount}</div>
+            <div style={styles.summaryLabel}>Total Complaints</div>
+          </div>
+        </div>
+        <div style={styles.summaryCard}>
+          <Clock style={{ width: 18, height: 18, color: '#D97706' }} />
+          <div>
+            <div style={styles.summaryVal}>{openCount + inProgressCount}</div>
+            <div style={styles.summaryLabel}>Active / Pending</div>
+          </div>
+        </div>
+        <div style={styles.summaryCard}>
+          <CheckCircle2 style={{ width: 18, height: 18, color: '#16A34A' }} />
+          <div>
+            <div style={styles.summaryVal}>{resolvedCount}</div>
+            <div style={styles.summaryLabel}>Resolved</div>
+          </div>
+        </div>
+        <div style={styles.summaryCard}>
+          <AlertTriangle style={{ width: 18, height: 18, color: '#DC2626' }} />
+          <div>
+            <div style={styles.summaryVal}>{escalatedCount}</div>
+            <div style={styles.summaryLabel}>Escalated</div>
+          </div>
         </div>
       </div>
 
+      {/* Control Bar */}
       <div style={styles.controlBar}>
         <div style={styles.searchBox}>
           <Search style={{ width: 15, height: 15, color: '#94A3B8' }} />
           <input
             type="text"
-            placeholder="Search ticket ID, village, category..."
+            placeholder="Search ticket ID, title, category, village..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
@@ -71,6 +151,7 @@ export default function Complaints() {
               key={st}
               onClick={() => setStatusFilter(st)}
               style={{ ...styles.filterBtn, ...(statusFilter === st ? styles.filterBtnActive : {}) }}
+              className="btn-interactive"
             >
               {st}
             </button>
@@ -78,75 +159,85 @@ export default function Complaints() {
         </div>
       </div>
 
+      {/* Table */}
       <div style={styles.card}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Ticket ID</th>
-              <th style={styles.th}>Village</th>
-              <th style={styles.th}>Category</th>
-              <th style={styles.th}>Priority</th>
-              <th style={styles.th}>Department</th>
-              <th style={styles.th}>Status</th>
-              <th style={styles.th}>Assigned Officer</th>
-              <th style={styles.th}>Created Date</th>
-              <th style={{ ...styles.th, textAlign: 'right' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((c) => (
-              <tr key={c.id} style={styles.tr}>
-                <td style={styles.tdMono}>{c.id}</td>
-                <td style={styles.tdBold}>{c.village}</td>
-                <td style={styles.td}>{c.category}</td>
-                <td style={styles.td}>
-                  <span
-                    style={{
-                      ...styles.priorityBadge,
-                      color: c.priority === 'High' ? '#B91C1C' : c.priority === 'Medium' ? '#B45309' : '#15803D',
-                      background: c.priority === 'High' ? '#FEE2E2' : c.priority === 'Medium' ? '#FEF3C7' : '#DCFCE7',
-                    }}
-                  >
-                    {c.priority}
-                  </span>
-                </td>
-                <td style={styles.tdMuted}>{c.department}</td>
-                <td style={styles.td}>
-                  <span
-                    style={{
-                      ...styles.statusBadge,
-                      background:
-                        c.status === 'Resolved'
-                          ? '#DCFCE7'
-                          : c.status === 'In Progress'
-                          ? '#FEF3C7'
-                          : c.status === 'Escalated'
-                          ? '#FEE2E2'
-                          : '#EFF6FF',
-                      color:
-                        c.status === 'Resolved'
-                          ? '#15803D'
-                          : c.status === 'In Progress'
-                          ? '#B45309'
-                          : c.status === 'Escalated'
-                          ? '#B91C1C'
-                          : '#1D4ED8',
-                    }}
-                  >
-                    {c.status}
-                  </span>
-                </td>
-                <td style={styles.tdBold}>{c.officer}</td>
-                <td style={styles.tdMono}>{c.created}</td>
-                <td style={{ ...styles.td, textAlign: 'right' }}>
-                  <button style={styles.viewBtn}>
-                    <Eye style={{ width: 13, height: 13 }} /> View
-                  </button>
-                </td>
+        {loading ? (
+          <div style={styles.loadingBox}>
+            <Loader2 style={{ width: 20, height: 20, color: '#2563EB', animation: 'spin 1s linear infinite' }} />
+            <span>Loading complaints from Supabase...</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={styles.emptyBox}>No complaints found matching your criteria.</div>
+        ) : (
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Ticket / ID</th>
+                <th style={styles.th}>Title</th>
+                <th style={styles.th}>Village</th>
+                <th style={styles.th}>Category</th>
+                <th style={styles.th}>Priority</th>
+                <th style={styles.th}>Status</th>
+                <th style={styles.th}>Citizen</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filtered.map((c) => {
+                const villageObj = villages[c.village_id] || {}
+                const citizenObj = profiles[c.citizen_id] || {}
+                return (
+                  <tr key={c.id} style={styles.tr}>
+                    <td style={styles.tdMono}>
+                      {c.ticket_number || (typeof c.id === 'string' ? c.id.slice(0, 8) : `TKT-${c.id}`)}
+                    </td>
+                    <td style={styles.tdBold}>{c.title || c.description || 'General Grievance'}</td>
+                    <td style={styles.td}>{villageObj.village_name || '—'}</td>
+                    <td style={styles.tdMuted}>{c.category || 'General'}</td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          ...styles.priorityBadge,
+                          color: c.priority === 'High' || c.priority === 'Critical' ? '#B91C1C' : c.priority === 'Medium' ? '#B45309' : '#15803D',
+                          background: c.priority === 'High' || c.priority === 'Critical' ? '#FEE2E2' : c.priority === 'Medium' ? '#FEF3C7' : '#DCFCE7',
+                        }}
+                      >
+                        {c.priority || 'Normal'}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          ...styles.statusBadge,
+                          background:
+                            c.status === 'Resolved'
+                              ? '#DCFCE7'
+                              : c.status === 'In Progress'
+                              ? '#FEF3C7'
+                              : c.is_escalated
+                              ? '#FEE2E2'
+                              : '#EFF6FF',
+                          color:
+                            c.status === 'Resolved'
+                              ? '#15803D'
+                              : c.status === 'In Progress'
+                              ? '#B45309'
+                              : c.is_escalated
+                              ? '#B91C1C'
+                              : '#1D4ED8',
+                        }}
+                      >
+                        {c.is_escalated ? 'Escalated' : c.status || 'Open'}
+                      </span>
+                    </td>
+                    <td style={styles.tdMuted}>{citizenObj.name || 'Anonymous'}</td>
+                    <td style={{ ...styles.tdMono, textAlign: 'right' }}>{formatDate(c.created_at)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )
@@ -154,14 +245,54 @@ export default function Complaints() {
 
 const styles = {
   container: { display: 'flex', flexDirection: 'column', gap: 20 },
-  header: { marginBottom: 4 },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   pageTitle: { fontSize: 22, fontWeight: 800, color: '#0F172A' },
-  pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4 },
+  pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 },
+  dbTag: {
+    display: 'inline-block',
+    fontSize: 9.5,
+    fontFamily: 'var(--font-mono)',
+    fontWeight: 700,
+    color: '#16A34A',
+    background: '#DCFCE7',
+    padding: '2px 8px',
+    borderRadius: 6,
+    letterSpacing: '0.04em',
+  },
+  refreshBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '8px 16px',
+    borderRadius: 10,
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: '#2563EB',
+    background: '#EFF6FF',
+    border: '1px solid #DBEAFE',
+  },
+  summaryRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 14,
+  },
+  summaryCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: 14,
+    padding: '14px 18px',
+    boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+  },
+  summaryVal: { fontSize: 20, fontWeight: 800, color: '#0F172A', lineHeight: 1 },
+  summaryLabel: { fontSize: 11, color: '#64748B', marginTop: 2 },
   controlBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   searchBox: { display: 'flex', alignItems: 'center', gap: 10, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 12, padding: '0 14px', height: 42, width: 340 },
   searchInput: { border: 'none', outline: 'none', fontSize: 13, width: '100%' },
   filterGroup: { display: 'flex', alignItems: 'center', gap: 6, background: '#FFFFFF', border: '1px solid #E2E8F0', padding: 4, borderRadius: 12 },
-  filterBtn: { padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#64748B', background: 'none' },
+  filterBtn: { padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' },
   filterBtnActive: { background: '#2563EB', color: '#FFFFFF' },
   card: { background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 3px rgba(15,23,42,0.04)' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 },
@@ -173,5 +304,6 @@ const styles = {
   tdMono: { padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#64748B' },
   priorityBadge: { fontSize: 10.5, fontWeight: 800, padding: '2px 8px', borderRadius: 6 },
   statusBadge: { fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 10px' },
-  viewBtn: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, color: '#2563EB', background: '#EFF6FF' },
+  loadingBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 60, fontSize: 13, color: '#64748B' },
+  emptyBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, fontSize: 13, color: '#94A3B8' },
 }

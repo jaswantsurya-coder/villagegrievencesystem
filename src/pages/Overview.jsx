@@ -89,13 +89,12 @@ export default function Overview() {
       if (requestsRes.data && requestsRes.data.length > 0) {
         setRecentRequests(requestsRes.data)
       } else {
-        setRecentRequests([
-          { id: 'req-1', full_name: 'Ramesh Babu', village_name: 'Peddapudi', district: 'Prakasam', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
-          { id: 'req-2', full_name: 'Lakshmi Narayana', village_name: 'Thummala palli', district: 'Kurnool', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
-          { id: 'req-3', full_name: 'Suresh Kumar', village_name: 'Velugodu', district: 'Guntur', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
-          { id: 'req-4', full_name: 'Anitha Devi', village_name: 'Ramapuram', district: 'Vizianagaram', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
-          { id: 'req-5', full_name: 'Venkatesh', village_name: 'Chintapalli', district: 'Alluri Sitarama Raju', state: 'Andhra Pradesh', created_at: new Date().toISOString(), status: 'pending' },
-        ])
+        const auxReqs = await supabaseAux
+          .from('admin_requests')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5)
+        setRecentRequests(auxReqs.data || [])
       }
     } catch (err) {
       console.error('Data load error:', err)

@@ -5,14 +5,17 @@ const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
+  const [user, setUser] = useState(null)
   const [role, setRole] = useState('super_admin')
   const [loading, setLoading] = useState(true)
 
   async function resolveRole(sess) {
     if (!sess) {
       setRole(null)
+      setUser(null)
       return
     }
+    setUser(sess.user)
     try {
       const { data, error } = await supabase.rpc('sec_get_role')
       if (!error && data) {
@@ -20,7 +23,7 @@ export function AuthProvider({ children }) {
         return
       }
     } catch {
-      // Fallback
+      // Fallback role for super admin portal
     }
     setRole('super_admin')
   }
@@ -38,6 +41,7 @@ export function AuthProvider({ children }) {
         await resolveRole(session)
       } else {
         setRole(null)
+        setUser(null)
       }
     })
 
@@ -45,17 +49,25 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function signInWithPassword(email, password) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    await resolveRole()
+    if (data?.session) {
+      setSession(data.session)
+      await resolveRole(data.session)
+    }
+    return data
   }
 
   async function signOut() {
     await supabase.auth.signOut()
+    setSession(null)
+    setUser(null)
+    setRole(null)
   }
 
   const value = {
     session,
+    user,
     role,
     loading,
     isSuperAdmin: !!session && (role === 'super_admin' || !role),
