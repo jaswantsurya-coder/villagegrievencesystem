@@ -8,19 +8,18 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState('super_admin')
   const [loading, setLoading] = useState(true)
-  const [activeClient, setActiveClient] = useState('primary')
 
-  async function resolveRole(sess, clientType = 'primary') {
-    if (!sess || !sess.user) {
+  async function resolveUserRole(s) {
+    if (!s?.user) {
       setRole(null)
       setUser(null)
       return
     }
-    const u = sess.user
+    const u = s.user
     setUser(u)
 
     try {
-      // 1. Check profiles table in aux database (dtucrczgagpzjbbrwqit)
+      // 1. Try checking profiles table in aux DB (dtucrczgagpzjbbrwqit)
       const { data: prof } = await supabaseAux
         .from('profiles')
         .select('role')
@@ -32,67 +31,87 @@ export function AuthProvider({ children }) {
         return
       }
 
-      // 2. Check primary RPC (sompzqwvegygtpsrlhzt)
-      const { data: rpcRole, error } = await supabase.rpc('sec_get_role')
-      if (!error && rpcRole) {
+      // 2. Try checking primary RPC
+      const { data: rpcRole } = await supabase.rpc('sec_get_role')
+      if (rpcRole) {
         setRole(rpcRole)
         return
       }
-
-      // 3. Check user_metadata or app_metadata
-      const metaRole = u.user_metadata?.role || u.app_metadata?.role
-      if (metaRole) {
-        setRole(metaRole)
-        return
-      }
     } catch (err) {
-      console.warn('Role resolution warning:', err)
+      console.warn('Role resolution fallback:', err)
     }
 
-    // Default to super_admin for authenticated portal users
+    // Default: allow super_admin role for logged-in admin portal users
     setRole('super_admin')
   }
 
   useEffect(() => {
-    // Check session on primary client first
-    supabase.auth.getSession().then(async ({ data: { session: s1 } }) => {
-      if (s1) {
-        setSession(s1)
-        setActiveClient('primary')
-        await resolveRole(s1, 'primary')
-        setLoading(false)
-        return
-      }
+    let mounted = true
 
-      // Fallback: check session on aux client (dtucrczgagpzjbbrwqit)
-      supabaseAux.auth.getSession().then(async ({ data: { session: s2 } }) => {
-        if (s2) {
-          setSession(s2)
-          setActiveClient('aux')
-          await resolveRole(s2, 'aux')
+    async function initAuth() {
+      try {
+        // Try getting session from primary Supabase
+        const { data: d1 } = await supabase.auth.getSession().catch(() => ({ data: {} }))
+        if (d1?.session) {
+          if (mounted) {
+            setSession(d1.session)
+            await resolveUserRole(d1.session)
+          }
+          return
+        }
+
+        // Try getting session from auxiliary Supabase (dtucrczgagpzjbbrwqit)
+        const { data: d2 } = await supabaseAux.auth.getSession().catch(() => ({ data: {} }))
+        if (d2?.session) {
+          if (mounted) {
+            setSession(d2.session)
+            await resolveUserRole(d2.session)
+          }
+          return
+        }
+      } catch (err) {
+        console.error('Auth initialization error:', err)
+      } finally {
+        if (mounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    initAuth()
+
+    // Listeners for auth state changes
+    const { data: l1 } = supabase.auth.onAuthStateChange(async (_evt, s) => {
+      if (mounted) {
+        if (s) {
+          setSession(s)
+          await resolveUserRole(s)
+        } else {
+          // Check if aux session exists before clearing
+          const { data: auxData } = await supabaseAux.auth.getSession().catch(() => ({ data: {} }))
+          if (auxData?.session) {
+            setSession(auxData.session)
+            await resolveUserRole(auxData.session)
+          } else {
+            setSession(null)
+            setUser(null)
+            setRole(null)
+          }
         }
         setLoading(false)
-      })
-    })
-
-    // Listeners for both clients
-    const { data: l1 } = supabase.auth.onAuthStateChange(async (_event, s) => {
-      if (s) {
-        setSession(s)
-        setActiveClient('primary')
-        await resolveRole(s, 'primary')
       }
     })
 
-    const { data: l2 } = supabaseAux.auth.onAuthStateChange(async (_event, s) => {
-      if (s && !session) {
+    const { data: l2 } = supabaseAux.auth.onAuthStateChange(async (_evt, s) => {
+      if (mounted && s) {
         setSession(s)
-        setActiveClient('aux')
-        await resolveRole(s, 'aux')
+        await resolveUserRole(s)
+        setLoading(false)
       }
     })
 
     return () => {
+      mounted = false
       l1?.subscription?.unsubscribe()
       l2?.subscription?.unsubscribe()
     }
@@ -100,31 +119,27 @@ export function AuthProvider({ children }) {
 
   async function signInWithPassword(email, password) {
     let authRes = null
-    let usedClient = 'primary'
 
-    // Try primary Supabase first
+    // Attempt 1: Primary Supabase
     try {
       const res1 = await supabase.auth.signInWithPassword({ email, password })
       if (!res1.error && res1.data?.session) {
         authRes = res1.data
-        usedClient = 'primary'
       }
     } catch (err) {
-      console.log('Primary auth attempt failed, trying aux database...', err)
+      console.log('Primary login attempt failed:', err)
     }
 
-    // If primary failed, try aux Supabase (dtucrczgagpzjbbrwqit)
+    // Attempt 2: Auxiliary Supabase (dtucrczgagpzjbbrwqit)
     if (!authRes) {
       const res2 = await supabaseAux.auth.signInWithPassword({ email, password })
       if (res2.error) throw res2.error
       authRes = res2.data
-      usedClient = 'aux'
     }
 
     if (authRes?.session) {
       setSession(authRes.session)
-      setActiveClient(usedClient)
-      await resolveRole(authRes.session, usedClient)
+      await resolveUserRole(authRes.session)
     }
 
     return authRes
@@ -140,15 +155,13 @@ export function AuthProvider({ children }) {
     setRole(null)
   }
 
-  // A user logged into the Super Admin portal is granted Super Admin access
-  // unless explicitly resolved as non-admin in profiles.
-  const isSuperAdmin = !!session && (role === 'super_admin' || role === 'admin' || !role || role === null)
+  // Granted if a valid session is present and role is not explicitly non-admin
+  const isSuperAdmin = !!session && (role === 'super_admin' || role === 'admin' || !role)
 
   const value = {
     session,
     user,
     role,
-    activeClient,
     loading,
     isSuperAdmin,
     signInWithPassword,
