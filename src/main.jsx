@@ -5,7 +5,7 @@ import App from './App.jsx'
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
-    this.state = { hasError: false, error: null }
+    this.state = { hasError: false, error: null, errorInfo: null }
   }
 
   static getDerivedStateFromError(error) {
@@ -13,6 +13,7 @@ class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo })
     console.error('Global Error Boundary caught:', error, errorInfo)
   }
 
@@ -47,22 +48,26 @@ class ErrorBoundary extends Component {
             !
           </div>
           <h2 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 8px' }}>Something went wrong</h2>
-          <p style={{ fontSize: 13, color: '#64748B', maxWidth: 400, margin: '0 0 20px', lineHeight: 1.5 }}>
-            An unexpected error occurred while loading the dashboard.
+          <p style={{ fontSize: 13, color: '#64748B', maxWidth: 450, margin: '0 0 16px', lineHeight: 1.5 }}>
+            An error occurred while rendering the interface.
           </p>
-          <pre style={{
+          <div style={{
             background: '#FFFFFF',
             border: '1px solid #E2E8F0',
-            borderRadius: 8,
-            padding: 12,
-            fontSize: 11,
+            borderRadius: 10,
+            padding: 16,
+            fontSize: 11.5,
             color: '#DC2626',
-            maxWidth: 500,
+            maxWidth: 600,
+            textAlign: 'left',
             overflowX: 'auto',
             marginBottom: 20,
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'monospace',
           }}>
-            {this.state.error?.toString() || 'Unknown Error'}
-          </pre>
+            {this.state.error?.toString()}
+            {this.state.errorInfo?.componentStack && `\n\nComponent Stack:${this.state.errorInfo.componentStack}`}
+          </div>
           <button
             onClick={() => window.location.reload()}
             style={{

@@ -1,5 +1,5 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
-import { PieChart as PieIcon } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 
 const data = [
   { name: 'Roads & Infrastructure', value: 32.4, color: '#2563EB' },
@@ -17,7 +17,7 @@ export default function CategoriesDonutChart({ totalComplaints = 18573 }) {
       <div style={styles.header}>
         <div style={styles.titleGroup}>
           <div style={styles.iconBox}>
-            <PieIcon style={{ width: 16, height: 16, color: '#2563EB' }} />
+            <BarChart3 style={{ width: 16, height: 16, color: '#2563EB' }} />
           </div>
           <div>
             <h3 style={styles.title}>Top Complaint Categories</h3>
