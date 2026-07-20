@@ -1,5 +1,5 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
-import { Clock, ArrowDownRight, Zap, TimerReset } from 'lucide-react'
+import { Clock, ArrowDownRight, Zap, RotateCcw } from 'lucide-react'
 
 const data = [
   { name: 'Open', value: 22.7, color: '#3B82F6' },
@@ -16,7 +16,7 @@ export default function StatusDonutChart({ totalComplaints = 18573 }) {
         <div style={styles.header}>
           <div style={styles.titleGroup}>
             <div style={styles.iconBox}>
-              <TimerReset style={{ width: 16, height: 16, color: '#2563EB' }} />
+              <RotateCcw style={{ width: 16, height: 16, color: '#2563EB' }} />
             </div>
             <div>
               <h3 style={styles.title}>Complaint Status</h3>

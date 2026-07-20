@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
-import { ChartColumn } from 'lucide-react'
+import { BarChart3 } from 'lucide-react'
 
 const yearlyData = {
   'This Year': [
@@ -42,7 +42,7 @@ export default function ComplaintTrendChart() {
       <div style={styles.header}>
         <div style={styles.titleGroup}>
           <div style={styles.iconBox}>
-            <ChartColumn style={{ width: 16, height: 16, color: '#2563EB' }} />
+            <BarChart3 style={{ width: 16, height: 16, color: '#2563EB' }} />
           </div>
           <div>
             <h3 style={styles.title}>Complaint Trend (Monthly)</h3>
