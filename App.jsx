@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import ReactDOM from "react-dom";
+import { createPortal } from "react-dom";
 import { supabase, supabaseConfigError } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
@@ -4636,7 +4636,7 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
 };
 
 // ─── Reset Password Modal (shown after user clicks email reset link) ──────────
-// BUG FIX: Uses ReactDOM.createPortal to render outside Shell's stacking context,
+// BUG FIX: Uses createPortal to render outside Shell's stacking context,
 // stopPropagation on the card to prevent Shell's handleClickOutside from stealing focus,
 // and explicit pointer-events management to ensure inputs are interactive.
 
@@ -4845,7 +4845,7 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
         </div>
       </div>
     );
-    return typeof document !== 'undefined' ? ReactDOM.createPortal(successContent, document.body) : successContent;
+    return typeof document !== 'undefined' ? createPortal(successContent, document.body) : successContent;
   }
 
   // ─── Expired link state ─────────────────────────────────────────────────────
@@ -4874,7 +4874,7 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
         </div>
       </div>
     );
-    return typeof document !== 'undefined' ? ReactDOM.createPortal(expiredContent, document.body) : expiredContent;
+    return typeof document !== 'undefined' ? createPortal(expiredContent, document.body) : expiredContent;
   }
 
   // ─── Main reset form ────────────────────────────────────────────────────────
@@ -5079,7 +5079,7 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
   );
 
   // Portal to document.body to escape Shell's stacking context
-  return typeof document !== 'undefined' ? ReactDOM.createPortal(formContent, document.body) : formContent;
+  return typeof document !== 'undefined' ? createPortal(formContent, document.body) : formContent;
 };
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
