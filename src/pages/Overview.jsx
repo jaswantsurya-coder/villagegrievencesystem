@@ -23,8 +23,8 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
-  TriangleAlert,
-  UserRoundCog,
+  AlertTriangle,
+  UserCheck,
   Eye,
   Check,
   X,
@@ -437,7 +437,7 @@ export default function Overview() {
           title="Escalated Cases"
           value={stats.escalated.toLocaleString()}
           subtitle="High Priority"
-          icon={TriangleAlert}
+          icon={AlertTriangle}
           iconBg="#FEE2E2"
           iconColor="#B91C1C"
           badgeText="Critical"
@@ -450,7 +450,7 @@ export default function Overview() {
               title: 'Escalated Cases',
               value: stats.escalated.toLocaleString(),
               subtitle: 'Requires immediate Super Admin attention',
-              icon: TriangleAlert,
+              icon: AlertTriangle,
               iconBg: '#FEE2E2',
               iconColor: '#B91C1C',
               targetPath: '/complaints',
@@ -467,7 +467,7 @@ export default function Overview() {
           title="Pending Admin Requests"
           value={stats.pendingRequests.toLocaleString()}
           subtitle="Needs review"
-          icon={UserRoundCog}
+          icon={UserCheck}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
           badgeText={`${stats.pendingRequests} Action`}
@@ -480,7 +480,7 @@ export default function Overview() {
               title: 'Pending Admin Requests',
               value: stats.pendingRequests.toLocaleString(),
               subtitle: 'Sarpanch onboarding requests waiting for verification',
-              icon: UserRoundCog,
+              icon: UserCheck,
               iconBg: '#EFF6FF',
               iconColor: '#2563EB',
               targetPath: '/approvals',
