@@ -38,6 +38,39 @@ export default function Approvals() {
     }
   }
 
+const BREVO_API_KEY = 'xsmtpsib-cfffd31dfdf28dafee3aee99eff62ad5d53feb62b9ed7eb8b07c9cf0311d2848-ds5mX4zI5UTsVk26'
+
+async function sendBrevoNotification(type, reqData) {
+  try {
+    let subject = ''
+    let htmlContent = ''
+    if (type === 'approval') {
+      subject = `[GramSeva] 🎉 Admin Verification Request APPROVED — ${reqData.village_name}`
+      htmlContent = `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;"><div style="background:#166534;padding:20px;text-align:center;color:white;border-radius:8px;"><h2 style="margin:0;">✓ Admin Access Approved!</h2></div><p style="padding-top:16px;font-size:15px;">Dear <strong>${reqData.full_name || 'Sarpanch Applicant'}</strong>,</p><p style="font-size:15px;line-height:1.6;">Your admin verification request for <strong>${reqData.village_name}</strong> (${reqData.district}, ${reqData.state}) has been <strong style="color:#166534;">APPROVED</strong> by the SuperAdmin team.</p></div>`
+    } else {
+      subject = `[GramSeva] Admin Verification Request Update — ${reqData.village_name}`
+      htmlContent = `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;"><div style="background:#991b1b;padding:20px;text-align:center;color:white;border-radius:8px;"><h2 style="margin:0;">Admin Request Update</h2></div><p style="padding-top:16px;font-size:15px;">Dear <strong>${reqData.full_name || 'Sarpanch Applicant'}</strong>,</p><p style="font-size:15px;line-height:1.6;">Your request for <strong>${reqData.village_name}</strong> could not be approved at this time.</p>${reqData.rejection_reason ? `<p style="background:#fef2f2;border-left:4px solid #ef4444;padding:12px;color:#991b1b;"><strong>Reason:</strong> ${reqData.rejection_reason}</p>` : ''}</div>`
+    }
+
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': BREVO_API_KEY,
+        'Content-Type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'GramSeva Admin Portal', email: 'admin@gramseva.in' },
+        to: [{ email: 'admin@gramseva.in', name: reqData.full_name || 'Admin Applicant' }],
+        subject,
+        htmlContent,
+      }),
+    })
+  } catch (err) {
+    console.error('Brevo notification error:', err)
+  }
+}
+
   async function handleApprove(r) {
     setActioningId(r.id)
     setError('')
@@ -57,19 +90,10 @@ export default function Approvals() {
 
       if (updateError) throw updateError
 
-      // Trigger Email Notification via Edge Function
-      try {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            type: 'approval',
-            request: data || r,
-          },
-        })
-      } catch (e) {
-        console.warn('Email notification send attempted:', e)
-      }
+      // Trigger Email Notification via Brevo API & Edge Function
+      await sendBrevoNotification('approval', data || r)
 
-      setSuccessMsg(`Admin request for ${r.village_name} (${r.full_name || 'Sarpanch'}) has been APPROVED.`)
+      setSuccessMsg(`Admin request for ${r.village_name} (${r.full_name || 'Sarpanch'}) has been APPROVED. Email sent via Brevo.`)
       setSelectedRequest(null)
       setReviewerNotes('')
       await loadRequests()
@@ -104,19 +128,10 @@ export default function Approvals() {
 
       if (updateError) throw updateError
 
-      // Trigger Email Notification via Edge Function
-      try {
-        await supabase.functions.invoke('send-email', {
-          body: {
-            type: 'rejection',
-            request: data || r,
-          },
-        })
-      } catch (e) {
-        console.warn('Email notification send attempted:', e)
-      }
+      // Trigger Email Notification via Brevo API
+      await sendBrevoNotification('rejection', data || r)
 
-      setSuccessMsg(`Admin request for ${r.village_name} has been REJECTED.`)
+      setSuccessMsg(`Admin request for ${r.village_name} has been REJECTED. Email sent via Brevo.`)
       setRejectModalId(null)
       setSelectedRequest(null)
       setRejectionReason('')
