@@ -2447,7 +2447,7 @@ const ProfileView = ({ t, session, profile, notify, navigate, fetchProfile }) =>
     if (result === "granted") {
       notify(t('push_enabled'));
     } else {
-      notify(t('push_denied'), "err");
+      notify("Notifications blocked by browser. Click the lock icon in your address bar to enable notifications.", "err");
     }
   };
 
@@ -5785,8 +5785,12 @@ export default function App() {
   // ─── Request push notification permission on login ────────────────────────
   useEffect(() => {
     if (session && "Notification" in window && Notification.permission === "default") {
-      // Soft-ask after a delay
-      const timer = setTimeout(() => requestPushPermission(), 5000);
+      // Soft-ask after a delay without error toasts
+      const timer = setTimeout(() => {
+        try {
+          Notification.requestPermission();
+        } catch (e) { /* ignore */ }
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [session]);
