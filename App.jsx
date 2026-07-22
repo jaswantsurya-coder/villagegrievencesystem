@@ -4734,9 +4734,24 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
       notify(`Signed in with Google as ${displayName} ✅`);
     } catch (err) {
       console.error("Google auth error:", err);
-      const msg = err?.message || "Google Sign-In failed.";
-      setAuthMessage({ type: "error", text: msg });
-      notify(msg, "err");
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        try {
+          const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin }
+          });
+          if (oauthErr) throw oauthErr;
+          return;
+        } catch (e) {
+          const msg = "Firebase domain restriction: Please add 'villagegrievencesystem-2uvj.vercel.app' under Firebase Console -> Authentication -> Settings -> Authorized Domains.";
+          setAuthMessage({ type: "error", text: msg });
+          notify("Domain unauthorized in Firebase Console", "err");
+        }
+      } else {
+        const msg = err?.message || "Google Sign-In failed.";
+        setAuthMessage({ type: "error", text: msg });
+        notify(msg, "err");
+      }
     } finally {
       setLoading(false);
     }
