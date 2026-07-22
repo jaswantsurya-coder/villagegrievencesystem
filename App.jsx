@@ -4379,46 +4379,168 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   );
 };
 
-const ProfileSetupModal = ({ session, onComplete, notify, t }) => {
-  const [name, setName] = useState("");
+const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
+  const [name, setName] = useState(profile?.name || session?.user?.user_metadata?.full_name || "");
+  const [mobile, setMobile] = useState(profile?.mobile || "");
+  const [gender, setGender] = useState(profile?.gender || "male");
+  const [dob, setDob] = useState(profile?.dob || "");
+  const [age, setAge] = useState(profile?.age || "");
+  const [address, setAddress] = useState(profile?.address || "");
   const [loading, setLoading] = useState(false);
 
+  const activePilotToken = localStorage.getItem('pilot_token') || new URLSearchParams(window.location.search).get('pilot_token');
+  const isPilotFlow = Boolean(activePilotToken || localStorage.getItem('pilot_role') === 'sarpanch');
+
   const handleSave = async () => {
-    if (!name.trim()) return notify("Please enter your name", "err");
+    if (!name.trim()) return notify("Please enter your full name", "err");
+    if (isPilotFlow && !mobile.trim()) return notify("Please enter your mobile number for pilot verification", "err");
+
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ name: name.trim() })
-        .eq("id", session.user.id);
-      
-      if (error) throw error;
-      notify("Profile setup complete!");
+      const targetId = ensureUUID(session.user.id);
+      let claimedSuccess = false;
+
+      // 1. Try claim_pilot_token RPC if a pilot token is active
+      if (activePilotToken) {
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
+            p_token: activePilotToken,
+            p_user_id: targetId,
+            p_name: name.trim(),
+            p_mobile: mobile.trim(),
+            p_gender: gender,
+            p_dob: dob || null,
+            p_age: age ? parseInt(age, 10) : null,
+            p_address: address.trim(),
+          });
+
+          if (!rpcErr && rpcRes?.success) {
+            claimedSuccess = true;
+            localStorage.removeItem('pilot_token');
+            localStorage.removeItem('pilot_role');
+            notify("🎉 Pilot Onboarding Complete! Welcome to your Sarpanch Portal. ✅");
+          }
+        } catch (e) {
+          console.warn("RPC claim_pilot_token notice:", e);
+        }
+      }
+
+      // 2. Fallback / direct upsert if not claimed via RPC
+      if (!claimedSuccess) {
+        const updatePayload = {
+          id: targetId,
+          name: name.trim(),
+          mobile: mobile.trim(),
+          gender,
+          dob: dob || null,
+          age: age ? parseInt(age, 10) : null,
+          address: address.trim(),
+          is_onboarded: true,
+          last_active: new Date().toISOString(),
+        };
+
+        if (isPilotFlow) {
+          updatePayload.role = 'village_admin';
+        }
+
+        const { error } = await supabase.from("profiles").upsert([updatePayload]);
+        if (error) throw error;
+        
+        localStorage.removeItem('pilot_token');
+        localStorage.removeItem('pilot_role');
+        notify("Profile onboarding complete! ✅");
+      }
+
       onComplete();
     } catch (err) {
-      notify(err.message, "err");
+      console.error("Onboarding error:", err);
+      notify(err.message || "Failed to complete onboarding", "err");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, backdropFilter: "blur(4px)" }}>
-      <div style={{ background: THEME.colors.surface, padding: 32, borderRadius: 24, width: 380, boxShadow: "0 20px 50px rgba(0,0,0,0.2)" }}>
-        <div style={{ fontSize: 40, marginBottom: 16, textAlign: "center" }}>👋</div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, textAlign: "center", marginBottom: 8 }}>{t('profile_setup_title')}</h2>
-        <p style={{ color: THEME.colors.textMuted, textAlign: "center", marginBottom: 24, fontSize: 14 }}>Please tell us your name to complete your registration.</p>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, backdropFilter: "blur(6px)", padding: 16 }}>
+      <div style={{ background: THEME.colors.surface, padding: "28px 32px", borderRadius: 24, width: "100%", maxWidth: 460, boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)", border: `1px solid ${THEME.colors.border}`, maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ fontSize: 36, marginBottom: 12, textAlign: "center" }}>
+          {isPilotFlow ? "🏛️" : "👋"}
+        </div>
         
-        <Input 
-          label={t('full_name_label')} 
-          placeholder="e.g. Rajesh Kumar" 
-          value={name} 
-          onChange={e => setName(e.target.value)} 
-          autoFocus
-        />
+        <h2 style={{ fontSize: 22, fontWeight: 800, textAlign: "center", marginBottom: 6, color: THEME.colors.text }}>
+          {isPilotFlow ? "Sarpanch Portal Onboarding" : (t('profile_setup_title') || "Complete Your Profile")}
+        </h2>
         
-        <Btn full onClick={handleSave} disabled={loading}>
-          {loading ? t('saving') : t('get_started_btn')}
-        </Btn>
+        <p style={{ color: THEME.colors.textMuted, textAlign: "center", marginBottom: 20, fontSize: 13, lineHeight: 1.5 }}>
+          {isPilotFlow 
+            ? "Welcome! Please verify your official contact details to activate your Village Admin (Sarpanch) account." 
+            : "Please confirm your basic details to get started with GramSeva."}
+        </p>
+
+        {isPilotFlow && (
+          <div style={{ background: "#F0FDF4", border: "1px solid #DCFCE7", borderRadius: 12, padding: "10px 14px", marginBottom: 18, fontSize: 12, color: "#166534", display: "flex", alignItems: "center", gap: 8, fontWeight: 600 }}>
+            <span>✅</span>
+            <span>Role Granted: <strong>Village Admin (Sarpanch)</strong></span>
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Input 
+            label="Full Name *" 
+            placeholder="e.g. Rajesh Kumar" 
+            value={name} 
+            onChange={e => setName(e.target.value)} 
+            autoFocus
+          />
+
+          <Input 
+            label="Mobile Number *" 
+            placeholder="e.g. 9876543210" 
+            value={mobile} 
+            onChange={e => setMobile(e.target.value)} 
+          />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, marginBottom: 4 }}>Gender</label>
+              <select
+                value={gender}
+                onChange={e => setGender(e.target.value)}
+                style={{ width: "100%", padding: "10px 12px", border: `1.5px solid ${THEME.colors.border}`, borderRadius: THEME.radius.sm, fontSize: 13, outline: "none", background: THEME.colors.background, color: THEME.colors.text }}
+              >
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <Input 
+              label="Age" 
+              type="number"
+              placeholder="e.g. 42" 
+              value={age} 
+              onChange={e => setAge(e.target.value)} 
+            />
+          </div>
+
+          <Input 
+            label="Date of Birth" 
+            type="date"
+            value={dob} 
+            onChange={e => setDob(e.target.value)} 
+          />
+
+          <Input 
+            label="Address / Panchayat Details" 
+            placeholder="e.g. Main Street, Gram Panchayat House" 
+            value={address} 
+            onChange={e => setAddress(e.target.value)} 
+          />
+
+          <Btn full onClick={handleSave} disabled={loading} style={{ marginTop: 8 }}>
+            {loading ? "Activating Account..." : (isPilotFlow ? "Activate Sarpanch Account 🚀" : "Complete Setup")}
+          </Btn>
+        </div>
       </div>
     </div>
   );
@@ -5623,7 +5745,15 @@ export default function App() {
     const pilotToken = params.get('pilot_token');
     const roleParam = params.get('role');
 
-    if (pilotToken || roleParam === 'sarpanch') {
+    if (path.startsWith('/pilot/')) {
+      const token = path.split('/pilot/')[1];
+      if (token) {
+        localStorage.setItem('pilot_token', token);
+        localStorage.setItem('pilot_role', 'sarpanch');
+        setShowLogin(true);
+        setInitialLoginMode('login');
+      }
+    } else if (pilotToken || roleParam === 'sarpanch') {
       localStorage.setItem('pilot_role', 'sarpanch');
       if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
       setShowLogin(true);
@@ -5975,10 +6105,11 @@ export default function App() {
         <ProfileSetupModal 
           t={t}
           session={session} 
+          profile={profile}
           notify={notify} 
           onComplete={() => {
             setShowProfileSetup(false);
-            fetchProfile(session.user.id);
+            if (session?.user?.id) fetchProfile(session.user.id);
           }} 
         />
       )}
