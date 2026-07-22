@@ -2332,16 +2332,103 @@ const GalleryView = ({ t, session }) => {
 const ProfileView = ({ t, session, profile, notify }) => {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState(Notification?.permission || "default");
+
+  // Editable Profile State
+  const [fullName, setFullName] = useState(profile?.name || "");
+  const [phone, setPhone] = useState(profile?.phone || "");
+  const [villageName, setVillageName] = useState("");
+  const [district, setDistrict] = useState("");
 
   useEffect(() => {
     if (session) fetchStats();
-  }, [session]);
+    if (profile) {
+      setFullName(profile.name || "");
+      setPhone(profile.phone || "");
+      if (profile.village_id) {
+        fetchVillage(profile.village_id);
+      }
+    }
+  }, [session, profile]);
+
+  const fetchVillage = async (villageId) => {
+    try {
+      const { data } = await supabase.from("villages").select("*").eq("id", villageId).maybeSingle();
+      if (data) {
+        setVillageName(data.village_name || "");
+        setDistrict(data.district || "");
+      }
+    } catch (e) { console.error("Error fetching village:", e); }
+  };
 
   const fetchStats = async () => {
     const { count, error } = await supabase.from("complaints").select("*", { count: "exact", head: true }).eq("citizen_id", session.user.id);
     if (!error) setCount(count || 0);
     setLoading(false);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      let targetVillageId = profile?.village_id || null;
+
+      // Handle Village creation / linking if villageName provided
+      if (villageName.trim()) {
+        const vNameClean = villageName.trim();
+        const distClean = district.trim() || "Visakhapatnam";
+
+        // Check if village already exists
+        const { data: existingV } = await supabase
+          .from("villages")
+          .select("*")
+          .ilike("village_name", vNameClean)
+          .maybeSingle();
+
+        if (existingV) {
+          targetVillageId = existingV.id;
+        } else {
+          // Insert new village
+          const joinCode = vNameClean.substring(0, 4).toUpperCase() + "-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+          const { data: newV, error: vErr } = await supabase
+            .from("villages")
+            .insert([{
+              village_name: vNameClean,
+              district: distClean,
+              state: "Andhra Pradesh",
+              join_code: joinCode,
+            }])
+            .select()
+            .single();
+
+          if (vErr) throw vErr;
+          if (newV) targetVillageId = newV.id;
+        }
+      }
+
+      // Update Profile record in Supabase
+      const updateData = {
+        name: fullName.trim(),
+        phone: phone.trim(),
+        village_id: targetVillageId,
+      };
+
+      const { error: profErr } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", session.user.id);
+
+      if (profErr) throw profErr;
+
+      notify("Account details updated successfully! ✅");
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (err) {
+      console.error("Save profile error:", err);
+      notify(err?.message || "Failed to update profile", "err");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const enablePush = async () => {
@@ -2356,21 +2443,108 @@ const ProfileView = ({ t, session, profile, notify }) => {
 
   if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
+  const isAdminRole = ['village_admin', 'sarpanch', 'super_admin'].includes(profile.role);
+
   return (
-    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto" }}>
-      <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 32, letterSpacing: "-0.01em" }}>{t('my_account')}</h2>
+    <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto", fontFamily: THEME.font }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 28, flexWrap: "wrap", gap: 12 }}>
+        <h2 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>{t('my_account')}</h2>
+        {isAdminRole && (
+          <span style={{ background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #DBEAFE", borderRadius: 99, padding: "4px 12px", fontSize: 12, fontWeight: 800, display: "inline-flex", alignItems: "center", gap: 6 }}>
+            👑 Admin / Sarpanch Account
+          </span>
+        )}
+      </div>
       
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 24 }}>
-          <div style={{ width: 80, height: 80, background: THEME.colors.primaryLight, color: THEME.colors.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, fontWeight: 800 }}>
-            {profile.name?.charAt(0).toUpperCase() || "U"}
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 20 }}>
+          <div style={{ width: 72, height: 72, background: THEME.colors.primaryLight, color: THEME.colors.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, flexShrink: 0 }}>
+            {fullName?.charAt(0).toUpperCase() || profile.name?.charAt(0).toUpperCase() || "U"}
           </div>
           <div>
-            <h3 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px" }}>{profile.name || "User"}</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: 0, fontSize: 15 }}>{session.user.email || profile.phone}</p>
+            <h3 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{fullName || profile.name || "User"}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: 0, fontSize: 14 }}>{session.user?.email || phone || profile.phone}</p>
           </div>
         </div>
       </div>
+
+      {/* Account Details Form */}
+      <form onSubmit={handleSaveProfile} style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 24, marginBottom: 24 }}>
+        <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 16px", color: THEME.colors.text, display: "flex", alignItems: "center", gap: 8 }}>
+          👤 Personal & Village Information
+        </h4>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Full Name</label>
+            <input
+              type="text"
+              placeholder="Your full name"
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              required
+              style={{ width: "100%", padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Phone Number</label>
+            <input
+              type="tel"
+              placeholder="+91 9876543210"
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              required
+              style={{ width: "100%", padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>Village Name</label>
+            <input
+              type="text"
+              placeholder="e.g. Visakhapatnam"
+              value={villageName}
+              onChange={e => setVillageName(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6 }}>District</label>
+            <input
+              type="text"
+              placeholder="e.g. Visakhapatnam"
+              value={district}
+              onChange={e => setDistrict(e.target.value)}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontSize: 14, outline: "none", boxSizing: "border-box" }}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={saving}
+          style={{
+            padding: "12px 24px",
+            borderRadius: THEME.radius.sm,
+            background: THEME.colors.primary,
+            color: "white",
+            border: "none",
+            fontSize: 14,
+            fontWeight: 800,
+            cursor: saving ? "not-allowed" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            boxShadow: THEME.shadow.sm,
+          }}
+        >
+          {saving ? "Saving to DB..." : "💾 Save Account Details"}
+        </button>
+      </form>
 
       <div style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.md, padding: 24, marginBottom: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2404,8 +2578,8 @@ const ProfileView = ({ t, session, profile, notify }) => {
       <div style={{ background: THEME.colors.successBg, border: `1px solid #86efac`, borderRadius: THEME.radius.md, padding: 24 }}>
         <h4 style={{ fontSize: 15, fontWeight: 700, color: THEME.colors.success, margin: "0 0 8px" }}>{t('account_security')}</h4>
         <p style={{ fontSize: 14, color: "#15803d", margin: 0, lineHeight: 1.6 }}>
-          {t('auth_desc')} <strong>{session.user.app_metadata.provider === 'google' ? t('auth_method_google') : t('auth_method_email')}</strong>.
-          {session.user.app_metadata.provider === 'google' ? ` ${t('auth_no_password')}` : ''}
+          {t('auth_desc')} <strong>{session.user?.app_metadata?.provider === 'google' ? t('auth_method_google') : t('auth_method_email')}</strong>.
+          {session.user?.app_metadata?.provider === 'google' ? ` ${t('auth_no_password')}` : ''}
         </p>
       </div>
     </div>
@@ -4484,12 +4658,67 @@ const AdminPasswordResetTab = ({ t, notify, session }) => {
 };
 
 import { SignInPage } from "./components/ui/sign-in";
+import { auth as firebaseAuth, googleProvider, signInWithPopup } from "./firebase";
 
 const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
   const [isSignUp, setIsSignUp] = useState(initialMode === 'signup');
   const [isForgot, setIsForgot] = useState(initialMode === 'forgot');
   const [loading, setLoading] = useState(false);
   const [authMessage, setAuthMessage] = useState(null);
+
+  const handleGoogleAuth = async () => {
+    setLoading(true);
+    setAuthMessage(null);
+    try {
+      const result = await signInWithPopup(firebaseAuth, googleProvider);
+      const user = result.user;
+      const email = user.email;
+      const displayName = user.displayName || (email ? email.split('@')[0] : "User");
+
+      let sessionData = null;
+      try {
+        const res = await supabase.auth.signInWithPassword({
+          email,
+          password: `GAuth_${user.uid.slice(0, 12)}`,
+        });
+        if (res.data?.session) sessionData = res.data.session;
+      } catch (e) { /* ignore */ }
+
+      if (!sessionData) {
+        try {
+          const signUpRes = await supabase.auth.signUp({
+            email,
+            password: `GAuth_${user.uid.slice(0, 12)}`,
+            options: { data: { full_name: displayName } }
+          });
+          if (signUpRes.data?.session) sessionData = signUpRes.data.session;
+        } catch (e) { /* ignore */ }
+      }
+
+      const activeUser = sessionData?.user || { id: user.uid, email, app_metadata: { provider: 'google' } };
+
+      const { data: existingProf } = await supabase.from("profiles").select("*").eq("id", activeUser.id).maybeSingle();
+      if (!existingProf) {
+        await supabase.from("profiles").insert([{
+          id: activeUser.id,
+          name: displayName,
+          role: 'citizen',
+        }]);
+      } else if (!existingProf.name) {
+        await supabase.from("profiles").update({ name: displayName }).eq("id", activeUser.id);
+      }
+
+      onLogin(sessionData || { user: activeUser });
+      notify(`Signed in with Google as ${displayName} ✅`);
+    } catch (err) {
+      console.error("Google auth error:", err);
+      const msg = err?.message || "Google Sign-In failed.";
+      setAuthMessage({ type: "error", text: msg });
+      notify(msg, "err");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -4619,6 +4848,7 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
         description={isSignUp ? t('create_account') : t('login_to_account')}
         heroImageSrc="/images/login-abstract-background.jpg"
         onSignIn={handleAuth}
+        onGoogleSignIn={handleGoogleAuth}
         onSwitchMode={() => { setIsSignUp(prev => !prev); setAuthMessage(null); }}
         onForgotPassword={() => { setIsForgot(true); setAuthMessage(null); }}
         isSignUp={isSignUp}
@@ -5500,13 +5730,28 @@ export default function App() {
 
   const fetchProfile = async (id) => {
     try {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
+      // Check for pilot token or role parameter in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const pilotToken = urlParams.get("pilot_token");
+      const roleParam = urlParams.get("role");
+      let isPilotAdmin = Boolean(pilotToken || roleParam === 'sarpanch');
+
+      if (pilotToken) {
+        try {
+          const decoded = JSON.parse(decodeURIComponent(atob(pilotToken)));
+          if (decoded && (decoded.role === 'sarpanch' || decoded.role === 'admin')) {
+            isPilotAdmin = true;
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      let { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
       
       if (error && error.code === 'PGRST116') {
-        // Profile not found, let's create it manually (self-healing)
+        const initialRole = isPilotAdmin ? 'village_admin' : 'citizen';
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
-          .insert([{ id }])
+          .insert([{ id, role: initialRole }])
           .select()
           .single();
           
@@ -5518,6 +5763,7 @@ export default function App() {
         setProfile(newProfile);
         setRole(newProfile.role);
         setShowProfileSetup(true);
+        if (isPilotAdmin) navigate("profile");
         return;
       } else if (error) {
         notify("Select error: " + error.message, "err");
@@ -5525,10 +5771,21 @@ export default function App() {
       }
 
       if (data) { 
+        if (isPilotAdmin && data.role !== 'village_admin' && data.role !== 'super_admin') {
+          // Elevate role to Sarpanch/Village Admin in Supabase DB
+          await supabase.from("profiles").update({ role: 'village_admin' }).eq("id", id);
+          data.role = 'village_admin';
+          notify("🎉 You have been logged in as Village Admin (Sarpanch)!");
+        }
+
         setProfile(data); 
         setRole(data.role); 
         if (!data.name) setShowProfileSetup(true);
-        if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) navigate("admin");
+        if (isPilotAdmin) {
+          navigate("profile");
+        } else if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
+          navigate("admin");
+        }
       }
     } catch (err) {
       console.error("Profile fetch error:", err);
