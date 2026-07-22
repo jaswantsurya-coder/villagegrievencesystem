@@ -2414,6 +2414,10 @@ const ProfileView = ({ t, session, profile, notify }) => {
         village_id: targetVillageId,
       };
 
+      if (profile?.role === 'village_admin' || localStorage.getItem('pilot_role') === 'sarpanch') {
+        updateData.role = 'village_admin';
+      }
+
       const { error: profErr } = await supabase
         .from("profiles")
         .update(updateData)
