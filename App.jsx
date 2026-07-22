@@ -5589,10 +5589,19 @@ export default function App() {
   const [initialLoginMode, setInitialLoginMode] = useState(null);
   const [inviteToken, setInviteToken] = useState(null);
 
-  // ─── URL path-based routing for auth pages ─────────────────────────────────
+  // ─── URL path-based routing for auth pages & pilot links ───────────────────
   useEffect(() => {
     const path = window.location.pathname;
-    if (path === '/forgot-password') {
+    const params = new URLSearchParams(window.location.search);
+    const pilotToken = params.get('pilot_token');
+    const roleParam = params.get('role');
+
+    if (pilotToken || roleParam === 'sarpanch') {
+      localStorage.setItem('pilot_role', 'sarpanch');
+      if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
+      setShowLogin(true);
+      setInitialLoginMode('login');
+    } else if (path === '/forgot-password') {
       setShowLogin(true);
       setInitialLoginMode('forgot');
     } else if (path === '/login') {
@@ -5602,7 +5611,6 @@ export default function App() {
       setInviteToken(token);
       setView("invite");
     }
-    // /reset-password is handled by recovery detection in the auth state change listener
   }, []);
 
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
@@ -5877,6 +5885,7 @@ export default function App() {
             setSession(s); 
             setShowLogin(false);
             setInitialLoginMode(null);
+            if (s?.user?.id) fetchProfile(s.user.id);
             window.history.replaceState({}, document.title, '/');
           }} 
         />
