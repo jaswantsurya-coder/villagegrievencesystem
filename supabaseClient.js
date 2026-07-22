@@ -29,3 +29,36 @@ export const supabaseConfigError = !supabaseUrl || !supabaseKey
   : '';
 
 export const supabase = supabaseConfigError ? null : createClient(supabaseUrl, supabaseKey);
+
+/**
+ * Ensures an ID is in valid UUID format (8-4-4-4-12 hex syntax) for PostgreSQL.
+ * If the input is already a valid UUID, returns it unchanged.
+ * If it's a non-UUID string (e.g. Firebase UID "wcj7Y1dT74SZS2rbTrrwU4S85pY2"),
+ * converts it deterministically into a valid UUID string.
+ */
+export function ensureUUID(idStr) {
+  if (!idStr) return idStr;
+  const str = String(idStr).trim();
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(str)) return str;
+
+  // Generate 32-char hex string deterministically from input string
+  let rawHex = '';
+  for (let i = 0; i < str.length; i++) {
+    rawHex += str.charCodeAt(i).toString(16).padStart(2, '0');
+  }
+
+  let hash1 = 5381, hash2 = 52711;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash1 = (hash1 * 33) ^ ch;
+    hash2 = (hash2 * 33) ^ ch;
+  }
+  const h1Hex = (hash1 >>> 0).toString(16).padStart(8, '0');
+  const h2Hex = (hash2 >>> 0).toString(16).padStart(8, '0');
+
+  let combined = (rawHex + h1Hex + h2Hex + '00000000000000000000000000000000').toLowerCase().replace(/[^0-9a-f]/g, '0');
+  combined = combined.slice(0, 32);
+
+  return `${combined.slice(0, 8)}-${combined.slice(8, 12)}-4${combined.slice(13, 16)}-a${combined.slice(17, 20)}-${combined.slice(20, 32)}`;
+}

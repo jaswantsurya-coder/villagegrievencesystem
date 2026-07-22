@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { supabase, supabaseConfigError } from "./supabaseClient";
+import { supabase, supabaseConfigError, ensureUUID } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
 import './i18n'; // initialize i18n
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
@@ -2329,15 +2329,15 @@ const GalleryView = ({ t, session }) => {
   );
 };
 
-const ProfileView = ({ t, session, profile, notify }) => {
+const ProfileView = ({ t, session, profile, notify, navigate, fetchProfile }) => {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pushStatus, setPushStatus] = useState(Notification?.permission || "default");
 
   // Editable Profile State
-  const [fullName, setFullName] = useState(profile?.name || "");
-  const [phone, setPhone] = useState(profile?.phone || "");
+  const [fullName, setFullName] = useState(profile?.name || session?.user?.user_metadata?.full_name || "");
+  const [phone, setPhone] = useState(profile?.phone || session?.user?.phone || "");
   const [villageName, setVillageName] = useState("");
   const [district, setDistrict] = useState("");
 
@@ -2412,23 +2412,24 @@ const ProfileView = ({ t, session, profile, notify }) => {
         }
       }
 
-      // Update Profile record in Supabase with village_admin role
+      // Upsert Profile record in Supabase
+      const targetId = ensureUUID(session.user.id);
       const updateData = {
+        id: targetId,
         name: fullName.trim(),
         phone: phone.trim(),
         village_id: targetVillageId,
-        role: 'village_admin',
+        role: profile?.role || 'citizen',
       };
 
       const { error: profErr } = await supabase
         .from("profiles")
-        .update(updateData)
-        .eq("id", session.user.id);
+        .upsert([updateData]);
 
       if (profErr) throw profErr;
 
-      notify("Account details updated! Welcome to Village Admin Dashboard! 🎉");
-      setTimeout(() => navigate("admin"), 800);
+      notify("Account details updated successfully! 🎉");
+      if (fetchProfile) fetchProfile(session.user.id);
     } catch (err) {
       console.error("Save profile error:", err);
       notify(err?.message || "Failed to update profile", "err");
@@ -2447,9 +2448,9 @@ const ProfileView = ({ t, session, profile, notify }) => {
     }
   };
 
-  if (!session || !profile) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
+  if (!session) return <div style={{ textAlign: "center", padding: 40, fontFamily: THEME.font, fontWeight: 700 }}>{t("login_to_track")}</div>;
 
-  const isAdminRole = ['village_admin', 'sarpanch', 'super_admin'].includes(profile.role) || true;
+  const isAdminRole = profile?.role && ['village_admin', 'sarpanch', 'super_admin'].includes(profile.role);
 
   return (
     <div style={{ background: THEME.colors.surface, padding: "40px 32px", borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, maxWidth: 680, margin: "0 auto", fontFamily: THEME.font }}>
@@ -2481,11 +2482,11 @@ const ProfileView = ({ t, session, profile, notify }) => {
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 20 }}>
           <div style={{ width: 72, height: 72, background: THEME.colors.primaryLight, color: THEME.colors.primary, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, flexShrink: 0 }}>
-            {fullName?.charAt(0).toUpperCase() || profile.name?.charAt(0).toUpperCase() || "U"}
+            {fullName?.charAt(0).toUpperCase() || profile?.name?.charAt(0).toUpperCase() || session?.user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
           <div>
-            <h3 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{fullName || profile.name || "User"}</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: 0, fontSize: 14 }}>{session.user?.email || phone || profile.phone}</p>
+            <h3 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{fullName || profile?.name || session?.user?.email || "User"}</h3>
+            <p style={{ color: THEME.colors.textMuted, margin: 0, fontSize: 14 }}>{session?.user?.email || phone || profile?.phone}</p>
           </div>
         </div>
       </div>
@@ -4717,20 +4718,28 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
         } catch (e) { /* ignore */ }
       }
 
-      const activeUser = sessionData?.user || { id: user.uid, email, app_metadata: { provider: 'google' } };
+      const activeRawId = sessionData?.user?.id || user.uid;
+      const activeUserId = ensureUUID(activeRawId);
+      const activeUser = sessionData?.user
+        ? { ...sessionData.user, id: activeUserId }
+        : { id: activeUserId, email, app_metadata: { provider: 'google' } };
 
-      const { data: existingProf } = await supabase.from("profiles").select("*").eq("id", activeUser.id).maybeSingle();
+      const { data: existingProf } = await supabase.from("profiles").select("*").eq("id", activeUserId).maybeSingle();
       if (!existingProf) {
         await supabase.from("profiles").insert([{
-          id: activeUser.id,
+          id: activeUserId,
           name: displayName,
           role: 'citizen',
         }]);
       } else if (!existingProf.name) {
-        await supabase.from("profiles").update({ name: displayName }).eq("id", activeUser.id);
+        await supabase.from("profiles").update({ name: displayName }).eq("id", activeUserId);
       }
 
-      onLogin(sessionData || { user: activeUser });
+      const finalSession = sessionData
+        ? { ...sessionData, user: activeUser }
+        : { user: activeUser };
+
+      onLogin(finalSession);
       notify(`Signed in with Google as ${displayName} ✅`);
     } catch (err) {
       console.error("Google auth error:", err);
@@ -5684,6 +5693,9 @@ export default function App() {
     const hasRecoveryHash = detectRecoveryFromHash();
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) {
+        session.user.id = ensureUUID(session.user.id);
+      }
       setSession(session);
       if (hasRecoveryHash && session) {
         // Recovery session detected from hash — show the reset form
@@ -5696,6 +5708,9 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('[Auth] onAuthStateChange:', event);
+      if (session?.user?.id) {
+        session.user.id = ensureUUID(session.user.id);
+      }
       setSession(session);
       if (event === "PASSWORD_RECOVERY") {
         // Supabase detected the recovery session — show reset password form
@@ -5775,6 +5790,9 @@ export default function App() {
 
   const fetchProfile = async (id) => {
     try {
+      const targetId = ensureUUID(id);
+      if (!targetId) return;
+
       // Check for pilot token or role parameter in URL
       const urlParams = new URLSearchParams(window.location.search);
       const pilotToken = urlParams.get("pilot_token");
@@ -5790,13 +5808,13 @@ export default function App() {
         } catch (e) { /* ignore */ }
       }
 
-      let { data, error } = await supabase.from("profiles").select("*").eq("id", id).single();
+      let { data, error } = await supabase.from("profiles").select("*").eq("id", targetId).single();
       
       if (error && error.code === 'PGRST116') {
         const initialRole = isPilotAdmin ? 'village_admin' : 'citizen';
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
-          .insert([{ id, role: initialRole }])
+          .insert([{ id: targetId, role: initialRole }])
           .select()
           .single();
           
@@ -5818,7 +5836,7 @@ export default function App() {
       if (data) { 
         if (isPilotAdmin && data.role !== 'village_admin' && data.role !== 'super_admin') {
           // Elevate role to Sarpanch/Village Admin in Supabase DB
-          await supabase.from("profiles").update({ role: 'village_admin' }).eq("id", id);
+          await supabase.from("profiles").update({ role: 'village_admin' }).eq("id", targetId);
           data.role = 'village_admin';
           notify("🎉 You have been logged in as Village Admin (Sarpanch)!");
         }
@@ -5844,7 +5862,7 @@ export default function App() {
     navigate("home");
   };
 
-  const shared = { t, notify, navigate, session, profile, role, i18n, theme, setTheme };
+  const shared = { t, notify, navigate, session, profile, role, i18n, theme, setTheme, fetchProfile };
 
   const renderContent = () => {
     switch(view) {
@@ -5872,7 +5890,9 @@ export default function App() {
             </div>
             <button
               onClick={async () => {
-                const { data } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
+                const targetId = ensureUUID(session?.user?.id);
+                if (!targetId) return;
+                const { data } = await supabase.from("profiles").select("*").eq("id", targetId).single();
                 if (data) { setRole(data.role); setProfile(data); if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) navigate("admin"); }
               }}
               style={{ background: "linear-gradient(135deg,#047857,#10B981)", color: "#fff", border: "none", padding: "12px 28px", borderRadius: 8, fontWeight: 800, fontSize: 14, cursor: "pointer" }}
