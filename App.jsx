@@ -6136,7 +6136,17 @@ export default function App() {
       }
     } catch (err) {
       console.error("Profile fetch/sync error:", err);
-      notify("Profile fetch error: " + err.message, "err");
+      let authId = "none";
+      let authEmail = "none";
+      try {
+        const { data: { user: aUser } } = await supabase.auth.getUser();
+        if (aUser) {
+          authId = aUser.id;
+          authEmail = aUser.email;
+        }
+      } catch (e) {}
+      const debugMsg = `Profile fetch error: ${err.message} (targetId: ${targetId}, authId: ${authId}, email: ${authEmail})`;
+      notify(debugMsg, "err");
     }
   };
 
