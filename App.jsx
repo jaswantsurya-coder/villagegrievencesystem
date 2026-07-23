@@ -4411,84 +4411,56 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
     setLoading(true);
     try {
       const targetId = ensureUUID(session.user.id);
-      let claimedSuccess = false;
 
-      // 1. Try claim_pilot_token RPC if a pilot token is active
-      if (activePilotToken) {
+      // Step 6: Village Resolution
+      let resolvedVillageId = null;
+      if (villageName.trim()) {
         try {
-          const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
-            p_token: activePilotToken,
-            p_user_id: targetId,
-            p_name: name.trim(),
-            p_mobile: mobile.trim(),
-            p_gender: gender,
-            p_dob: dob || null,
-            p_age: age ? parseInt(age, 10) : null,
-            p_address: address.trim(),
+          const { data: vId, error: vErr } = await supabase.rpc("resolve_village", {
             p_village_name: villageName.trim(),
-            p_district: pDistrict.trim(),
-            p_state: pState.trim(),
-            p_mandal: pMandal.trim() || null,
+            p_district: pDistrict.trim() || 'Unknown',
+            p_state: pState.trim() || 'Unknown',
+            p_sarpanch_id: targetId
           });
-
-          const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
-          if (!rpcErr && parsedRes?.success) {
-            claimedSuccess = true;
-          } else if (parsedRes?.error) {
-            console.warn("claim_pilot_token returned error:", parsedRes.error);
+          if (!vErr && vId) {
+            resolvedVillageId = vId;
           }
         } catch (e) {
-          console.warn("RPC claim_pilot_token notice:", e);
+          console.warn("Error resolving village:", e);
         }
       }
 
-      // 2. Fallback / direct upsert if not claimed via RPC
-      if (!claimedSuccess) {
-        // Step 6: Village Resolution
-        let resolvedVillageId = null;
-        if (villageName.trim()) {
-          try {
-            const { data: vId, error: vErr } = await supabase.rpc("resolve_village", {
-              p_village_name: villageName.trim(),
-              p_district: pDistrict.trim() || 'Unknown',
-              p_state: pState.trim() || 'Unknown',
-              p_sarpanch_id: targetId
-            });
-            if (!vErr && vId) {
-              resolvedVillageId = vId;
-            }
-          } catch (e) {
-            console.warn("Error resolving village:", e);
-          }
-        }
+      // Step 7: Save Profile (Single Database Transaction / Update)
+      const updatePayload = {
+        name: name.trim(),
+        phone: mobile.trim(),
+        mobile: mobile.trim(),
+        gender,
+        dob: dob || null,
+        age: age ? parseInt(age, 10) : null,
+        address: address.trim(),
+        state: pState.trim() || null,
+        district: pDistrict.trim() || null,
+        mandal: pMandal.trim() || null,
+        village_name: villageName.trim() || null,
+        village_id: resolvedVillageId,
+        is_onboarded: true,
+        last_active: new Date().toISOString(),
+      };
 
-        const updatePayload = {
-          id: targetId,
-          name: name.trim(),
-          phone: mobile.trim(),
-          mobile: mobile.trim(),
-          gender,
-          dob: dob || null,
-          age: age ? parseInt(age, 10) : null,
-          address: address.trim(),
-          state: pState.trim() || null,
-          district: pDistrict.trim() || null,
-          mandal: pMandal.trim() || null,
-          village_name: villageName.trim() || null,
-          village_id: resolvedVillageId,
-          is_onboarded: true,
-          last_active: new Date().toISOString(),
-        };
-
-        if (isPilotFlow) {
-          updatePayload.role = 'village_admin';
-        }
-
-        const { error } = await supabase.from("profiles").upsert([updatePayload]);
-        if (error) throw error;
+      if (isPilotFlow) {
+        updatePayload.role = 'village_admin';
       }
 
-      // 3. Step 8: Verify Database
+      // Perform direct update to preserve existing fields like super_admin_id / organization_id
+      const { error: updateErr } = await supabase
+        .from("profiles")
+        .update(updatePayload)
+        .eq("id", targetId);
+
+      if (updateErr) throw updateErr;
+
+      // Step 8: Verify Database
       const { data: verifiedProfile, error: verifyErr } = await supabase
         .from("profiles")
         .select("*")
@@ -4532,6 +4504,7 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
       setLoading(false);
     }
   };
+
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, backdropFilter: "blur(6px)", padding: 16 }}>
