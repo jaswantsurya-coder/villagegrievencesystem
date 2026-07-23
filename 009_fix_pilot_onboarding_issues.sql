@@ -73,11 +73,11 @@ BEGIN
   END IF;
 
   -- Generate unique join code
-  v_join_code := upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8));
+  v_join_code := upper(substring(md5(random()::text), 1, 8));
 
   -- Ensure join code uniqueness
   WHILE EXISTS (SELECT 1 FROM public.villages WHERE join_code = v_join_code) LOOP
-    v_join_code := upper(substr(encode(gen_random_bytes(4), 'hex'), 1, 8));
+    v_join_code := upper(substring(md5(random()::text), 1, 8));
   END LOOP;
 
   -- Create new village with proper casing

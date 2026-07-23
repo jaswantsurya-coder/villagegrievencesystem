@@ -4479,7 +4479,6 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
 
       if (isPilotFlow) {
         if (!verifiedProfile.super_admin_id) missingFields.push("Admin ID");
-        if (!verifiedProfile.organization_id) missingFields.push("Organization ID");
         if (!verifiedProfile.pilot_id) missingFields.push("Pilot Campaign ID");
       }
 
