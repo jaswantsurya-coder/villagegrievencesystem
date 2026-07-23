@@ -2342,6 +2342,12 @@ const ProfileView = ({ t, session, profile, notify, navigate, fetchProfile }) =>
   const [district, setDistrict] = useState("");
 
   useEffect(() => {
+    if (session?.user?.id && fetchProfile) {
+      fetchProfile(session.user.id);
+    }
+  }, []);
+
+  useEffect(() => {
     if (session) fetchStats();
     if (profile) {
       setFullName(profile.name || "");
@@ -4428,12 +4434,8 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
           const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
           if (!rpcErr && parsedRes?.success) {
             claimedSuccess = true;
-            localStorage.removeItem('pilot_token');
-            localStorage.removeItem('pilot_role');
-            notify("🎉 Pilot Onboarding Complete! Welcome to your Sarpanch Portal. ✅");
           } else if (parsedRes?.error) {
             console.warn("claim_pilot_token returned error:", parsedRes.error);
-            notify("Token error: " + parsedRes.error + ". Saving profile directly.", "err");
           }
         } catch (e) {
           console.warn("RPC claim_pilot_token notice:", e);
@@ -4442,6 +4444,24 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
 
       // 2. Fallback / direct upsert if not claimed via RPC
       if (!claimedSuccess) {
+        // Step 6: Village Resolution
+        let resolvedVillageId = null;
+        if (villageName.trim()) {
+          try {
+            const { data: vId, error: vErr } = await supabase.rpc("resolve_village", {
+              p_village_name: villageName.trim(),
+              p_district: pDistrict.trim() || 'Unknown',
+              p_state: pState.trim() || 'Unknown',
+              p_sarpanch_id: targetId
+            });
+            if (!vErr && vId) {
+              resolvedVillageId = vId;
+            }
+          } catch (e) {
+            console.warn("Error resolving village:", e);
+          }
+        }
+
         const updatePayload = {
           id: targetId,
           name: name.trim(),
@@ -4455,6 +4475,7 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
           district: pDistrict.trim() || null,
           mandal: pMandal.trim() || null,
           village_name: villageName.trim() || null,
+          village_id: resolvedVillageId,
           is_onboarded: true,
           last_active: new Date().toISOString(),
         };
@@ -4465,12 +4486,44 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
 
         const { error } = await supabase.from("profiles").upsert([updatePayload]);
         if (error) throw error;
-        
-        localStorage.removeItem('pilot_token');
-        localStorage.removeItem('pilot_role');
-        notify(isPilotFlow ? "🎉 Sarpanch account activated! ✅" : "Profile onboarding complete! ✅");
       }
 
+      // 3. Step 8: Verify Database
+      const { data: verifiedProfile, error: verifyErr } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", targetId)
+        .maybeSingle();
+
+      if (verifyErr || !verifiedProfile) {
+        throw new Error("Failed to verify profile record in database.");
+      }
+
+      const missingFields = [];
+      if (!verifiedProfile.name) missingFields.push("Name");
+      if (!verifiedProfile.phone) missingFields.push("Phone");
+      if (!verifiedProfile.village_id) missingFields.push("Village ID");
+      
+      const targetRole = isPilotFlow ? 'village_admin' : verifiedProfile.role;
+      if (verifiedProfile.role !== targetRole) {
+        missingFields.push(`Role (${targetRole})`);
+      }
+
+      if (isPilotFlow) {
+        if (!verifiedProfile.super_admin_id) missingFields.push("Admin ID");
+        if (!verifiedProfile.organization_id) missingFields.push("Organization ID");
+        if (!verifiedProfile.pilot_id) missingFields.push("Pilot Campaign ID");
+      }
+
+      if (missingFields.length > 0) {
+        setLoading(false);
+        return notify(`Database verification failed. Missing fields: ${missingFields.join(", ")}. Please try saving again.`, "err");
+      }
+
+      // Step 9: Refresh Application State
+      localStorage.removeItem('pilot_token');
+      localStorage.removeItem('pilot_role');
+      notify(isPilotFlow ? "🎉 Sarpanch account activated! ✅" : "Profile onboarding complete! ✅");
       onComplete();
     } catch (err) {
       console.error("Onboarding error:", err);
@@ -5977,94 +6030,91 @@ export default function App() {
       const targetId = ensureUUID(id);
       if (!targetId) return;
 
-      // Check for pilot token or role parameter in URL AND localStorage
+      // URL and localStorage pilot configuration detection
       const urlParams = new URLSearchParams(window.location.search);
       const pilotToken = urlParams.get("pilot_token");
       const roleParam = urlParams.get("role");
       const lsPilotToken = localStorage.getItem('pilot_token');
       const lsPilotRole = localStorage.getItem('pilot_role');
-      let isPilotAdmin = Boolean(pilotToken || roleParam === 'sarpanch' || lsPilotToken || lsPilotRole === 'sarpanch');
+      let activePilotToken = pilotToken || lsPilotToken;
+      let isPilotAdmin = Boolean(activePilotToken || roleParam === 'sarpanch' || lsPilotRole === 'sarpanch');
 
-      if (pilotToken) {
-        try {
-          const decoded = JSON.parse(decodeURIComponent(atob(pilotToken)));
-          if (decoded && (decoded.role === 'sarpanch' || decoded.role === 'admin')) {
-            isPilotAdmin = true;
-          }
-        } catch (e) { /* ignore */ }
+      if (pilotToken && !lsPilotToken) {
+        localStorage.setItem('pilot_token', pilotToken);
+      }
+      if ((roleParam === 'sarpanch' || pilotToken) && !lsPilotRole) {
+        localStorage.setItem('pilot_role', 'sarpanch');
       }
 
-      let { data, error } = await supabase.from("profiles").select("*").eq("id", targetId).single();
-      
-      if (error && error.code === 'PGRST116') {
-        const initialRole = isPilotAdmin ? 'village_admin' : 'citizen';
+      // Step 3: Profile Check
+      let { data, error } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
+
+      if (!data) {
+        // Create Empty Profile with Role = citizen (temporary)
+        const { data: newProfile, error: insertError } = await supabase
+          .from("profiles")
+          .insert([{ id: targetId, role: 'citizen', is_onboarded: false }])
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+        data = newProfile;
+      }
+
+      // Step 4: Pilot Token Claim (immediately after login)
+      if (activePilotToken) {
         try {
-          const { data: newProfile, error: insertError } = await supabase
-            .from("profiles")
-            .insert([{ id: targetId, role: initialRole }])
-            .select()
-            .single();
-            
-          if (insertError) {
-            console.warn("Profile insert notice:", insertError.message);
-            const fallbackProfile = { id: targetId, role: initialRole, name: "" };
-            setProfile(fallbackProfile);
-            setRole(initialRole);
-            if (isPilotAdmin) navigate("profile");
-            return;
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
+            p_token: activePilotToken,
+            p_user_id: targetId,
+          });
+
+          const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+          if (!rpcErr && parsedRes?.success) {
+            // Re-fetch profile to load the newly updated DB-level roles and IDs
+            const { data: updatedProf, error: fetchErr } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", targetId)
+              .maybeSingle();
+
+            if (!fetchErr && updatedProf) {
+              data = updatedProf;
+            }
           }
-          
-          setProfile(newProfile);
-          setRole(newProfile.role);
-          setShowProfileSetup(true);
-          if (isPilotAdmin) navigate("profile");
-          return;
         } catch (e) {
-          const fallbackProfile = { id: targetId, role: initialRole, name: "" };
-          setProfile(fallbackProfile);
-          setRole(initialRole);
-          return;
+          console.warn("Direct RPC claim_pilot_token failure on fetchProfile:", e);
         }
-      } else if (error) {
-        console.warn("Profile select notice:", error.message);
-        const initialRole = isPilotAdmin ? 'village_admin' : 'citizen';
-        const fallbackProfile = { id: targetId, role: initialRole, name: "" };
-        setProfile(fallbackProfile);
-        setRole(initialRole);
-        return;
       }
 
-      if (data) { 
-        if (isPilotAdmin && data.role !== 'village_admin' && data.role !== 'super_admin') {
-          // Elevate role to Sarpanch/Village Admin in Supabase DB
-          await supabase.from("profiles").update({ role: 'village_admin' }).eq("id", targetId);
-          data.role = 'village_admin';
-        }
+      // Set profile and role from database
+      setProfile(data);
+      setRole(data.role);
 
-        setProfile(data); 
-        setRole(data.role); 
+      // Step 5: Profile Setup & Step 10: Admin Access Check
+      const isDbAdmin = data.role === 'village_admin';
+      const isCurrentlyPilot = isPilotAdmin || isDbAdmin;
 
-        // Pilot flow: check if onboarding is complete
-        if (isPilotAdmin) {
-          const needsOnboarding = !data.name || !data.is_onboarded || !data.village_id;
-          if (needsOnboarding) {
-            setShowProfileSetup(true);
-          } else {
-            // Fully onboarded pilot — go to admin dashboard
-            localStorage.removeItem('pilot_token');
-            localStorage.removeItem('pilot_role');
-            navigate("admin");
-          }
+      if (isCurrentlyPilot) {
+        const isFullyOnboarded = Boolean(data.name && data.is_onboarded && data.village_id);
+        if (!isFullyOnboarded) {
+          setShowProfileSetup(true);
         } else {
-          // Non-pilot flow
-          if (!data.name) setShowProfileSetup(true);
-          if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
-            navigate("admin");
-          }
+          // Fully onboarded: remove localStorage tokens & route to admin
+          localStorage.removeItem('pilot_token');
+          localStorage.removeItem('pilot_role');
+          navigate("admin");
+        }
+      } else {
+        // Non-pilot citizen onboarding
+        if (!data.name) {
+          setShowProfileSetup(true);
+        } else if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
+          navigate("admin");
         }
       }
     } catch (err) {
-      console.error("Profile fetch error:", err);
+      console.error("Profile fetch/sync error:", err);
       notify("Profile fetch error: " + err.message, "err");
     }
   };
