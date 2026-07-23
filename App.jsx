@@ -4386,6 +4386,10 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
   const [dob, setDob] = useState(profile?.dob || "");
   const [age, setAge] = useState(profile?.age || "");
   const [address, setAddress] = useState(profile?.address || "");
+  const [pState, setPState] = useState(profile?.state || "");
+  const [pDistrict, setPDistrict] = useState(profile?.district || "");
+  const [pMandal, setPMandal] = useState(profile?.mandal || "");
+  const [villageName, setVillageName] = useState(profile?.village_name || "");
   const [loading, setLoading] = useState(false);
 
   const activePilotToken = localStorage.getItem('pilot_token') || new URLSearchParams(window.location.search).get('pilot_token');
@@ -4393,7 +4397,10 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
 
   const handleSave = async () => {
     if (!name.trim()) return notify("Please enter your full name", "err");
-    if (isPilotFlow && !mobile.trim()) return notify("Please enter your mobile number for pilot verification", "err");
+    if (isPilotFlow && !mobile.trim()) return notify("Please enter your mobile number", "err");
+    if (isPilotFlow && !villageName.trim()) return notify("Please enter your village name", "err");
+    if (isPilotFlow && !pState.trim()) return notify("Please enter your state", "err");
+    if (isPilotFlow && !pDistrict.trim()) return notify("Please enter your district", "err");
 
     setLoading(true);
     try {
@@ -4412,13 +4419,21 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
             p_dob: dob || null,
             p_age: age ? parseInt(age, 10) : null,
             p_address: address.trim(),
+            p_village_name: villageName.trim(),
+            p_district: pDistrict.trim(),
+            p_state: pState.trim(),
+            p_mandal: pMandal.trim() || null,
           });
 
-          if (!rpcErr && rpcRes?.success) {
+          const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+          if (!rpcErr && parsedRes?.success) {
             claimedSuccess = true;
             localStorage.removeItem('pilot_token');
             localStorage.removeItem('pilot_role');
             notify("🎉 Pilot Onboarding Complete! Welcome to your Sarpanch Portal. ✅");
+          } else if (parsedRes?.error) {
+            console.warn("claim_pilot_token returned error:", parsedRes.error);
+            notify("Token error: " + parsedRes.error + ". Saving profile directly.", "err");
           }
         } catch (e) {
           console.warn("RPC claim_pilot_token notice:", e);
@@ -4430,11 +4445,16 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
         const updatePayload = {
           id: targetId,
           name: name.trim(),
+          phone: mobile.trim(),
           mobile: mobile.trim(),
           gender,
           dob: dob || null,
           age: age ? parseInt(age, 10) : null,
           address: address.trim(),
+          state: pState.trim() || null,
+          district: pDistrict.trim() || null,
+          mandal: pMandal.trim() || null,
+          village_name: villageName.trim() || null,
           is_onboarded: true,
           last_active: new Date().toISOString(),
         };
@@ -4448,7 +4468,7 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
         
         localStorage.removeItem('pilot_token');
         localStorage.removeItem('pilot_role');
-        notify("Profile onboarding complete! ✅");
+        notify(isPilotFlow ? "🎉 Sarpanch account activated! ✅" : "Profile onboarding complete! ✅");
       }
 
       onComplete();
@@ -4500,6 +4520,40 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
             onChange={e => setMobile(e.target.value)} 
           />
 
+          {isPilotFlow && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input 
+                  label="State *" 
+                  placeholder="e.g. Telangana" 
+                  value={pState} 
+                  onChange={e => setPState(e.target.value)} 
+                />
+                <Input 
+                  label="District *" 
+                  placeholder="e.g. Rangareddy" 
+                  value={pDistrict} 
+                  onChange={e => setPDistrict(e.target.value)} 
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input 
+                  label="Mandal / Block" 
+                  placeholder="e.g. Shamshabad" 
+                  value={pMandal} 
+                  onChange={e => setPMandal(e.target.value)} 
+                />
+                <Input 
+                  label="Village Name *" 
+                  placeholder="e.g. Nandigama" 
+                  value={villageName} 
+                  onChange={e => setVillageName(e.target.value)} 
+                />
+              </div>
+            </>
+          )}
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div>
               <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: THEME.colors.textMuted, marginBottom: 4 }}>Gender</label>
@@ -4531,7 +4585,7 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
           />
 
           <Input 
-            label="Address / Panchayat Details" 
+            label={isPilotFlow ? "Address / Panchayat Details" : "Address (Optional)"}
             placeholder="e.g. Main Street, Gram Panchayat House" 
             value={address} 
             onChange={e => setAddress(e.target.value)} 
@@ -4850,11 +4904,13 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
         : { id: activeUserId, email, app_metadata: { provider: 'google' } };
 
       const { data: existingProf } = await supabase.from("profiles").select("*").eq("id", activeUserId).maybeSingle();
+      const pilotActive = Boolean(localStorage.getItem('pilot_token') || localStorage.getItem('pilot_role') === 'sarpanch');
+      const profileRole = pilotActive ? 'village_admin' : 'citizen';
       if (!existingProf) {
         await supabase.from("profiles").insert([{
           id: activeUserId,
           name: displayName,
-          role: 'citizen',
+          role: profileRole,
         }]);
       } else if (!existingProf.name) {
         await supabase.from("profiles").update({ name: displayName }).eq("id", activeUserId);
@@ -5930,11 +5986,13 @@ export default function App() {
       const targetId = ensureUUID(id);
       if (!targetId) return;
 
-      // Check for pilot token or role parameter in URL
+      // Check for pilot token or role parameter in URL AND localStorage
       const urlParams = new URLSearchParams(window.location.search);
       const pilotToken = urlParams.get("pilot_token");
       const roleParam = urlParams.get("role");
-      let isPilotAdmin = Boolean(pilotToken || roleParam === 'sarpanch');
+      const lsPilotToken = localStorage.getItem('pilot_token');
+      const lsPilotRole = localStorage.getItem('pilot_role');
+      let isPilotAdmin = Boolean(pilotToken || roleParam === 'sarpanch' || lsPilotToken || lsPilotRole === 'sarpanch');
 
       if (pilotToken) {
         try {
@@ -5990,16 +6048,28 @@ export default function App() {
           // Elevate role to Sarpanch/Village Admin in Supabase DB
           await supabase.from("profiles").update({ role: 'village_admin' }).eq("id", targetId);
           data.role = 'village_admin';
-          notify("🎉 You have been logged in as Village Admin (Sarpanch)!");
         }
 
         setProfile(data); 
         setRole(data.role); 
-        if (!data.name) setShowProfileSetup(true);
+
+        // Pilot flow: check if onboarding is complete
         if (isPilotAdmin) {
-          navigate("profile");
-        } else if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
-          navigate("admin");
+          const needsOnboarding = !data.name || !data.is_onboarded || !data.village_id;
+          if (needsOnboarding) {
+            setShowProfileSetup(true);
+          } else {
+            // Fully onboarded pilot — go to admin dashboard
+            localStorage.removeItem('pilot_token');
+            localStorage.removeItem('pilot_role');
+            navigate("admin");
+          }
+        } else {
+          // Non-pilot flow
+          if (!data.name) setShowProfileSetup(true);
+          if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
+            navigate("admin");
+          }
         }
       }
     } catch (err) {
@@ -6067,13 +6137,17 @@ export default function App() {
           t={t}
           notify={notify}
           initialMode={initialLoginMode}
-          onClose={() => { setShowLogin(false); setInitialLoginMode(null); window.history.replaceState({}, document.title, '/'); }} 
+          onClose={() => { setShowLogin(false); setInitialLoginMode(null); if (!localStorage.getItem('pilot_token')) window.history.replaceState({}, document.title, '/'); }} 
           onLogin={(s) => { 
             setSession(s); 
             setShowLogin(false);
             setInitialLoginMode(null);
+            // fetchProfile FIRST — it checks localStorage for pilot context
             if (s?.user?.id) fetchProfile(s.user.id);
-            window.history.replaceState({}, document.title, '/');
+            // Only clear URL if NOT in pilot flow (pilot flow needs profile setup first)
+            if (!localStorage.getItem('pilot_token') && !localStorage.getItem('pilot_role')) {
+              window.history.replaceState({}, document.title, '/');
+            }
           }} 
         />
       )}
