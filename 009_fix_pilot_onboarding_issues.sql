@@ -135,6 +135,9 @@ DECLARE
   v_role      TEXT;
   v_profile   public.profiles;
 BEGIN
+  -- Bypass profile role checks for this transaction (allows escalating role via token)
+  PERFORM set_config('app.bypass_profile_role_check', 'true', true);
+
   -- 1. Look up the token
   SELECT * INTO v_token
   FROM public.pilot_tokens
