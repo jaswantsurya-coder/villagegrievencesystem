@@ -1327,7 +1327,7 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
       )}
     </nav>
     {toast && (
-      <div style={{ position: "fixed", top: 84, right: 24, zIndex: 1000, background: toast.type === "err" ? THEME.colors.dangerBg : THEME.colors.successBg, color: toast.type === "err" ? THEME.colors.danger : THEME.colors.success, padding: "14px 20px", borderRadius: THEME.radius.md, border: `1px solid ${toast.type === "err" ? '#fca5a5' : '#86efac'}`, fontWeight: 600, boxShadow: THEME.shadow.md, display: "flex", alignItems: "center", gap: 10 }}>{toast.type === "err" ? "⚠️" : "✅"} {toast.msg}</div>
+      <div style={{ position: "fixed", top: 84, right: 24, zIndex: 2000, background: toast.type === "err" ? THEME.colors.dangerBg : THEME.colors.successBg, color: toast.type === "err" ? THEME.colors.danger : THEME.colors.success, padding: "14px 20px", borderRadius: THEME.radius.md, border: `1px solid ${toast.type === "err" ? '#fca5a5' : '#86efac'}`, fontWeight: 600, boxShadow: THEME.shadow.md, display: "flex", alignItems: "center", gap: 10 }}>{toast.type === "err" ? "⚠️" : "✅"} {toast.msg}</div>
     )}
     <div className="shell-content" style={{ maxWidth: 1040, margin: "0 auto", padding: "32px 24px" }}>{children}</div>
   </div>
