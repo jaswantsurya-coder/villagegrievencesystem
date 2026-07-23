@@ -5835,35 +5835,8 @@ export default function App() {
   
   const navigate = (v) => { setView(v); };
 
-  if (supabaseConfigError) {
-    return (
-      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: THEME.colors.background, color: THEME.colors.text, fontFamily: THEME.font }}>
-        <div style={{ maxWidth: 560, width: "100%", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, padding: 28, boxShadow: THEME.shadow.md }}>
-          <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 900 }}>Supabase configuration missing</h1>
-          <p style={{ margin: "0 0 16px", color: THEME.colors.textMuted, lineHeight: 1.6 }}>{supabaseConfigError}</p>
-          <div style={{ padding: 14, borderRadius: THEME.radius.sm, background: THEME.colors.background, color: THEME.colors.text, fontSize: 13, fontWeight: 700 }}>
-            Add these in Vercel Project Settings - Environment Variables, then redeploy:
-            <div style={{ marginTop: 8, fontFamily: "monospace" }}>VITE_SUPABASE_URL</div>
-            <div style={{ fontFamily: "monospace" }}>VITE_SUPABASE_ANON_KEY</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!authInitialized) {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: THEME.colors.background, fontFamily: THEME.font, gap: 16 }}>
-        <div style={{ width: 40, height: 40, border: `4px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
-        <span style={{ color: THEME.colors.textMuted, fontSize: 14, fontWeight: 600 }}>Loading GramSeva...</span>
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  // NOTE: No early returns here — all hooks must run unconditionally (React Rules of Hooks)
+  // Loading and config-error states are handled in the final return below
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -6248,6 +6221,27 @@ export default function App() {
   };
 
   return (
+    <>
+      {supabaseConfigError ? (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, background: THEME.colors.background, color: THEME.colors.text, fontFamily: THEME.font }}>
+          <div style={{ maxWidth: 560, width: "100%", background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: THEME.radius.lg, padding: 28, boxShadow: THEME.shadow.md }}>
+            <h1 style={{ margin: "0 0 10px", fontSize: 24, fontWeight: 900 }}>Supabase configuration missing</h1>
+            <p style={{ margin: "0 0 16px", color: THEME.colors.textMuted, lineHeight: 1.6 }}>{supabaseConfigError}</p>
+            <div style={{ padding: 14, borderRadius: THEME.radius.sm, background: THEME.colors.background, color: THEME.colors.text, fontSize: 13, fontWeight: 700 }}>
+              Add these in Vercel Project Settings - Environment Variables, then redeploy:
+              <div style={{ marginTop: 8, fontFamily: "monospace" }}>VITE_SUPABASE_URL</div>
+              <div style={{ fontFamily: "monospace" }}>VITE_SUPABASE_ANON_KEY</div>
+            </div>
+          </div>
+        </div>
+      ) : !authInitialized ? (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: THEME.colors.background, fontFamily: THEME.font, gap: 16 }}>
+          <div style={{ width: 40, height: 40, border: `4px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+          <span style={{ color: THEME.colors.textMuted, fontSize: 14, fontWeight: 600 }}>Loading GramSeva...</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : (
+
     <Shell {...shared} view={view} toast={toast} handleLogout={handleLogout} setShowLogin={setShowLogin}>
       {renderContent()}
       
@@ -6303,9 +6297,11 @@ export default function App() {
           onComplete={() => {
             setShowProfileSetup(false);
             if (session?.user?.id) fetchProfile(session.user.id);
-          }} 
+          }}
         />
       )}
     </Shell>
+      )}
+    </>
   );
 }
