@@ -5826,38 +5826,7 @@ export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [initialLoginMode, setInitialLoginMode] = useState(null);
   const [inviteToken, setInviteToken] = useState(null);
-
-  // ─── URL path-based routing for auth pages & pilot links ───────────────────
-  useEffect(() => {
-    const path = window.location.pathname;
-    const params = new URLSearchParams(window.location.search);
-    const pilotToken = params.get('pilot_token');
-    const roleParam = params.get('role');
-
-    if (path.startsWith('/pilot/')) {
-      const token = path.split('/pilot/')[1];
-      if (token) {
-        localStorage.setItem('pilot_token', token);
-        localStorage.setItem('pilot_role', 'sarpanch');
-        setShowLogin(true);
-        setInitialLoginMode('login');
-      }
-    } else if (pilotToken || roleParam === 'sarpanch') {
-      localStorage.setItem('pilot_role', 'sarpanch');
-      if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
-      setShowLogin(true);
-      setInitialLoginMode('login');
-    } else if (path === '/forgot-password') {
-      setShowLogin(true);
-      setInitialLoginMode('forgot');
-    } else if (path === '/login') {
-      setShowLogin(true);
-    } else if (path.startsWith('/invite/')) {
-      const token = path.split('/invite/')[1];
-      setInviteToken(token);
-      setView("invite");
-    }
-  }, []);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
   const notify = (msg, type = "ok") => { setToast({ msg, type }); setTimeout(() => setToast(null), 3000); };
   
@@ -5879,74 +5848,124 @@ export default function App() {
     );
   }
 
+  if (!authInitialized) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: THEME.colors.background, fontFamily: THEME.font, gap: 16 }}>
+        <div style={{ width: 40, height: 40, border: `4px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        <span style={{ color: THEME.colors.textMuted, fontSize: 14, fontWeight: 600 }}>Loading GramSeva...</span>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
   useEffect(() => {
-    // ─── Detect Supabase recovery hash fragments on page load ──────────────
-    // When users click the password reset link from email, Supabase redirects
-    // back with tokens in the URL hash: #access_token=...&type=recovery
-    // We need to detect this BEFORE calling getSession to ensure the recovery
-    // session is properly established.
-    const detectRecoveryFromHash = () => {
+    let hasInitialized = false;
+
+    const path = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+    const pilotToken = params.get('pilot_token');
+    const roleParam = params.get('role');
+    const hasRecoveryHash = (() => {
       try {
-        const hash = window.location.hash;
-        if (hash && hash.includes('type=recovery')) {
-          // The hash contains a recovery token — Supabase JS client will
-          // automatically parse it. We just need to flag it so we show
-          // the reset form once onAuthStateChange fires.
-          console.log('[Auth] Recovery hash detected in URL');
-          return true;
-        }
-        // Also check for recovery in URL search params (some Supabase versions)
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('type') === 'recovery') {
-          console.log('[Auth] Recovery param detected in URL');
-          return true;
-        }
-      } catch (e) {
-        console.error('[Auth] Error detecting recovery hash:', e);
-      }
+        const hash = window.location.hash || '';
+        if (hash.includes('type=recovery')) return true;
+        if (params.get('type') === 'recovery') return true;
+        if (params.get('code') && hash.includes('recovery')) return true;
+        if (path === '/reset-password' && (hash || params.get('code'))) return true;
+      } catch (e) {}
       return false;
+    })();
+
+    const handleInitialSession = async (s) => {
+      if (hasInitialized) return;
+      hasInitialized = true;
+
+      if (s?.user?.id) {
+        s.user.id = ensureUUID(s.user.id);
+      }
+      setSession(s);
+
+      if (s) {
+        await fetchProfile(s.user.id);
+        if (hasRecoveryHash) {
+          setShowResetPassword(true);
+        }
+        if (path.startsWith('/pilot/') || pilotToken || roleParam === 'sarpanch') {
+          window.history.replaceState({}, document.title, '/');
+        }
+      } else {
+        setProfile(null);
+        setRole(null);
+        setShowProfileSetup(false);
+
+        if (path.startsWith('/pilot/')) {
+          const token = path.split('/pilot/')[1];
+          if (token) {
+            localStorage.setItem('pilot_token', token);
+            localStorage.setItem('pilot_role', 'sarpanch');
+            setShowLogin(true);
+            setInitialLoginMode('login');
+          }
+        } else if (pilotToken || roleParam === 'sarpanch') {
+          localStorage.setItem('pilot_role', 'sarpanch');
+          if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
+          setShowLogin(true);
+          setInitialLoginMode('login');
+        } else if (path === '/forgot-password') {
+          setShowLogin(true);
+          setInitialLoginMode('forgot');
+        } else if (path === '/login') {
+          setShowLogin(true);
+        } else if (path.startsWith('/invite/')) {
+          const token = path.split('/invite/')[1];
+          setInviteToken(token);
+          setView("invite");
+        }
+      }
+      setAuthInitialized(true);
     };
 
-    const hasRecoveryHash = detectRecoveryFromHash();
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.id) {
-        session.user.id = ensureUUID(session.user.id);
-      }
-      setSession(session);
-      if (hasRecoveryHash && session) {
-        // Recovery session detected from hash — show the reset form
-        console.log('[Auth] Recovery session established from hash, showing reset form');
-        setShowResetPassword(true);
-      } else if (session) {
-        fetchProfile(session.user.id);
-      }
+    // 1. Fetch current session immediately
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      handleInitialSession(initialSession);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Auth] onAuthStateChange:', event);
-      if (session?.user?.id) {
-        session.user.id = ensureUUID(session.user.id);
+    // 2. Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sessionState) => {
+      console.log('[Auth] onAuthStateChange:', event, sessionState?.user?.email);
+      
+      let s = sessionState;
+      if (s?.user?.id) {
+        s.user.id = ensureUUID(s.user.id);
       }
-      setSession(session);
+
+      if (!hasInitialized) {
+        handleInitialSession(s);
+        return;
+      }
+
+      setSession(s);
       if (event === "PASSWORD_RECOVERY") {
-        // Supabase detected the recovery session — show reset password form
         setShowResetPassword(true);
-        // Close login modal if open
         setShowLogin(false);
-      } else if (session) {
-        fetchProfile(session.user.id);
+      } else if (s) {
+        await fetchProfile(s.user.id);
       } else {
         setProfile(null);
         setRole(null);
         setShowProfileSetup(false);
       }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
