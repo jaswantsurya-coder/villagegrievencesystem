@@ -4931,13 +4931,23 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
       const displayName = user.displayName || (email ? email.split('@')[0] : "User");
 
       let sessionData = null;
+      let lastAuthError = null;
+
       try {
         const res = await supabase.auth.signInWithPassword({
           email,
           password: `GAuth_${user.uid.slice(0, 12)}`,
         });
-        if (res.data?.session) sessionData = res.data.session;
-      } catch (e) { /* ignore */ }
+        if (res.data?.session) {
+          sessionData = res.data.session;
+        } else if (res.error) {
+          lastAuthError = res.error;
+          console.error("Supabase Google Auth Signin Error:", res.error);
+        }
+      } catch (e) {
+        lastAuthError = e;
+        console.error("Supabase Google Auth Signin Exception:", e);
+      }
 
       if (!sessionData) {
         try {
@@ -4946,15 +4956,26 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
             password: `GAuth_${user.uid.slice(0, 12)}`,
             options: { data: { full_name: displayName } }
           });
-          if (signUpRes.data?.session) sessionData = signUpRes.data.session;
-        } catch (e) { /* ignore */ }
+          if (signUpRes.data?.session) {
+            sessionData = signUpRes.data.session;
+          } else if (signUpRes.error) {
+            lastAuthError = signUpRes.error;
+            console.error("Supabase Google Auth Signup Error:", signUpRes.error);
+          }
+        } catch (e) {
+          lastAuthError = e;
+          console.error("Supabase Google Auth Signup Exception:", e);
+        }
       }
 
-      const activeRawId = sessionData?.user?.id || user.uid;
-      const activeUserId = ensureUUID(activeRawId);
-      const activeUser = sessionData?.user
-        ? { ...sessionData.user, id: activeUserId }
-        : { id: activeUserId, email, app_metadata: { provider: 'google' } };
+      if (!sessionData) {
+        throw new Error(
+          `Supabase Auth failed: ${lastAuthError?.message || "Email confirmation may be required on this Supabase project."}`
+        );
+      }
+
+      const activeUserId = sessionData.user.id;
+      const activeUser = sessionData.user;
 
       const { data: existingProf } = await supabase.from("profiles").select("*").eq("id", activeUserId).maybeSingle();
       const pilotActive = Boolean(localStorage.getItem('pilot_token') || localStorage.getItem('pilot_role') === 'sarpanch');
