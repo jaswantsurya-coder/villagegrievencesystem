@@ -4448,10 +4448,6 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
         last_active: new Date().toISOString(),
       };
 
-      if (isPilotFlow) {
-        updatePayload.role = 'village_admin';
-      }
-
       // Perform direct update to preserve existing fields like super_admin_id / organization_id
       const { error: updateErr } = await supabase
         .from("profiles")
