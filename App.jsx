@@ -4439,14 +4439,17 @@ const ProfileSetupModal = ({ session, profile, onComplete, notify, t }) => {
         dob: dob || null,
         age: age ? parseInt(age, 10) : null,
         address: address.trim(),
-        state: pState.trim() || null,
-        district: pDistrict.trim() || null,
-        mandal: pMandal.trim() || null,
-        village_name: villageName.trim() || null,
-        village_id: resolvedVillageId,
         is_onboarded: true,
         last_active: new Date().toISOString(),
       };
+
+      if (resolvedVillageId) {
+        updatePayload.village_id = resolvedVillageId;
+        updatePayload.state = pState.trim() || null;
+        updatePayload.district = pDistrict.trim() || null;
+        updatePayload.mandal = pMandal.trim() || null;
+        updatePayload.village_name = villageName.trim() || null;
+      }
 
       // Perform direct update to preserve existing fields like super_admin_id / organization_id
       const { error: updateErr } = await supabase
@@ -5886,52 +5889,57 @@ export default function App() {
     })();
 
     const handleInitialSession = async (s) => {
-      if (hasInitialized) return;
-      hasInitialized = true;
+      try {
+        if (hasInitialized) return;
+        hasInitialized = true;
 
-      if (s?.user?.id) {
-        s.user.id = ensureUUID(s.user.id);
-      }
-      setSession(s);
-
-      if (s) {
-        await fetchProfile(s.user.id);
-        if (hasRecoveryHash) {
-          setShowResetPassword(true);
+        if (s?.user?.id) {
+          s.user.id = ensureUUID(s.user.id);
         }
-        if (path.startsWith('/pilot/') || pilotToken || roleParam === 'sarpanch') {
-          window.history.replaceState({}, document.title, '/');
-        }
-      } else {
-        setProfile(null);
-        setRole(null);
-        setShowProfileSetup(false);
+        setSession(s);
 
-        if (path.startsWith('/pilot/')) {
-          const token = path.split('/pilot/')[1];
-          if (token) {
-            localStorage.setItem('pilot_token', token);
+        if (s) {
+          await fetchProfile(s.user.id);
+          if (hasRecoveryHash) {
+            setShowResetPassword(true);
+          }
+          if (path.startsWith('/pilot/') || pilotToken || roleParam === 'sarpanch') {
+            window.history.replaceState({}, document.title, '/');
+          }
+        } else {
+          setProfile(null);
+          setRole(null);
+          setShowProfileSetup(false);
+
+          if (path.startsWith('/pilot/')) {
+            const token = path.split('/pilot/')[1];
+            if (token) {
+              localStorage.setItem('pilot_token', token);
+              localStorage.setItem('pilot_role', 'sarpanch');
+              setShowLogin(true);
+              setInitialLoginMode('login');
+            }
+          } else if (pilotToken || roleParam === 'sarpanch') {
             localStorage.setItem('pilot_role', 'sarpanch');
+            if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
             setShowLogin(true);
             setInitialLoginMode('login');
+          } else if (path === '/forgot-password') {
+            setShowLogin(true);
+            setInitialLoginMode('forgot');
+          } else if (path === '/login') {
+            setShowLogin(true);
+          } else if (path.startsWith('/invite/')) {
+            const token = path.split('/invite/')[1];
+            setInviteToken(token);
+            setView("invite");
           }
-        } else if (pilotToken || roleParam === 'sarpanch') {
-          localStorage.setItem('pilot_role', 'sarpanch');
-          if (pilotToken) localStorage.setItem('pilot_token', pilotToken);
-          setShowLogin(true);
-          setInitialLoginMode('login');
-        } else if (path === '/forgot-password') {
-          setShowLogin(true);
-          setInitialLoginMode('forgot');
-        } else if (path === '/login') {
-          setShowLogin(true);
-        } else if (path.startsWith('/invite/')) {
-          const token = path.split('/invite/')[1];
-          setInviteToken(token);
-          setView("invite");
         }
+      } catch (err) {
+        console.error("Initial session handling error:", err);
+      } finally {
+        setAuthInitialized(true);
       }
-      setAuthInitialized(true);
     };
 
     // 1. Fetch current session immediately
@@ -6156,7 +6164,7 @@ export default function App() {
           authEmail = aUser.email;
         }
       } catch (e) {}
-      const debugMsg = `Profile fetch error: ${err.message} (targetId: ${targetId}, authId: ${authId}, email: ${authEmail})`;
+      const debugMsg = `Profile fetch error: ${err.message} (id: ${id}, authId: ${authId}, email: ${authEmail})`;
       notify(debugMsg, "err");
     }
   };
