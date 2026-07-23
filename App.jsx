@@ -6039,8 +6039,33 @@ export default function App() {
       // Step 3: Profile Check
       let { data, error } = await supabase.from("profiles").select("*").eq("id", targetId).maybeSingle();
 
+      // Step 3/4: If profile does not exist and this is a pilot flow, claim the token first to create the profile directly as a village_admin
+      if (!data && activePilotToken) {
+        try {
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
+            p_token: activePilotToken,
+            p_user_id: targetId,
+          });
+
+          const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+          if (!rpcErr && parsedRes?.success) {
+            const { data: updatedProf, error: fetchErr } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", targetId)
+              .maybeSingle();
+
+            if (!fetchErr && updatedProf) {
+              data = updatedProf;
+            }
+          }
+        } catch (e) {
+          console.warn("Direct RPC claim_pilot_token failure on initial fetchProfile:", e);
+        }
+      }
+
+      // Step 3 (Fallback): If profile still does not exist, create it as a standard citizen profile
       if (!data) {
-        // Create Empty Profile with Role = citizen (temporary)
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
           .insert([{ id: targetId, role: 'citizen', is_onboarded: false }])
@@ -6051,8 +6076,8 @@ export default function App() {
         data = newProfile;
       }
 
-      // Step 4: Pilot Token Claim (immediately after login)
-      if (activePilotToken) {
+      // Step 4 (If profile existed but token wasn't claimed yet): Run token claim to elevate role
+      if (data && activePilotToken && data.role !== 'village_admin') {
         try {
           const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
             p_token: activePilotToken,
@@ -6061,7 +6086,6 @@ export default function App() {
 
           const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
           if (!rpcErr && parsedRes?.success) {
-            // Re-fetch profile to load the newly updated DB-level roles and IDs
             const { data: updatedProf, error: fetchErr } = await supabase
               .from("profiles")
               .select("*")
