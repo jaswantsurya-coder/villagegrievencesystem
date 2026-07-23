@@ -105,6 +105,9 @@ GRANT EXECUTE ON FUNCTION public.resolve_village TO authenticated, service_role;
 --    increments token usage -> returns success.
 -- ────────────────────────────────────────────────────────────────────────────
 
+-- Drop the old overloaded signature to prevent PostgreSQL duplicate function errors
+DROP FUNCTION IF EXISTS public.claim_pilot_token(TEXT, UUID, TEXT, TEXT, TEXT, DATE, INT, TEXT, TEXT, TEXT, BIGINT);
+
 CREATE OR REPLACE FUNCTION public.claim_pilot_token(
   p_token          TEXT,
   p_user_id        UUID,
