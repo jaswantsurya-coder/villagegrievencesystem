@@ -2343,7 +2343,7 @@ const ProfileView = ({ t, session, profile, notify, navigate, fetchProfile }) =>
 
   useEffect(() => {
     if (session?.user?.id && fetchProfile) {
-      fetchProfile(session.user.id);
+      fetchProfile(session.user.id, true);
     }
   }, []);
 
@@ -2438,7 +2438,7 @@ const ProfileView = ({ t, session, profile, notify, navigate, fetchProfile }) =>
       } else {
         notify("Account details updated successfully! 🎉");
       }
-      if (fetchProfile) fetchProfile(session.user.id);
+      if (fetchProfile) fetchProfile(session.user.id, true);
     } catch (err) {
       console.error("Save profile error:", err);
       notify(err?.message || "Failed to update profile", "err");
@@ -6014,7 +6014,7 @@ export default function App() {
     }
   }, [session]);
 
-  const fetchProfile = async (id) => {
+  const fetchProfile = async (id, skipRedirect = false) => {
     try {
       const targetId = ensureUUID(id);
       if (!targetId) return;
@@ -6112,7 +6112,7 @@ export default function App() {
         const isFullyOnboarded = Boolean(data.name && data.is_onboarded && data.village_id);
         if (!isFullyOnboarded) {
           setShowProfileSetup(true);
-        } else {
+        } else if (!skipRedirect) {
           // Fully onboarded: remove localStorage tokens & route to admin
           localStorage.removeItem('pilot_token');
           localStorage.removeItem('pilot_role');
@@ -6122,7 +6122,7 @@ export default function App() {
         // Non-pilot citizen onboarding
         if (!data.name) {
           setShowProfileSetup(true);
-        } else if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role)) {
+        } else if (['village_admin', 'district_admin', 'super_admin', 'officer'].includes(data.role) && !skipRedirect) {
           navigate("admin");
         }
       }
