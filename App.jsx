@@ -5974,7 +5974,18 @@ export default function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    // 3. Safety timeout: Force init after 3 seconds if getSession/authChange hangs
+    const safetyTimeout = setTimeout(() => {
+      if (!hasInitialized) {
+        console.warn("[Auth] Safety timeout triggered. Forcing auth initialization.");
+        handleInitialSession(null);
+      }
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   // ─── Offline queue auto-sync ──────────────────────────────────────────────
