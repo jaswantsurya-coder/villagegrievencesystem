@@ -5943,36 +5943,53 @@ export default function App() {
     };
 
     // 1. Fetch current session immediately
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      handleInitialSession(initialSession);
-    });
+    if (supabase && supabase.auth) {
+      supabase.auth.getSession()
+        .then(({ data: { session: initialSession } }) => {
+          handleInitialSession(initialSession);
+        })
+        .catch(err => {
+          console.error("[Auth] getSession error:", err);
+          handleInitialSession(null);
+        });
+    } else {
+      handleInitialSession(null);
+    }
 
     // 2. Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, sessionState) => {
-      console.log('[Auth] onAuthStateChange:', event, sessionState?.user?.email);
-      
-      let s = sessionState;
-      if (s?.user?.id) {
-        s.user.id = ensureUUID(s.user.id);
-      }
+    let subscription = null;
+    if (supabase && supabase.auth) {
+      try {
+        const { data: res } = supabase.auth.onAuthStateChange(async (event, sessionState) => {
+          console.log('[Auth] onAuthStateChange:', event, sessionState?.user?.email);
+          
+          let s = sessionState;
+          if (s?.user?.id) {
+            s.user.id = ensureUUID(s.user.id);
+          }
 
-      if (!hasInitialized) {
-        handleInitialSession(s);
-        return;
-      }
+          if (!hasInitialized) {
+            handleInitialSession(s);
+            return;
+          }
 
-      setSession(s);
-      if (event === "PASSWORD_RECOVERY") {
-        setShowResetPassword(true);
-        setShowLogin(false);
-      } else if (s) {
-        await fetchProfile(s.user.id);
-      } else {
-        setProfile(null);
-        setRole(null);
-        setShowProfileSetup(false);
+          setSession(s);
+          if (event === "PASSWORD_RECOVERY") {
+            setShowResetPassword(true);
+            setShowLogin(false);
+          } else if (s) {
+            await fetchProfile(s.user.id);
+          } else {
+            setProfile(null);
+            setRole(null);
+            setShowProfileSetup(false);
+          }
+        });
+        subscription = res?.subscription;
+      } catch (e) {
+        console.error("[Auth] onAuthStateChange subscription error:", e);
       }
-    });
+    }
 
     // 3. Safety timeout: Force init after 3 seconds if getSession/authChange hangs
     const safetyTimeout = setTimeout(() => {
@@ -5983,7 +6000,7 @@ export default function App() {
     }, 3000);
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) subscription.unsubscribe();
       clearTimeout(safetyTimeout);
     };
   }, []);
