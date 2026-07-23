@@ -1729,18 +1729,21 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     setUploadError("");
     const ticketId = generateTicketId();
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
-    
-    const complaint = {
-      citizen_id: session.user.id,
-      ticket_id: ticketId,
-      title: form.title,
-      description: fullDescription,
-      category: form.categories.join(", "),
-      location: form.location,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      status: "Open",
-      related_scheme: form.relatedScheme || null
+
+    // Build the RPC payload — svc_create_complaint is the only way to insert
+    // (direct INSERT on complaints is revoked for authenticated users)
+    const rpcPayload = {
+      p_title: form.title,
+      p_description: fullDescription,
+      p_category: form.categories.join(", "),
+      p_location: form.location || null,
+      p_latitude: form.latitude || null,
+      p_longitude: form.longitude || null,
+      p_photos: '[]',
+      p_photo_urls: '[]',
+      p_is_anonymous: false,
+      p_anonymous_phone: null,
+      p_village_id: null,
     };
 
     // Check if offline - photos need Storage, so only text-only drafts can be queued.
@@ -1753,26 +1756,28 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
         return;
       }
 
-      addToOfflineQueue({ ...complaint, photo_urls: [] });
+      // Save offline draft with the RPC payload structure
+      addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
       notify(`${t('saved_offline')} Ticket: ${ticketId}`);
       navigate("track");
       setLoading(false);
       return;
     }
 
-    let complaintWithPhotos = { ...complaint, photo_urls: [] };
     try {
-      const photoUrls = await uploadEvidencePhotos(photos, { ticketId, userId: session.user.id });
-      complaintWithPhotos = { ...complaint, photo_urls: photoUrls };
-      const { error } = await supabase.from("complaints").insert([complaintWithPhotos]);
+      const photoUrls = photos.length > 0 ? await uploadEvidencePhotos(photos, { ticketId, userId: session.user.id }) : [];
+      const finalPayload = { ...rpcPayload, p_photo_urls: JSON.stringify(photoUrls) };
+      const { data: rpcRes, error } = await supabase.rpc("svc_create_complaint", finalPayload);
       if (error) throw error;
-      notify(`${t("success_submit")} Ticket: ${ticketId}`);
+      const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+      if (!parsed?.success) throw new Error(parsed?.error || 'Complaint submission failed');
+      notify(`${t("success_submit")} Ticket: ${parsed.ticket_id || ticketId}`);
       navigate("track");
     } catch (err) {
-      const message = err?.message || "Failed to submit grievance with photo evidence.";
+      const message = err?.message || "Failed to submit grievance.";
       setUploadError(message);
       if (photos.length === 0) {
-        addToOfflineQueue(complaintWithPhotos);
+        addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
         notify(`${t('saved_offline')} Ticket: ${ticketId}`);
         navigate("track");
       } else {
@@ -5990,16 +5995,46 @@ export default function App() {
       let lastError = null;
 
       for (const complaint of queue) {
-        const { _offlineId, ...data } = complaint;
-        // Make sure citizen_id matches the current authenticated session user
-        data.citizen_id = session.user.id;
-        
-        const { error } = await supabase.from("complaints").insert([data]);
-        if (!error) {
-          syncedIds.push(_offlineId);
-        } else {
-          lastError = error;
-          console.error("Offline sync error details:", error);
+        const { _offlineId, _rpcPayload, ticketId: _tid, ...data } = complaint;
+        try {
+          let rpcRes, error;
+          if (_rpcPayload) {
+            // New format: stored as RPC payload, submit via svc_create_complaint
+            ({ data: rpcRes, error } = await supabase.rpc("svc_create_complaint", data));
+            if (!error) {
+              const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+              if (!parsed?.success) error = new Error(parsed?.error || 'Sync failed');
+            }
+          } else {
+            // Legacy format: old direct-insert shape — attempt RPC with mapped fields
+            const legacyPayload = {
+              p_title: data.title || 'Offline Draft',
+              p_description: data.description || '',
+              p_category: data.category || 'Other',
+              p_location: data.location || null,
+              p_latitude: data.latitude || null,
+              p_longitude: data.longitude || null,
+              p_photos: '[]',
+              p_photo_urls: JSON.stringify(data.photo_urls || []),
+              p_is_anonymous: false,
+              p_anonymous_phone: null,
+              p_village_id: null,
+            };
+            ({ data: rpcRes, error } = await supabase.rpc("svc_create_complaint", legacyPayload));
+            if (!error) {
+              const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+              if (!parsed?.success) error = new Error(parsed?.error || 'Sync failed');
+            }
+          }
+          if (!error) {
+            syncedIds.push(_offlineId);
+          } else {
+            lastError = error;
+            console.error("Offline sync error details:", error);
+          }
+        } catch (e) {
+          lastError = e;
+          console.error("Offline sync exception:", e);
         }
       }
 
