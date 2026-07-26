@@ -24,10 +24,14 @@ AS $$
 DECLARE
   v_caller_role TEXT;
 BEGIN
-  -- Verify caller is an admin or officer
-  SELECT role INTO v_caller_role
-  FROM public.profiles
-  WHERE id = auth.uid();
+  -- Verify caller is an admin or officer, or service_role
+  IF current_setting('request.jwt.claims', true)::jsonb->>'role' = 'service_role' THEN
+    v_caller_role := 'super_admin';
+  ELSE
+    SELECT role INTO v_caller_role
+    FROM public.profiles
+    WHERE id = auth.uid();
+  END IF;
 
   IF v_caller_role IS NULL OR v_caller_role NOT IN ('village_admin', 'district_admin', 'super_admin', 'officer') THEN
     RAISE EXCEPTION 'Access denied: insufficient permissions to view citizen emails';
