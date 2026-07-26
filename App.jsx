@@ -12,7 +12,8 @@ import {
   BarChart3, Building2, CalendarDays, Camera, Check, CircleAlert, CircleDot,
   Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
   GraduationCap, HeartPulse, Images, Leaf, MapPin, Menu, Moon, Search,
-  ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap
+  ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap,
+  User, Mail, Phone, Home, Hash, Clock, Shield, UserCheck, AlertTriangle, Filter
 } from 'lucide-react';
 
 const EVIDENCE_BUCKET = "complaint-evidence";
@@ -4054,6 +4055,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   const [tab, setTab] = useState("complaints"); // complaints | analytics | users | admin_reset
   const [lightbox, setLightbox] = useState(null);
   const [upvoteCounts, setUpvoteCounts] = useState({});
+  const [citizenEmails, setCitizenEmails] = useState({}); // { citizen_id: email }
 
   // Filters
   const [fStatus, setFStatus] = useState("");
@@ -4093,10 +4095,34 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
   const fetchData = async () => {
     setLoading(true);
-    let query = supabase.from("complaints").select("*").order("created_at", { ascending: false });
+    let query = supabase.from("complaints").select(`
+      *,
+      citizen:profiles!citizen_id (
+        id, name, phone, avatar_url, village_id,
+        village:villages!village_id ( village_name )
+      )
+    `).order("created_at", { ascending: false });
     if (t_officer) query = query.eq("assigned_officer_id", session.user.id);
     const { data } = await query;
-    if (data) setList(data);
+    if (data) {
+      setList(data);
+      // Batch-fetch citizen emails via secure RPC
+      const uniqueCitizenIds = [...new Set(data.map(c => c.citizen_id).filter(Boolean))];
+      if (uniqueCitizenIds.length > 0) {
+        try {
+          const { data: emailData } = await supabase.rpc("get_citizen_emails", {
+            p_citizen_ids: uniqueCitizenIds
+          });
+          if (emailData) {
+            const emailMap = {};
+            emailData.forEach(e => { emailMap[e.citizen_id] = e.email; });
+            setCitizenEmails(emailMap);
+          }
+        } catch (e) {
+          console.warn("Could not fetch citizen emails:", e);
+        }
+      }
+    }
     setLoading(false);
   };
 
@@ -4132,11 +4158,21 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       if (fUrgent && it.priority !== "Urgent") return false;
       if (fSearch) {
         const q = fSearch.toLowerCase();
-        if (!(it.title || "").toLowerCase().includes(q) && !(it.ticket_id || "").toLowerCase().includes(q) && !(it.location || "").toLowerCase().includes(q)) return false;
+        const cEmail = (citizenEmails[it.citizen_id] || "").toLowerCase();
+        const cName = (it.citizen?.name || "").toLowerCase();
+        const cPhone = (it.citizen?.phone || "").toLowerCase();
+        if (
+          !(it.title || "").toLowerCase().includes(q) &&
+          !(it.ticket_id || "").toLowerCase().includes(q) &&
+          !(it.location || "").toLowerCase().includes(q) &&
+          !cName.includes(q) &&
+          !cEmail.includes(q) &&
+          !cPhone.includes(q)
+        ) return false;
       }
       return true;
     }).sort((a, b) => (upvoteCounts[b.id] || 0) - (upvoteCounts[a.id] || 0));
-  }, [list, fStatus, fCategory, fSearch, fUrgent, upvoteCounts]);
+  }, [list, fStatus, fCategory, fSearch, fUrgent, upvoteCounts, citizenEmails]);
 
   const getPhotos = (item) => getComplaintPhotoUrls(item);
 
@@ -4254,6 +4290,12 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                         </div>
                         <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{it.title}</h3>
                         <div style={{ fontSize: 12, color: THEME.colors.textMuted }}>📍 {it.location}</div>
+                        {it.citizen?.name && (
+                          <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 700, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                            <User size={12} strokeWidth={2.5} /> {it.citizen.name}
+                            {it.citizen?.village?.village_name && <span style={{ color: THEME.colors.textMuted, fontWeight: 600 }}> • {it.citizen.village.village_name}</span>}
+                          </div>
+                        )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
                           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                             <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
@@ -4276,24 +4318,137 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   <button onClick={() => setSelected(null)} style={{ background: THEME.colors.background, border: "none", width: 30, height: 30, borderRadius: THEME.radius.sm, fontSize: 14, cursor: "pointer", fontWeight: 700, color: THEME.colors.textMuted }}>✕</button>
                 </div>
 
-                {/* Title & ID */}
-                <div style={{ padding: "14px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, marginBottom: 16, border: `1px solid ${THEME.colors.border}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>
-                    #{selected.ticket_id || selected.id.slice(0, 8)}
-                    {selected.is_anonymous && <span style={{ marginLeft: 8, background: THEME.colors.textMuted, color: "#fff", padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🕵️ {t('anonymous_badge') || "Anonymous"}</span>}
-                    {selected.related_scheme && <span style={{ marginLeft: 8, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🏛 {selected.related_scheme}</span>}
+                {/* ─── Section 1: Citizen Information ─── */}
+                {selected.citizen && !selected.is_anonymous && (() => {
+                  const citizen = selected.citizen;
+                  const email = citizenEmails[selected.citizen_id] || "";
+                  const villageName = citizen.village?.village_name || "";
+                  const initials = (citizen.name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+                  const submittedDate = new Date(selected.created_at);
+                  const dateStr = submittedDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+                  const timeStr = submittedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                  return (
+                    <div className="citizen-info-card" style={{ marginBottom: 18, padding: 0, borderRadius: THEME.radius.md, border: `1.5px solid transparent`, backgroundClip: "padding-box", position: "relative", overflow: "hidden" }}>
+                      {/* Gradient border effect */}
+                      <div style={{ position: "absolute", inset: -1.5, borderRadius: THEME.radius.md, background: "linear-gradient(135deg, #6366f1, #06b6d4, #10b981)", zIndex: 0 }} />
+                      <div style={{ position: "relative", zIndex: 1, background: THEME.colors.surface, borderRadius: `calc(${THEME.radius.md} - 1px)`, padding: "18px 18px 16px" }}>
+                        {/* Section Header */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #6366f1, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <UserCheck size={15} color="#fff" strokeWidth={2.5} />
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.8 }}>Citizen Information</span>
+                          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "linear-gradient(135deg, rgba(16,185,129,0.12), rgba(6,182,212,0.12))", fontSize: 9, fontWeight: 800, color: "#059669" }}>✓ Verified</div>
+                        </div>
+                        {/* Avatar + Name row */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${THEME.colors.border}` }}>
+                          {citizen.avatar_url ? (
+                            <img src={citizen.avatar_url} alt={citizen.name} style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", border: `2.5px solid ${THEME.colors.border}` }} />
+                          ) : (
+                            <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 900, letterSpacing: 1, flexShrink: 0 }}>{initials}</div>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 16, fontWeight: 800, color: THEME.colors.text, lineHeight: 1.2 }}>{citizen.name || "Unknown"}</div>
+                            {email && <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                          </div>
+                        </div>
+                        {/* Info Fields Grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
+                          {citizen.name && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <User size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                              <div>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Name</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{citizen.name}</div>
+                              </div>
+                            </div>
+                          )}
+                          {email && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Mail size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
+                              </div>
+                            </div>
+                          )}
+                          {citizen.phone && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Phone size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                              <div>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{citizen.phone}</div>
+                              </div>
+                            </div>
+                          )}
+                          {villageName && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Home size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                              <div>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Village</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{villageName}</div>
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Hash size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Clock size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ─── Section 2: Complaint Information ─── */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.primaryLight, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <FileText size={13} color={THEME.colors.primary} strokeWidth={2.5} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint Information</span>
                   </div>
-                  <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 8px" }}>{selected.title}</h4>
-                  <Badge status={selected.status} priority={selected.priority} />
-                  {(upvoteCounts[selected.id] || 0) > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: THEME.colors.danger }}>🔥 {upvoteCounts[selected.id]} {t('community_upvotes')}</div>
-                  )}
+                  <div style={{ padding: "14px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}` }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>
+                      #{selected.ticket_id || selected.id.slice(0, 8)}
+                      {selected.is_anonymous && <span style={{ marginLeft: 8, background: THEME.colors.textMuted, color: "#fff", padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🕵️ {t('anonymous_badge') || "Anonymous"}</span>}
+                      {selected.related_scheme && <span style={{ marginLeft: 8, background: THEME.colors.primaryLight, color: THEME.colors.primaryHover, padding: "2px 6px", borderRadius: THEME.radius.full, fontSize: 9 }}>🏛 {selected.related_scheme}</span>}
+                    </div>
+                    <h4 style={{ fontSize: 16, fontWeight: 800, margin: "0 0 8px" }}>{selected.title}</h4>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                      <Badge status={selected.status} priority={selected.priority} />
+                      {selected.category && <span style={{ padding: "3px 10px", borderRadius: THEME.radius.full, background: THEME.colors.primaryLight, color: THEME.colors.primary, fontSize: 10, fontWeight: 800 }}>{selected.category}</span>}
+                    </div>
+                    {(upvoteCounts[selected.id] || 0) > 0 && (
+                      <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: THEME.colors.danger }}>🔥 {upvoteCounts[selected.id]} {t('community_upvotes')}</div>
+                    )}
+                    {selected.location && (
+                      <div style={{ marginTop: 8, fontSize: 12, color: THEME.colors.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                        <MapPin size={13} strokeWidth={2.2} /> {selected.location}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Description */}
+                {/* ─── Section 3: Description ─── */}
                 <div style={{ marginBottom: 16 }}>
-                  <label style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase" }}>{t("description")}</label>
-                  <p style={{ fontSize: 13, color: THEME.colors.text, marginTop: 6, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.description}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.warningBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <FileText size={13} color={THEME.colors.warning} strokeWidth={2.5} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("description")}</span>
+                  </div>
+                  <p style={{ fontSize: 13, color: THEME.colors.text, marginTop: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", background: THEME.colors.background, padding: "12px 16px", borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}` }}>{selected.description}</p>
                   {selected.is_escalated && (
                     <div style={{ marginTop: 10, padding: 10, background: THEME.colors.dangerBg, border: `1px solid ${STATUS_META.Open.border}`, borderRadius: THEME.radius.sm, color: "#991B1B", fontSize: 11, fontWeight: 700 }}>
                       {t("escalation_warning")}
@@ -4301,12 +4456,17 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   )}
                 </div>
 
-                {/* Photo Evidence Viewer */}
+                {/* ─── Section 4: Evidence Images ─── */}
                 {(() => {
                   const photos = getPhotos(selected);
                   return (
                     <div style={{ marginBottom: 16 }}>
-                      <label style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", display: "block", marginBottom: 8 }}>{t("photo_viewer")} ({photos.length})</label>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.successBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <Camera size={13} color={THEME.colors.success} strokeWidth={2.5} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("photo_viewer")} ({photos.length})</span>
+                      </div>
                       {photos.length === 0 ? (
                         <div style={{ padding: 16, background: THEME.colors.background, borderRadius: THEME.radius.sm, textAlign: "center", color: THEME.colors.textMuted, fontSize: 12 }}>{t('no_photos')}</div>
                       ) : (
@@ -4320,11 +4480,16 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   );
                 })()}
 
-                {/* Management Controls */}
-                <div style={{ borderTop: `1.5px solid ${THEME.colors.background}`, paddingTop: 18 }}>
-                  <label style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, display: "block", marginBottom: 14, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("management_controls")}</label>
+                {/* ─── Section 5: Management Controls ─── */}
+                <div style={{ borderTop: `1.5px solid ${THEME.colors.border}`, paddingTop: 18 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                    <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.dangerBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Shield size={13} color={THEME.colors.danger} strokeWidth={2.5} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>{t("management_controls")}</span>
+                  </div>
 
-                  {/* Status Update Buttons */}
+                  {/* Current Status */}
                   <div style={{ marginBottom: 18 }}>
                     <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 8, display: "block" }}>{t('change_status')}</label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -4357,7 +4522,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     </button>
                   </div>
 
-                  {/* Officer Assignment */}
+                  {/* Assigned Officer */}
                   {!t_officer && (
                     <div style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6, display: "block" }}>{t('assign_officer')}</label>

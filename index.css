@@ -299,3 +299,33 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* ─── Citizen Information Card ────────────────────────────────────────────── */
+
+@keyframes citizenCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.citizen-info-card {
+  animation: citizenCardIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (max-width: 768px) {
+  .citizen-info-card div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  .citizen-info-card img,
+  .citizen-info-card div[style*="width: 52px"] {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 15px !important;
+  }
+}
