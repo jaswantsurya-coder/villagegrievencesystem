@@ -138,7 +138,10 @@ export default async function handler(req, res) {
       otpSent = true;
       sendChannel = 'email';
     } else {
-      return res.status(500).json({ error: 'Failed to send OTP email. Please verify your email address.' });
+      return res.status(500).json({ 
+        error: 'Failed to send OTP email. Please verify your email address.',
+        details: emailResult.error // Add details to help debug missing API keys or Brevo errors
+      });
     }
 
     // In development/testing, also log OTP to console
