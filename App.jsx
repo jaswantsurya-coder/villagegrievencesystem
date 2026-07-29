@@ -1832,8 +1832,8 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       p_location: form.location || null,
       p_latitude: form.latitude || null,
       p_longitude: form.longitude || null,
-      p_photos: '[]',
-      p_photo_urls: '[]',
+      p_photos: [],
+      p_photo_urls: [],
       p_related_scheme: form.relatedScheme || null,
       p_is_anonymous: false,
       p_anonymous_phone: null,
@@ -1860,7 +1860,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
 
     try {
       const photoUrls = photos.length > 0 ? await uploadEvidencePhotos(photos, { ticketId, userId: session.user.id }) : [];
-      const finalPayload = { ...rpcPayload, p_photo_urls: JSON.stringify(photoUrls) };
+      const finalPayload = { ...rpcPayload, p_photo_urls: photoUrls };
       const { data: rpcRes, error } = await supabase.rpc("svc_create_complaint", finalPayload);
       if (error) throw error;
       const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
@@ -6501,8 +6501,8 @@ export default function App() {
               p_location: data.location || null,
               p_latitude: data.latitude || null,
               p_longitude: data.longitude || null,
-              p_photos: '[]',
-              p_photo_urls: JSON.stringify(data.photo_urls || []),
+              p_photos: [],
+              p_photo_urls: data.photo_urls || [],
               p_related_scheme: data.related_scheme || null,
               p_is_anonymous: false,
               p_anonymous_phone: null,

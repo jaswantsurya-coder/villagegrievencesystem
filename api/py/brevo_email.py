@@ -22,7 +22,7 @@ def _get_brevo_config() -> dict:
 
     return {
         "api_key": api_key,
-        "sender_email": os.environ.get("BREVO_SENDER_EMAIL", "admin@gramseva.in"),
+        "sender_email": os.environ.get("BREVO_SENDER_EMAIL", "gramseva0089@gmail.com"),
         "sender_name": os.environ.get("BREVO_SENDER_NAME", "GramSeva"),
     }
 

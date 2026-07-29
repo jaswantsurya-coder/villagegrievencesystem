@@ -24,7 +24,7 @@ async function sendOTPEmail(email, otp) {
       body: JSON.stringify({
         sender: {
           name: process.env.BREVO_SENDER_NAME || 'GramSeva',
-          email: process.env.BREVO_SENDER_EMAIL || 'admin@gramseva.in',
+          email: process.env.BREVO_SENDER_EMAIL || 'gramseva0089@gmail.com',
         },
         to: [{ email }],
         subject: `[GramSeva] Your OTP Code: ${otp}`,
