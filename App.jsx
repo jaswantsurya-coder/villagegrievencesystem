@@ -6143,6 +6143,168 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
   );
 };
 
+// ─── Permissions View ────────────────────────────────────────────────────────
+
+const PermissionsView = ({ t, notify }) => {
+  const [perms, setPerms] = useState({
+    notifications: "prompt",
+    location: "prompt",
+    microphone: "prompt"
+  });
+
+  useEffect(() => {
+    checkPermissions();
+  }, []);
+
+  const checkPermissions = async () => {
+    try {
+      const state = { notifications: "prompt", location: "prompt", microphone: "prompt" };
+      
+      // Notifications
+      if ("Notification" in window) {
+        state.notifications = Notification.permission;
+      }
+      
+      // Location
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const locPerm = await navigator.permissions.query({ name: 'geolocation' });
+          state.location = locPerm.state;
+          locPerm.onchange = () => checkPermissions();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      
+      // Microphone
+      if (navigator.permissions && navigator.permissions.query) {
+        try {
+          const micPerm = await navigator.permissions.query({ name: 'microphone' });
+          state.microphone = micPerm.state;
+          micPerm.onchange = () => checkPermissions();
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      
+      setPerms(state);
+    } catch (err) {
+      console.warn("Permission check error:", err);
+    }
+  };
+
+  const requestNotification = async () => {
+    if (!("Notification" in window)) return notify("Notifications not supported in this browser", "err");
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      notify("Notifications enabled!", "success");
+    } else {
+      notify("Notification permission denied", "err");
+    }
+    checkPermissions();
+  };
+
+  const requestLocation = () => {
+    if (!navigator.geolocation) return notify("Geolocation not supported", "err");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        notify("Location permission granted!", "success");
+        checkPermissions();
+      },
+      (err) => {
+        notify("Location permission denied", "err");
+        checkPermissions();
+      }
+    );
+  };
+
+  const requestMicrophone = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return notify("Microphone not supported", "err");
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // stop stream immediately since we just wanted permission
+      stream.getTracks().forEach(track => track.stop());
+      notify("Microphone permission granted!", "success");
+      checkPermissions();
+    } catch (err) {
+      notify("Microphone permission denied", "err");
+      checkPermissions();
+    }
+  };
+
+  const getStatusColor = (status) => {
+    if (status === "granted") return THEME.colors.success;
+    if (status === "denied") return THEME.colors.danger;
+    return THEME.colors.textMuted;
+  };
+
+  return (
+    <div style={{ maxWidth: 600, margin: "0 auto", padding: 32, background: THEME.colors.surface, borderRadius: THEME.radius.lg, border: `1px solid ${THEME.colors.border}`, boxShadow: THEME.shadow.md }}>
+      <h2 style={{ fontSize: 24, fontWeight: 900, marginBottom: 8 }}>{t('permissions') || "Device Permissions"}</h2>
+      <p style={{ color: THEME.colors.textMuted, fontSize: 14, marginBottom: 32, lineHeight: 1.6 }}>
+        Manage access to your device features. These are required for certain GramSeva features to work optimally.
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Notifications */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+              🔔 Notifications 
+              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: THEME.radius.full, background: getStatusColor(perms.notifications) + "22", color: getStatusColor(perms.notifications), fontWeight: 800 }}>
+                {perms.notifications.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 4 }}>Receive important updates and OTPs</div>
+          </div>
+          <Btn onClick={requestNotification} disabled={perms.notifications === "granted"} variant={perms.notifications === "granted" ? "ghost" : "primary"}>
+            {perms.notifications === "granted" ? "Allowed" : "Allow"}
+          </Btn>
+        </div>
+
+        {/* Location */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+              📍 Location 
+              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: THEME.radius.full, background: getStatusColor(perms.location) + "22", color: getStatusColor(perms.location), fontWeight: 800 }}>
+                {perms.location.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 4 }}>Used to auto-detect your village for complaints</div>
+          </div>
+          <Btn onClick={requestLocation} disabled={perms.location === "granted"} variant={perms.location === "granted" ? "ghost" : "primary"}>
+            {perms.location === "granted" ? "Allowed" : "Allow"}
+          </Btn>
+        </div>
+
+        {/* Microphone */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", background: THEME.colors.background, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}` }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, display: "flex", alignItems: "center", gap: 8 }}>
+              🎤 Microphone 
+              <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: THEME.radius.full, background: getStatusColor(perms.microphone) + "22", color: getStatusColor(perms.microphone), fontWeight: 800 }}>
+                {perms.microphone.toUpperCase()}
+              </span>
+            </div>
+            <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 4 }}>Required for voice complaints and AI Chatbot</div>
+          </div>
+          <Btn onClick={requestMicrophone} disabled={perms.microphone === "granted"} variant={perms.microphone === "granted" ? "ghost" : "primary"}>
+            {perms.microphone === "granted" ? "Allowed" : "Allow"}
+          </Btn>
+        </div>
+      </div>
+      
+      {Object.values(perms).some(p => p === "denied") && (
+        <div style={{ marginTop: 24, padding: 16, background: THEME.colors.dangerBg, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.danger}44`, color: THEME.colors.danger, fontSize: 12, lineHeight: 1.5 }}>
+          <strong>Note:</strong> Some permissions are denied. To re-enable them, you may need to click the lock icon 🔒 in your browser's address bar and change the settings manually.
+        </div>
+      )}
+    </div>
+  );
+};
 export default function App() {
   const { t, i18n } = useTranslation();
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
