@@ -47,7 +47,13 @@ async function sendOTPEmail(email, otp) {
         `,
       }),
     });
-    return { success: res.ok };
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error(`[Brevo] HTTP ${res.status}: ${errorBody}`);
+      return { success: false, error: `Brevo HTTP ${res.status}: ${errorBody}` };
+    }
+    return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }

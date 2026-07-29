@@ -1560,7 +1560,10 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
         body: JSON.stringify({ phone, email })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to send OTP");
+      if (!res.ok) {
+        const errorMsg = data.details ? `${data.error} (${data.details})` : (data.error || "Failed to send OTP");
+        throw new Error(errorMsg);
+      }
       setOtpSent(true);
       notify(t('otp_sent'));
     } catch (err) {
