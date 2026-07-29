@@ -1259,6 +1259,29 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
               >
                 💬 {t('feedback')}
               </button>
+              <button 
+                onClick={() => { goTo('permissions'); setHelpMenuOpen(false); }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  textAlign: "left",
+                  padding: "10px 16px",
+                  color: THEME.colors.text,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  fontFamily: THEME.font
+                }}
+                onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
+                onMouseOut={e => e.currentTarget.style.background = "transparent"}
+              >
+                ⚙️ {t('permissions') || "Permissions"}
+              </button>
             </div>
           )}
         </div>
@@ -1318,6 +1341,13 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
                 style={{ fontSize: 13, minHeight: 40, borderLeft: `2.5px solid ${THEME.colors.border}`, borderRadius: "0 8px 8px 0" }}
               >
                 💬 {t('feedback')}
+              </button>
+              <button 
+                onClick={() => { goTo('permissions'); setMobileMenuOpen(false); setMobileHelpOpen(false); }}
+                className="mobile-nav-item"
+                style={{ fontSize: 13, minHeight: 40, borderLeft: `2.5px solid ${THEME.colors.border}`, borderRadius: "0 8px 8px 0" }}
+              >
+                ⚙️ {t('permissions') || "Permissions"}
               </button>
             </div>
           )}
@@ -1503,6 +1533,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
@@ -1521,11 +1552,12 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
 
   const sendOtp = async () => {
     if (phone.length < 10) return notify("Enter a valid phone number", "err");
+    if (!email || !email.includes('@')) return notify("Enter a valid email address", "err");
     try {
       const res = await fetch('/api/anonymous/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone })
+        body: JSON.stringify({ phone, email })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to send OTP");
@@ -1639,9 +1671,10 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
         <p style={{ fontSize: 14, color: THEME.colors.textMuted, marginBottom: 32 }}>{t('anonymous_desc')}</p>
         
         {!otpSent ? (
-          <div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             <Input label={t('enter_phone')} placeholder="e.g. 9876543210" value={phone} onChange={e => setPhone(e.target.value)} />
-            <Btn full onClick={sendOtp} style={{ marginTop: 16 }}>{t('send_otp_btn')}</Btn>
+            <Input label="Email (Required for OTP)" placeholder="citizen@example.com" value={email} onChange={e => setEmail(e.target.value)} type="email" />
+            <Btn full onClick={sendOtp}>{t('send_otp_btn')}</Btn>
           </div>
         ) : (
           <div>
@@ -4156,6 +4189,9 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       citizen:profiles!citizen_id (
         id, name, phone, avatar_url, village_id,
         village:villages!village_id ( village_name )
+      ),
+      anonymous_user:anonymous_users!anonymous_user_id (
+        id, anonymous_id, phone
       )
     `).order("created_at", { ascending: false });
     if (t_officer) query = query.eq("assigned_officer_id", session.user.id);
@@ -4217,13 +4253,17 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
         const cEmail = (citizenEmails[it.citizen_id] || "").toLowerCase();
         const cName = (it.citizen?.name || "").toLowerCase();
         const cPhone = (it.citizen?.phone || "").toLowerCase();
+        const anonPhone = (it.anonymous_user?.phone || "").toLowerCase();
+        const anonId = (it.anonymous_user?.anonymous_id || "").toLowerCase();
         if (
           !(it.title || "").toLowerCase().includes(q) &&
           !(it.ticket_id || "").toLowerCase().includes(q) &&
           !(it.location || "").toLowerCase().includes(q) &&
           !cName.includes(q) &&
           !cEmail.includes(q) &&
-          !cPhone.includes(q)
+          !cPhone.includes(q) &&
+          !anonPhone.includes(q) &&
+          !anonId.includes(q)
         ) return false;
       }
       return true;
@@ -4346,10 +4386,15 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                         </div>
                         <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{it.title}</h3>
                         <div style={{ fontSize: 12, color: THEME.colors.textMuted }}>📍 {it.location}</div>
-                        {it.citizen?.name && (
+                        {it.citizen?.name && !it.is_anonymous && (
                           <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 700, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
                             <User size={12} strokeWidth={2.5} /> {it.citizen.name}
                             {it.citizen?.village?.village_name && <span style={{ color: THEME.colors.textMuted, fontWeight: 600 }}> • {it.citizen.village.village_name}</span>}
+                          </div>
+                        )}
+                        {it.is_anonymous && it.anonymous_user && (
+                          <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 700, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                            <User size={12} strokeWidth={2.5} /> Anon: {it.anonymous_user.anonymous_id}
                           </div>
                         )}
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
@@ -4443,6 +4488,61 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                               <div>
                                 <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Village</div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{villageName}</div>
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Hash size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Clock size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ─── Section 1.5: Anonymous User Information ─── */}
+                {selected.is_anonymous && selected.anonymous_user && (() => {
+                  const anonUser = selected.anonymous_user;
+                  const submittedDate = new Date(selected.created_at);
+                  const dateStr = submittedDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+                  const timeStr = submittedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+                  return (
+                    <div className="citizen-info-card" style={{ marginBottom: 18, padding: 0, borderRadius: THEME.radius.md, border: `1.5px solid transparent`, backgroundClip: "padding-box", position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", inset: -1.5, borderRadius: THEME.radius.md, background: "linear-gradient(135deg, #6b7280, #374151)", zIndex: 0 }} />
+                      <div style={{ position: "relative", zIndex: 1, background: THEME.colors.surface, borderRadius: `calc(${THEME.radius.md} - 1px)`, padding: "18px 18px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #6b7280, #374151)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <UserCheck size={15} color="#fff" strokeWidth={2.5} />
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.8 }}>Anonymous Citizen</span>
+                          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "linear-gradient(135deg, rgba(107,114,128,0.12), rgba(55,65,81,0.12))", fontSize: 9, fontWeight: 800, color: "#4b5563" }}>🕵️ Anonymous</div>
+                        </div>
+                        
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <User size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Anonymous ID</div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{anonUser.anonymous_id}</div>
+                            </div>
+                          </div>
+                          {anonUser.phone && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <Phone size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                              <div>
+                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{anonUser.phone}</div>
                               </div>
                             </div>
                           )}
@@ -6469,6 +6569,7 @@ export default function App() {
       case "track":  return <ErrorBoundary><TrackView {...shared} /></ErrorBoundary>;
       case "profile": return <ProfileView {...shared} />;
       case "gov-links": return <GovLinksView {...shared} />;
+      case "permissions": return <PermissionsView {...shared} />;
       case "gallery": return <GalleryView {...shared} />;
       case "invite": return <InvitationAcceptView {...shared} token={inviteToken} onAccept={() => {
         if (session?.user?.id) fetchProfile(session.user.id);

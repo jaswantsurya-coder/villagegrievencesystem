@@ -65,6 +65,10 @@ export default async function handler(req, res) {
     if (!phone || phone.length < 10) {
       return res.status(400).json({ error: 'Valid phone number is required' });
     }
+    
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email is required for OTP delivery' });
+    }
 
     const cleanPhone = phone.replace(/\D/g, '').slice(-10);
 
@@ -125,16 +129,16 @@ export default async function handler(req, res) {
         });
     }
 
-    // ─── Send OTP via Email (if email provided) ─────────────────────
+    // ✉️ Send OTP via Email
     let otpSent = false;
     let sendChannel = 'none';
 
-    if (email) {
-      const emailResult = await sendOTPEmail(email, otp);
-      if (emailResult.success) {
-        otpSent = true;
-        sendChannel = 'email';
-      }
+    const emailResult = await sendOTPEmail(email, otp);
+    if (emailResult.success) {
+      otpSent = true;
+      sendChannel = 'email';
+    } else {
+      return res.status(500).json({ error: 'Failed to send OTP email. Please verify your email address.' });
     }
 
     // In development/testing, also log OTP to console
