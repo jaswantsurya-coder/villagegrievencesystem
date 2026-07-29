@@ -5,15 +5,25 @@ import './index.css'
 import './i18n'
 import 'regenerator-runtime/runtime'
 
-// Register Service Worker for PWA
+// Register Service Workers for PWA + Firebase Cloud Messaging
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // PWA Service Worker
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
         console.log('✅ SW registered:', registration.scope);
       })
       .catch((error) => {
         console.log('⚠️ SW registration failed:', error);
+      });
+
+    // Firebase Messaging Service Worker (for background push notifications)
+    navigator.serviceWorker.register('/firebase-messaging-sw.js')
+      .then((registration) => {
+        console.log('✅ Firebase SW registered:', registration.scope);
+      })
+      .catch((error) => {
+        console.log('⚠️ Firebase SW registration failed:', error);
       });
   });
 }

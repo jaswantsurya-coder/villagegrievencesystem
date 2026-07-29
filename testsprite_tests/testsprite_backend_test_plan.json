@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "create_complaint_with_valid_data",
+    "description": "Test the POST /rpc/svc_create_complaint endpoint with valid complaint details including title, description, category, coordinates, and optional photos to verify successful complaint creation with correct village routing and receipt of complaint_id and ticket_id."
+  },
+  {
+    "id": "TC002",
+    "title": "create_complaint_with_anonymous_submission",
+    "description": "Test the POST /rpc/svc_create_complaint endpoint with valid complaint details and anonymous submission fields to ensure complaint is created without exposing reporter identity and returns success with a generated ticket_id."
+  },
+  {
+    "id": "TC003",
+    "title": "create_complaint_with_invalid_or_missing_fields",
+    "description": "Test the POST /rpc/svc_create_complaint endpoint with missing or invalid title, category, or location fields to verify the API returns success false with an appropriate error message and does not create a complaint."
+  },
+  {
+    "id": "TC004",
+    "title": "create_complaint_with_unresolvable_coordinates",
+    "description": "Test the POST /rpc/svc_create_complaint endpoint with coordinates that do not resolve to a known village boundary to confirm the API returns success false or an error indicating routing failure and prevents complaint creation until valid village context is provided."
+  },
+  {
+    "id": "TC005",
+    "title": "join_village_with_valid_code_authenticated",
+    "description": "Test the POST /rpc/svc_join_village endpoint with a valid join code while authenticated to verify the user becomes a member of the village and receives success true with village_id and village_name."
+  },
+  {
+    "id": "TC006",
+    "title": "join_village_with_invalid_code_authenticated",
+    "description": "Test the POST /rpc/svc_join_village endpoint with an invalid or expired join code while authenticated to ensure the API returns success false with an error message and the user remains unassigned to any village."
+  },
+  {
+    "id": "TC007",
+    "title": "join_village_without_authentication",
+    "description": "Test the POST /rpc/svc_join_village endpoint without authentication to verify the API returns an authorization failure and does not change village membership."
+  },
+  {
+    "id": "TC008",
+    "title": "approve_admin_request_with_valid_request_super_admin",
+    "description": "Test the POST /rpc/svc_approve_admin_request endpoint with a valid request_id as a super admin to confirm the requested user is promoted to village admin and the response includes success true, village details, join_code, and user_id."
+  },
+  {
+    "id": "TC009",
+    "title": "reject_admin_request_with_valid_request_super_admin",
+    "description": "Test the POST /rpc/svc_reject_admin_request endpoint with a valid request_id as a super admin to verify the admin promotion request is rejected successfully with success true and no promotion occurs."
+  },
+  {
+    "id": "TC010",
+    "title": "get_current_village_join_code_with_valid_village_admin",
+    "description": "Test the POST /rpc/get_current_village_join_code endpoint with a valid village id as an authenticated admin to ensure the current join code string is returned for administrative sharing."
+  }
+]

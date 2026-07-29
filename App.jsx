@@ -8,6 +8,7 @@ import * as XLSX from 'xlsx';
 import { QRCodeSVG } from 'qrcode.react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { initializeFCMPush, removeFCMToken, refreshFCMToken } from './fcmPushNotifications';
 import {
   BarChart3, Building2, CalendarDays, Camera, Check, CircleAlert, CircleDot,
   Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
@@ -1513,26 +1514,68 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
   const [photos, setPhotos] = useState([]);
   const [uploadError, setUploadError] = useState("");
 
-  const sendOtp = () => {
-    if (phone.length < 10) return notify("Enter a valid phone number", "err");
-    setOtpSent(true);
-    notify(t('otp_sent'));
-  };
+  const [anonymousUserId, setAnonymousUserId] = useState(null);
+  const [villageName, setVillageName] = useState("");
+  const [district, setDistrict] = useState("");
+  const [villageId, setVillageId] = useState(null);
 
-  const verifyOtp = () => {
-    if (otp === "123456") {
-      setPhoneVerified(true);
-      notify(t('otp_verified'));
-    } else {
-      notify(t('otp_invalid'), "err");
+  const sendOtp = async () => {
+    if (phone.length < 10) return notify("Enter a valid phone number", "err");
+    try {
+      const res = await fetch('/api/anonymous/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send OTP");
+      setOtpSent(true);
+      notify(t('otp_sent'));
+    } catch (err) {
+      notify(err.message, "err");
     }
   };
 
-  const generateTicketId = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = 'VGS-';
-    for (let i = 0; i < 6; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    return result;
+  const verifyOtp = async () => {
+    if (!otp) return notify("Enter OTP", "err");
+    try {
+      const res = await fetch('/api/anonymous/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid OTP");
+      
+      setAnonymousUserId(data.anonymous_user_id);
+      setPhoneVerified(true);
+      notify(t('otp_verified'));
+    } catch (err) {
+      notify(err.message, "err");
+    }
+  };
+
+  const validateVillage = async () => {
+    if (!villageName || !district) return notify("Enter village and district", "err");
+    try {
+      setLoading(true);
+      const res = await fetch('/api/anonymous/validate-village', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ village_name: villageName, district })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to validate village");
+      if (!data.success) throw new Error(data.error || "Validation failed");
+      
+      setVillageId(data.village_id);
+      notify("Village validated successfully!");
+      setStep(2);
+    } catch (err) {
+      notify(err.message, "err");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleCategory = (id) => {
@@ -1547,31 +1590,38 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     e.preventDefault();
     if (form.categories.length === 0) return notify("Please select at least one category", "err");
     if (!phoneVerified) return notify("Please verify your phone number", "err");
+    if (!villageId) return notify("Village not validated", "err");
     
     setLoading(true);
     setUploadError("");
-    const ticketId = generateTicketId();
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
     
-    const complaint = {
-      ticket_id: ticketId,
-      title: form.title,
-      description: fullDescription,
-      category: form.categories.join(", "),
-      location: form.location,
-      latitude: form.latitude,
-      longitude: form.longitude,
-      status: "Open",
-      related_scheme: form.relatedScheme || null,
-      is_anonymous: true,
-      anonymous_phone: phone
-    };
-
     try {
-      const photoUrls = await uploadEvidencePhotos(photos, { ticketId, userId: null });
-      const { error } = await supabase.from("complaints").insert([{ ...complaint, photo_urls: photoUrls }]);
-      if (error) throw error;
-      notify(`${t("success_submit")} Ticket: ${ticketId}`);
+      // First, upload photos
+      const photoUrls = await uploadEvidencePhotos(photos, { ticketId: 'ANONYMOUS_UPLOAD', userId: 'anonymous' });
+      
+      // Then, submit complaint via API
+      const res = await fetch('/api/anonymous/submit-complaint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          anonymous_user_id: anonymousUserId,
+          title: form.title,
+          description: fullDescription,
+          category: form.categories.join(", "),
+          location: form.location,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          photo_urls: photoUrls,
+          village_id: villageId,
+          related_scheme: form.relatedScheme || null
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit complaint");
+      
+      notify(`${t("success_submit")} Ticket: ${data.ticket_id}`);
       navigate("track");
     } catch (err) {
       const message = err?.message || "Failed to submit grievance with photo evidence.";
@@ -1615,6 +1665,12 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
 
       {step === 1 ? (
         <div>
+          <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Village Selection</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+            <Input label="Village Name" placeholder="Enter Village" value={villageName} onChange={e => setVillageName(e.target.value)} required />
+            <Input label="District" placeholder="Enter District" value={district} onChange={e => setDistrict(e.target.value)} required />
+          </div>
+
           <label style={{ display: "block", marginBottom: 16, fontSize: 14, fontWeight: 600, color: THEME.colors.text }}>Select Problem Categories (Multiple allowed)</label>
           <div className="category-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, marginBottom: 32 }}>
             {CATEGORIES.map(c => {
@@ -1624,10 +1680,10 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
               );
             })}
           </div>
-          <Btn full onClick={() => {
+          <Btn full disabled={loading} onClick={() => {
             if (form.categories.length === 0) notify("Please select at least one category", "err");
-            else setStep(2);
-          }}>Select & Continue</Btn>
+            else validateVillage();
+          }}>{loading ? "Validating..." : "Select & Continue"}</Btn>
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
@@ -6231,18 +6287,40 @@ export default function App() {
     };
   }, [session]);
 
-  // ─── Request push notification permission on login ────────────────────────
+  // ─── Firebase Cloud Messaging (FCM) Push Notification Setup ────────────────
   useEffect(() => {
-    if (session && "Notification" in window && Notification.permission === "default") {
-      // Soft-ask after a delay without error toasts
-      const timer = setTimeout(() => {
-        try {
-          Notification.requestPermission();
-        } catch (e) { /* ignore */ }
-      }, 5000);
-      return () => clearTimeout(timer);
+    if (!session?.user?.id || !profile) return;
+    if (!("Notification" in window)) return;
+
+    // Don't attempt if already denied
+    if (Notification.permission === "denied") {
+      console.log('[FCM] Notification permission denied by user');
+      return;
     }
-  }, [session]);
+
+    // Delay the FCM initialization to avoid blocking the UI
+    const timer = setTimeout(async () => {
+      try {
+        const fcmToken = await initializeFCMPush(
+          session.user.id,
+          profile.role || 'citizen',
+          profile.village_id || null,
+          // Foreground notification callback — show in-app toast
+          (notification) => {
+            console.log('[FCM] Foreground notification:', notification);
+            notify(`🔔 ${notification.title}: ${notification.body}`);
+          }
+        );
+        if (fcmToken) {
+          console.log('[FCM] Push notifications active');
+        }
+      } catch (err) {
+        console.error('[FCM] Push setup failed:', err);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [session, profile]);
 
   const fetchProfile = async (id, skipRedirect = false) => {
     try {
@@ -6373,6 +6451,10 @@ export default function App() {
   };
 
   const handleLogout = async () => {
+    // Remove FCM push token before signing out
+    if (session?.user?.id) {
+      try { await removeFCMToken(session.user.id); } catch (e) { /* ignore */ }
+    }
     await supabase.auth.signOut();
     notify("Logged out successfully");
     navigate("home");
