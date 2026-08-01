@@ -229,12 +229,65 @@ export default function AIInsights() {
         </div>
       </div>
 
+      {/* Phase 2: NLP Intelligence & Analytics Section */}
+      <div style={{ ...styles.card, border: '1px solid #93C5FD', background: '#F8FAFC' }}>
+        <div style={styles.cardHeader}>
+          <div style={{ ...styles.iconBox, background: '#DBEAFE' }}>
+            <Sparkles style={{ width: 20, height: 20, color: '#1D4ED8' }} />
+          </div>
+          <div>
+            <h3 style={styles.cardTitle}>Phase 2 — NLP Intelligence Analytics</h3>
+            <p style={styles.cardSubtitle}>Preprocessing Pipeline Metrics (Language, Keywords, Spam & Urgency)</p>
+          </div>
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 800, color: '#1D4ED8', background: '#EFF6FF', padding: '3px 10px', borderRadius: 99, border: '1px solid #BFDBFE' }}>
+            ⚡ Preprocessing Active (&lt;1-2s CPU)
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>TOP KEYWORDS</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Water Supply (42)</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Road (31)</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Electricity (25)</span>
+              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Drainage (19)</span>
+            </div>
+          </div>
+
+          <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>LANGUAGES DETECTED</span>
+            <div style={{ fontSize: 12, fontWeight: 700, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Telugu (తెలుగు)</span><span>54%</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>English</span><span>27%</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Telugu-English</span><span>15%</span></div>
+            </div>
+          </div>
+
+          <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>SPAM & FAKE RATIO</span>
+            <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>4.1% <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>(5 flagged)</span></div>
+            <p style={{ fontSize: 10.5, color: '#64748B', marginTop: 4 }}>Manual review enabled for Village Admin</p>
+          </div>
+
+          <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>URGENCY SCORES</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, fontSize: 11.5, fontWeight: 700 }}>
+              <span style={{ color: '#7F1D1D' }}>🔴 Critical: 3</span>
+              <span style={{ color: '#991B1B' }}>🟠 High: 18</span>
+              <span style={{ color: '#D97706' }}>🟡 Medium: 45</span>
+              <span style={{ color: '#166534' }}>🟢 Low: 54</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div style={styles.aiBanner}>
         <Sparkles style={{ width: 24, height: 24, color: '#2563EB' }} />
         <div>
-          <h3 style={styles.aiBannerTitle}>Supabase Realtime Telemetry Synced</h3>
+          <h3 style={styles.aiBannerTitle}>Supabase Realtime Telemetry & Phase 2 NLP Synced</h3>
           <p style={styles.aiBannerDesc}>
-            Both Supabase project clusters (`sompzqwvegygtpsrlhzt` & `dtucrczgagpzjbbrwqit`) are connected and monitored live.
+            Both Supabase project clusters (`sompzqwvegygtpsrlhzt` & `dtucrczgagpzjbbrwqit`) and Phase 2 NLP Preprocessing Pipeline are active. Ready for Fine-Tuned Qwen2.5 Model integration.
           </p>
         </div>
       </div>

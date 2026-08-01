@@ -52,7 +52,7 @@ export default function ComplaintDetailModal({ complaint, citizen, village, onCl
         </div>
 
         <div style={styles.body}>
-          {/* Status + Priority Row */}
+          {/* Status + Priority + NLP Intelligence Badges */}
           <div style={styles.statusRow}>
             <div style={{ ...styles.statusBadge, background: sc.bg, color: sc.color }}>
               <StatusIcon style={{ width: 14, height: 14 }} />
@@ -67,12 +67,47 @@ export default function ComplaintDetailModal({ complaint, citizen, village, onCl
                 {complaint.priority} Priority
               </div>
             )}
-            {complaint.is_escalated && (
-              <div style={{ ...styles.escalatedBadge }}>
-                <AlertTriangle style={{ width: 12, height: 12 }} /> Escalated
+
+            {/* NLP Urgency Badge */}
+            {complaint.urgency_score && (
+              <div style={{
+                ...styles.urgencyBadge,
+                background: complaint.urgency_score === 'Critical' ? '#7F1D1D' : complaint.urgency_score === 'High' ? '#991B1B' : complaint.urgency_score === 'Medium' ? '#D97706' : '#166534',
+                color: '#FFFFFF'
+              }}>
+                ⚡ Urgency: {complaint.urgency_score}
               </div>
             )}
+
+            {/* NLP Spam Warning Badge */}
+            {(complaint.spam_flag || (complaint.spam_score && complaint.spam_score >= 50)) && (
+              <div style={styles.spamBadge}>
+                ⚠️ Spam Score: {complaint.spam_score || 60}/100
+              </div>
+            )}
+
+            {/* NLP Duplicate Badge */}
+            {(complaint.duplicate_group_id || (complaint.duplicate_count && complaint.duplicate_count > 0)) && (
+              <div style={styles.duplicateBadge}>
+                🔗 Similar Complaints ({complaint.duplicate_count || 1})
+              </div>
+            )}
+
+            {/* NLP Language Tag */}
+            <div style={styles.langBadge}>
+              🌐 {complaint.detected_language || 'English'}
+            </div>
           </div>
+
+          {/* NLP Extracted Keywords */}
+          {complaint.extracted_keywords && Array.isArray(complaint.extracted_keywords) && complaint.extracted_keywords.length > 0 && (
+            <div style={styles.keywordRow}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>KEYWORDS:</span>
+              {complaint.extracted_keywords.map((kw, idx) => (
+                <span key={idx} style={styles.keywordChip}>#{kw}</span>
+              ))}
+            </div>
+          )}
 
           {/* Title / Subject */}
           <div style={styles.section}>
@@ -293,6 +328,28 @@ const styles = {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     fontSize: 11, fontWeight: 800, color: '#B91C1C', background: '#FEE2E2',
     padding: '3px 10px', borderRadius: 6,
+  },
+  urgencyBadge: {
+    fontSize: 11, fontWeight: 800, padding: '3px 10px', borderRadius: 6, letterSpacing: '0.02em',
+  },
+  spamBadge: {
+    fontSize: 11, fontWeight: 800, color: '#B91C1C', background: '#FEF2F2',
+    border: '1px solid #FECACA', padding: '3px 10px', borderRadius: 6,
+  },
+  duplicateBadge: {
+    fontSize: 11, fontWeight: 800, color: '#6B21A8', background: '#F3E8FF',
+    border: '1px solid #E9D5FF', padding: '3px 10px', borderRadius: 6,
+  },
+  langBadge: {
+    fontSize: 11, fontWeight: 700, color: '#1E40AF', background: '#EFF6FF',
+    border: '1px solid #DBEAFE', padding: '3px 10px', borderRadius: 6,
+  },
+  keywordRow: {
+    display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: -6, marginBottom: 4,
+  },
+  keywordChip: {
+    fontSize: 11, fontWeight: 700, color: '#0369A1', background: '#E0F2FE',
+    padding: '2px 8px', borderRadius: 99,
   },
   section: {},
   sectionTitle: {

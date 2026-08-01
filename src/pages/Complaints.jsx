@@ -245,7 +245,21 @@ export default function Complaints() {
                     <td style={styles.tdMono}>
                       {c.ticket_number || (typeof c.id === 'string' ? c.id.slice(0, 8) : `TKT-${c.id}`)}
                     </td>
-                    <td style={styles.tdBold}>{c.title || c.description || 'General Grievance'}</td>
+                    <td style={styles.tdBold}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span>{c.title || c.description || 'General Grievance'}</span>
+                        {c.spam_flag && (
+                          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#B91C1C', background: '#FEE2E2', border: '1px solid #FECACA', padding: '1px 6px', borderRadius: 4 }}>
+                            ⚠️ SPAM
+                          </span>
+                        )}
+                        {c.detected_language && (
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#1E40AF', background: '#EFF6FF', padding: '1px 6px', borderRadius: 4 }}>
+                            {c.detected_language}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td style={styles.td}>{villageObj.village_name || '—'}</td>
                     <td style={styles.tdMuted}>{c.category || 'General'}</td>
                     <td style={styles.td}>
