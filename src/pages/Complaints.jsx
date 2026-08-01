@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabaseAux } from '../lib/supabase'
+import { supabaseAux, supabase, API_BASE_URL } from '../lib/supabase'
 import ComplaintDetailModal from '../components/ComplaintDetailModal'
 import { AlertCircle, Search, Eye, Trash2, Filter, RefreshCw, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 
@@ -14,22 +14,45 @@ export default function Complaints() {
   const [deleting, setDeleting] = useState(null)
 
   async function deleteComplaint(complaint) {
-    const confirmMsg = `Are you sure you want to permanently delete this complaint?\n\nTicket: ${complaint.ticket_number || complaint.id}\nTitle: ${complaint.title || 'General Grievance'}\n\nThis action cannot be undone.`
+    const confirmMsg = `Are you sure you want to permanently delete this complaint?\n\nTicket: ${complaint.ticket_number || complaint.id}\nTitle: ${complaint.title || 'General Grievance'}\n\nThis will remove it from ALL platforms — citizen app, village admin, and super admin.\n\nThis action cannot be undone.`
     if (!window.confirm(confirmMsg)) return
 
     setDeleting(complaint.id)
     try {
-      const { error } = await supabaseAux
-        .from('complaints')
-        .delete()
-        .eq('id', complaint.id)
+      // Get Super Admin JWT for server-side auth
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
 
-      if (error) {
-        alert('Failed to delete complaint: ' + error.message)
-      } else {
+      const res = await fetch(`${API_BASE_URL}/delete-complaint`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ complaintId: complaint.id }),
+      })
+
+      const result = await res.json()
+
+      if (res.ok && result.success) {
         setComplaints(prev => prev.filter(c => c.id !== complaint.id))
         if (selectedComplaint?.id === complaint.id) {
           setSelectedComplaint(null)
+        }
+      } else {
+        // Fallback: try direct delete via supabaseAux
+        const { error } = await supabaseAux
+          .from('complaints')
+          .delete()
+          .eq('id', complaint.id)
+
+        if (error) {
+          alert('Failed to delete complaint: ' + (result.error || error.message))
+        } else {
+          setComplaints(prev => prev.filter(c => c.id !== complaint.id))
+          if (selectedComplaint?.id === complaint.id) {
+            setSelectedComplaint(null)
+          }
         }
       }
     } catch (err) {
