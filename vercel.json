@@ -9,6 +9,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/anonymous/(.*)", "destination": "/api/anonymous?action=$1" },
     { "source": "/api/py/notification_service/(.*)", "destination": "/api/py/notification_service" },
     { "source": "/api/py/cron_escalate", "destination": "/api/py/cron_escalate" },
     { "source": "/api/(.*)", "destination": "/api/$1" },

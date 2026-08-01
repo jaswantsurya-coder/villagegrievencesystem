@@ -21,10 +21,16 @@ from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from supabase_client import get_supabase_admin
-from firebase_push import send_push_notification, send_push_to_multiple
-from brevo_email import send_email
-from notification_templates import get_notification_content
+try:
+    from ._lib.supabase_client import get_supabase_admin
+    from ._lib.firebase_push import send_push_notification, send_push_to_multiple
+    from ._lib.brevo_email import send_email
+    from ._lib.notification_templates import get_notification_content
+except ImportError:
+    from _lib.supabase_client import get_supabase_admin
+    from _lib.firebase_push import send_push_notification, send_push_to_multiple
+    from _lib.brevo_email import send_email
+    from _lib.notification_templates import get_notification_content
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
