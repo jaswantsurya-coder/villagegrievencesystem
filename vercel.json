@@ -1,4 +1,7 @@
 {
+  "env": {
+    "UV_LINK_MODE": "copy"
+  },
   "crons": [
     {
       "path": "/api/py/cron_escalate",
