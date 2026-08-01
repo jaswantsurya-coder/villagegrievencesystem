@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
 import { sendWhatsAppNotification } from './whatsapp.js';
 
 /**
@@ -7,12 +8,13 @@ import { sendWhatsAppNotification } from './whatsapp.js';
  * - Inserts into admin_requests table
  * - Sends Brevo email notification to Super Admin
  * - Sends Firebase FCM push notification to Super Admin
+ * - Sends WhatsApp notifications to Applicant & Super Admin
  */
 export default async function handler(req, res) {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
@@ -30,7 +32,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const body = req.body || {};
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (pErr) {
+        console.warn('[webhook] JSON parse fallback error:', pErr);
+      }
+    }
 
     // Validate required fields
     const requiredFields = ['full_name', 'email', 'village_name', 'district', 'state'];
@@ -50,7 +59,7 @@ export default async function handler(req, res) {
     // Build record
     const record = {
       full_name: body.full_name,
-      email: body.email.trim().toLowerCase(),
+      email: String(body.email).trim().toLowerCase(),
       phone: body.phone || null,
       state: body.state,
       district: body.district,
@@ -59,7 +68,7 @@ export default async function handler(req, res) {
       address: body.address || null,
       gender: body.gender || null,
       aadhaar_number: body.aadhaar_number || null,
-      government_id_url: body.government_id_url || null,
+      government_id_url: body.government_id_url || body.proof_url?.[0] || null,
       profile_photo_url: body.profile_photo_url || null,
       reason: body.reason || null,
       status: 'pending',
@@ -134,6 +143,8 @@ export default async function handler(req, res) {
       } catch (emailErr) {
         console.error('[webhook] Brevo email error:', emailErr);
       }
+    }
+
     // ─── Send Firebase FCM to Super Admin ────────────────────────────
     try {
       await sendFCMToSuperAdmin(supabaseAdmin, inserted);
@@ -143,7 +154,6 @@ export default async function handler(req, res) {
 
     // ─── Send WhatsApp Notifications ──────────────────────────────────
     try {
-      // Send to applicant
       if (inserted.phone) {
         await sendWhatsAppNotification({
           to: inserted.phone,
@@ -151,7 +161,6 @@ export default async function handler(req, res) {
           data: inserted,
         });
       }
-      // Send to Super Admin
       const superAdminPhone = process.env.SUPER_ADMIN_PHONE || process.env.SUPERADMIN_PHONE || '+919876543210';
       if (superAdminPhone) {
         await sendWhatsAppNotification({
@@ -207,7 +216,7 @@ async function sendFCMToSuperAdmin(supabaseAdmin, request) {
     return;
   }
 
-  // Get OAuth2 access token for FCM v1 API
+  // Get OAuth2 access token for FCM v1 API using native Node crypto
   const accessToken = await getFirebaseAccessToken(serviceAccount);
   if (!accessToken) return;
 
@@ -250,29 +259,40 @@ async function sendFCMToSuperAdmin(supabaseAdmin, request) {
 }
 
 /**
- * Get Firebase OAuth2 access token using service account JWT.
+ * Get Firebase OAuth2 access token using service account JWT with native Node.js crypto.
  */
 async function getFirebaseAccessToken(serviceAccount) {
   try {
-    const { default: jwt } = await import('jsonwebtoken');
+    const rawKey = serviceAccount.private_key || '';
+    const privateKey = rawKey.replace(/\\n/g, '\n');
+
+    if (!privateKey || !serviceAccount.client_email) {
+      console.warn('[FCM] Missing client_email or private_key in service account');
+      return null;
+    }
 
     const now = Math.floor(Date.now() / 1000);
-    const token = jwt.sign(
-      {
-        iss: serviceAccount.client_email,
-        scope: 'https://www.googleapis.com/auth/firebase.messaging',
-        aud: 'https://oauth2.googleapis.com/token',
-        iat: now,
-        exp: now + 3600,
-      },
-      serviceAccount.private_key,
-      { algorithm: 'RS256' }
-    );
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    };
+
+    const encode = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const unsignedToken = `${encode(header)}.${encode(payload)}`;
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(unsignedToken);
+    const signature = signer.sign(privateKey, 'base64url');
+    const jwtToken = `${unsignedToken}.${signature}`;
 
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${token}`,
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtToken}`,
     });
 
     const data = await resp.json();

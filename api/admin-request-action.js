@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'node:crypto';
 import { sendWhatsAppNotification } from './whatsapp.js';
 
 /**
@@ -381,28 +382,40 @@ async function sendFCMToApplicant(supabaseClient, request, notification) {
 }
 
 /**
- * Get Firebase OAuth2 access token using service account JWT.
+ * Get Firebase OAuth2 access token using service account JWT with native Node.js crypto.
  */
 async function getFirebaseAccessToken(serviceAccount) {
   try {
-    const { default: jwt } = await import('jsonwebtoken');
+    const rawKey = serviceAccount.private_key || '';
+    const privateKey = rawKey.replace(/\\n/g, '\n');
+
+    if (!privateKey || !serviceAccount.client_email) {
+      console.warn('[FCM] Missing client_email or private_key in service account');
+      return null;
+    }
+
     const now = Math.floor(Date.now() / 1000);
-    const token = jwt.sign(
-      {
-        iss: serviceAccount.client_email,
-        scope: 'https://www.googleapis.com/auth/firebase.messaging',
-        aud: 'https://oauth2.googleapis.com/token',
-        iat: now,
-        exp: now + 3600,
-      },
-      serviceAccount.private_key,
-      { algorithm: 'RS256' }
-    );
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600,
+    };
+
+    const encode = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    const unsignedToken = `${encode(header)}.${encode(payload)}`;
+
+    const signer = crypto.createSign('RSA-SHA256');
+    signer.update(unsignedToken);
+    const signature = signer.sign(privateKey, 'base64url');
+    const jwtToken = `${unsignedToken}.${signature}`;
 
     const resp = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${token}`,
+      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwtToken}`,
     });
 
     const data = await resp.json();
