@@ -156,17 +156,21 @@ export default async function handler(req, res) {
       const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
       const supabase = createClient(auxUrl, auxKey);
 
+      const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
       const { data: existing } = await supabase
         .from('complaints')
-        .select('id, ticket_number, title, description, cleaned_complaint, created_at')
+        .select('id, ticket_number, title, description, cleaned_complaint, created_at, status, urgency_score, duplicate_group_id')
         .eq('village_id', village_id)
+        .gte('created_at', threeDaysAgo)
         .order('created_at', { ascending: false })
         .limit(100);
 
       const matches = [];
       let maxSim = 0.0;
+      let is_recurring_gap = false;
 
       if (existing && existing.length > 0) {
+        const now = Date.now();
         for (const item of existing) {
           const itemText = item.cleaned_complaint || item.description || item.title || '';
           if (!itemText) continue;
@@ -174,12 +178,20 @@ export default async function handler(req, res) {
           if (sim > maxSim) maxSim = sim;
 
           if (sim >= threshold) {
+            const ageHours = (now - new Date(item.created_at).getTime()) / (1000 * 60 * 60);
+            if (ageHours >= 24 && item.status !== 'Resolved') {
+              is_recurring_gap = true;
+            }
+
             matches.push({
               id: item.id,
               ticket_number: item.ticket_number || item.id,
               title: item.title || itemText.slice(0, 50),
               similarity_score: Number(sim.toFixed(2)),
-              created_at: item.created_at
+              created_at: item.created_at,
+              status: item.status,
+              age_hours: Math.round(ageHours),
+              duplicate_group_id: item.duplicate_group_id
             });
           }
         }
@@ -192,9 +204,13 @@ export default async function handler(req, res) {
         success: true,
         has_duplicates,
         highest_similarity: Number(maxSim.toFixed(2)),
+        is_recurring_gap,
+        recommended_urgency: is_recurring_gap ? 'High' : (maxSim >= 0.85 ? 'High' : 'Low'),
         similar_complaints: matches,
         message: has_duplicates
-          ? "A similar complaint already exists in your village. Would you like to support the existing complaint or continue submitting a new complaint?"
+          ? (is_recurring_gap
+              ? "⚠️ An unresolved complaint for this issue was submitted 1-3 days ago. Submitting this will escalate the urgency for village admins!"
+              : "A similar complaint already exists in your village. Would you like to support the existing complaint or continue submitting a new complaint?")
           : "No duplicate complaints detected."
       });
     } catch (err) {
