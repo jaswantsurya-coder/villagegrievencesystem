@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useId } from 'react'
 import { supabase } from '../lib/supabase'
 
 /**
@@ -16,6 +16,7 @@ export function useAdminRequests(filter = 'pending') {
     total: 0,
   })
   const channelRef = useRef(null)
+  const channelId = useRef(`admin_requests_${Math.random().toString(36).slice(2, 8)}`)
 
   // Fetch requests with optional filter
   const fetchRequests = useCallback(async () => {
@@ -66,7 +67,7 @@ export function useAdminRequests(filter = 'pending') {
 
     // Subscribe to real-time changes
     const channel = supabase
-      .channel('admin_requests_realtime')
+      .channel(channelId.current)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'admin_requests' },

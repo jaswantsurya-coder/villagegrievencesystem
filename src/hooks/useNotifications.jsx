@@ -10,6 +10,7 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const channelRef = useRef(null)
+  const channelId = useRef(`sa_notifs_${Math.random().toString(36).slice(2, 8)}`)
 
   // Fetch all notifications
   const fetchNotifications = useCallback(async () => {
@@ -68,7 +69,7 @@ export function useNotifications() {
 
     // Subscribe to real-time changes
     const channel = supabase
-      .channel('sa_notifications_realtime')
+      .channel(channelId.current)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'sa_notifications' },
