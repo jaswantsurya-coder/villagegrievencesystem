@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
+import { useNotifications } from '../hooks/useNotifications'
+import { useAdminRequests } from '../hooks/useAdminRequests'
+import { initializeSuperAdminFCM } from '../lib/fcmRegistration'
 import QuickActions from './QuickActions'
 import {
   LayoutDashboard,
@@ -21,21 +23,24 @@ import {
   Menu,
   X,
   Calendar,
+  CheckCheck,
 } from 'lucide-react'
 
 export default function AppShell() {
-  const { signOut, session } = useAuth()
+  const { signOut, session, user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [pendingCount, setPendingCount] = useState(12)
+  const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications()
+  const { stats: requestStats } = useAdminRequests('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentDateTime, setCurrentDateTime] = useState('')
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false)
+  const [fcmToast, setFcmToast] = useState(null)
+  const notifRef = useRef(null)
 
+  // Clock
   useEffect(() => {
-    fetchPendingCount()
-    const interval = setInterval(fetchPendingCount, 10000)
-
     const updateClock = () => {
       const now = new Date()
       const formatted =
@@ -54,27 +59,31 @@ export default function AppShell() {
     }
     updateClock()
     const clockInterval = setInterval(updateClock, 10000)
-
-    return () => {
-      clearInterval(interval)
-      clearInterval(clockInterval)
-    }
+    return () => clearInterval(clockInterval)
   }, [])
 
-  async function fetchPendingCount() {
-    try {
-      const { count, error } = await supabase
-        .from('admin_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-
-      if (!error && count !== null) {
-        setPendingCount(count)
-      }
-    } catch {
-      // Ignore
+  // Initialize FCM on login
+  useEffect(() => {
+    if (user?.id) {
+      initializeSuperAdminFCM(user.id, (notif) => {
+        setFcmToast(notif)
+        setTimeout(() => setFcmToast(null), 6000)
+      }).catch(() => {})
     }
-  }
+  }, [user?.id])
+
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    function handleClick(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setShowNotifDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const pendingCount = requestStats.pending
 
   const NAV_ITEMS = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -189,10 +198,69 @@ export default function AppShell() {
           </div>
 
           <div style={styles.headerRight}>
-            {/* Notification Bell */}
-            <div style={styles.notificationWrapper} onClick={() => navigate('/notifications')} title="Notifications">
-              <Bell style={{ width: 18, height: 18, color: '#475569' }} />
-              <span style={styles.notificationBadge}>12</span>
+            {/* Notification Bell with Dropdown */}
+            <div style={{ position: 'relative' }} ref={notifRef}>
+              <div
+                style={styles.notificationWrapper}
+                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                title="Notifications"
+              >
+                <Bell style={{ width: 18, height: 18, color: '#475569' }} />
+                {unreadCount > 0 && (
+                  <span style={styles.notificationBadge}>{unreadCount > 99 ? '99+' : unreadCount}</span>
+                )}
+              </div>
+
+              {/* Notification Dropdown */}
+              {showNotifDropdown && (
+                <div style={styles.notifDropdown}>
+                  <div style={styles.notifDropdownHeader}>
+                    <span style={styles.notifDropdownTitle}>Notifications</span>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); markAllRead() }}
+                        style={styles.markAllReadBtn}
+                      >
+                        <CheckCheck style={{ width: 12, height: 12 }} /> Mark all read
+                      </button>
+                    )}
+                  </div>
+                  <div style={styles.notifDropdownList}>
+                    {notifications.slice(0, 5).map(n => (
+                      <div
+                        key={n.id}
+                        style={{
+                          ...styles.notifDropdownItem,
+                          background: n.is_read ? '#FFFFFF' : '#EFF6FF',
+                          borderLeft: n.is_read ? '3px solid transparent' : '3px solid #2563EB',
+                        }}
+                        onClick={() => {
+                          markAsRead(n.id)
+                          setShowNotifDropdown(false)
+                          navigate(n.link_path || '/notifications')
+                        }}
+                      >
+                        <div style={styles.notifItemTitle}>{n.title}</div>
+                        <div style={styles.notifItemMsg}>{n.message}</div>
+                        <div style={styles.notifItemTime}>
+                          {n.created_at ? new Date(n.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : ''}
+                        </div>
+                      </div>
+                    ))}
+                    {notifications.length === 0 && (
+                      <div style={{ padding: 20, textAlign: 'center', color: '#94A3B8', fontSize: 12.5 }}>No notifications yet</div>
+                    )}
+                  </div>
+                  <div style={styles.notifDropdownFooter}>
+                    <button
+                      onClick={() => { setShowNotifDropdown(false); navigate('/notifications') }}
+                      style={styles.viewAllNotifsBtn}
+                    >
+                      View All Notifications
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Date Display */}
@@ -206,6 +274,20 @@ export default function AppShell() {
               SA
             </div>
           </div>
+
+          {/* FCM Toast */}
+          {fcmToast && (
+            <div style={styles.fcmToast}>
+              <Bell style={{ width: 14, height: 14, color: '#2563EB' }} />
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#0F172A' }}>{fcmToast.title}</div>
+                <div style={{ fontSize: 11.5, color: '#64748B' }}>{fcmToast.body}</div>
+              </div>
+              <button onClick={() => setFcmToast(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}>
+                <X style={{ width: 12, height: 12, color: '#94A3B8' }} />
+              </button>
+            </div>
+          )}
         </header>
 
         {/* MAIN PAGE BODY */}
@@ -537,5 +619,97 @@ const styles = {
     flex: 1,
     padding: '28px 32px 60px',
     overflowY: 'auto',
+  },
+  // Notification Dropdown Styles
+  notifDropdown: {
+    position: 'absolute',
+    top: 48,
+    right: 0,
+    width: 380,
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    borderRadius: 16,
+    boxShadow: '0 20px 40px rgba(15, 23, 42, 0.15)',
+    zIndex: 100,
+    overflow: 'hidden',
+  },
+  notifDropdownHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '14px 18px',
+    borderBottom: '1px solid #F1F5F9',
+  },
+  notifDropdownTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#0F172A',
+  },
+  markAllReadBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#2563EB',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+  },
+  notifDropdownList: {
+    maxHeight: 320,
+    overflowY: 'auto',
+  },
+  notifDropdownItem: {
+    padding: '12px 18px',
+    borderBottom: '1px solid #F8FAFC',
+    cursor: 'pointer',
+    transition: 'background 0.1s ease',
+  },
+  notifItemTitle: {
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: '#0F172A',
+    lineHeight: 1.3,
+  },
+  notifItemMsg: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 1.4,
+  },
+  notifItemTime: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontFamily: 'var(--font-mono)',
+    marginTop: 4,
+  },
+  notifDropdownFooter: {
+    padding: '10px 18px',
+    borderTop: '1px solid #F1F5F9',
+    textAlign: 'center',
+  },
+  viewAllNotifsBtn: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#2563EB',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+  },
+  fcmToast: {
+    position: 'fixed',
+    top: 80,
+    right: 32,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '12px 18px',
+    background: '#FFFFFF',
+    border: '1px solid #DBEAFE',
+    borderRadius: 14,
+    boxShadow: '0 8px 24px rgba(37, 99, 235, 0.15)',
+    zIndex: 200,
+    animation: 'slideInRight 0.3s ease',
   },
 }

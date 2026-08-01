@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, supabaseAux } from '../lib/supabase'
+import { useAdminRequests } from '../hooks/useAdminRequests'
 import StatCard from '../components/StatCard'
 import PlatformHealth from '../components/PlatformHealth'
 import ComplaintTrendChart from '../components/ComplaintTrendChart'
@@ -32,6 +33,7 @@ import {
 
 export default function Overview() {
   const navigate = useNavigate()
+  const { requests: adminRequests, stats: adminRequestStats } = useAdminRequests('all')
   const [stats, setStats] = useState({
     villages: 486,
     citizens: 24892,
@@ -51,6 +53,17 @@ export default function Overview() {
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [selectedStat, setSelectedStat] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Sync admin request stats from real-time hook
+  useEffect(() => {
+    setStats(prev => ({
+      ...prev,
+      pendingRequests: adminRequestStats.pending,
+    }))
+    if (adminRequests.length > 0) {
+      setRecentRequests(adminRequests.slice(0, 5))
+    }
+  }, [adminRequestStats, adminRequests])
 
   useEffect(() => {
     loadData()

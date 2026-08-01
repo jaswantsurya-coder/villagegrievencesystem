@@ -1,137 +1,142 @@
-import { useEffect, useState } from 'react'
-import { supabase, supabaseAux } from '../lib/supabase'
+import { useState } from 'react'
+import { useAdminRequests } from '../hooks/useAdminRequests'
+import { supabase, API_BASE_URL } from '../lib/supabase'
 import AdminRequestModal from '../components/AdminRequestModal'
 import PilotLinkModal from '../components/PilotLinkModal'
-import { Search, CheckCircle2, XCircle, Clock, Eye, Check, X, Sparkles, RefreshCw, Loader2 } from 'lucide-react'
-
-const BREVO_API_KEY = 'xsmtpsib-cfffd31dfdf28dafee3aee99eff62ad5d53feb62b9ed7eb8b07c9cf0311d2848-ds5mX4zI5UTsVk26'
+import { Search, CheckCircle2, XCircle, Clock, Eye, Check, X, Sparkles, RefreshCw, Loader2, Hash } from 'lucide-react'
 
 export default function Approvals() {
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('pending')
+  const { requests, stats, loading, refresh } = useAdminRequests(filter)
   const [search, setSearch] = useState('')
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [pilotRequest, setPilotRequest] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
+  const [toastType, setToastType] = useState('success')
 
-  useEffect(() => {
-    loadRequests()
-  }, [filter])
-
-  async function loadRequests() {
-    setLoading(true)
-    try {
-      // Try primary db (sompzqwvegygtpsrlhzt) first, fallback to aux db (dtucrczgagpzjbbrwqit)
-      let data = null
-
-      let q1 = supabase.from('admin_requests').select('*').order('created_at', { ascending: false })
-      if (filter !== 'all') q1 = q1.eq('status', filter)
-      const res1 = await q1
-
-      if (!res1.error && res1.data && res1.data.length > 0) {
-        data = res1.data
-      } else {
-        // Fallback to aux db admin_requests
-        let q2 = supabaseAux.from('admin_requests').select('*').order('created_at', { ascending: false })
-        if (filter !== 'all') q2 = q2.eq('status', filter)
-        const res2 = await q2
-        if (!res2.error && res2.data) {
-          data = res2.data
-        }
-      }
-
-      setRequests(data || [])
-    } catch (err) {
-      console.error('Error loading requests:', err)
-      setRequests([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function sendBrevoNotification(type, reqData) {
-    try {
-      const subject =
-        type === 'approval'
-          ? `[GramSeva] 🎉 Admin Verification Request APPROVED — ${reqData.village_name}`
-          : `[GramSeva] Admin Verification Request Update — ${reqData.village_name}`
-
-      const htmlContent =
-        type === 'approval'
-          ? `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;"><div style="background:#166534;padding:20px;text-align:center;color:white;border-radius:8px;"><h2 style="margin:0;">✓ Admin Access Approved!</h2></div><p style="padding-top:16px;">Dear <strong>${reqData.full_name || 'Applicant'}</strong>,</p><p>Your admin verification for <strong>${reqData.village_name}</strong> (${reqData.district}) has been approved by the Super Admin.</p></div>`
-          : `<div style="font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:12px;"><div style="background:#991b1b;padding:20px;text-align:center;color:white;border-radius:8px;"><h2 style="margin:0;">Request Rejected</h2></div><p style="padding-top:16px;">Dear <strong>${reqData.full_name || 'Applicant'}</strong>,</p><p>Your request for <strong>${reqData.village_name}</strong> could not be approved at this time.</p></div>`
-
-      await fetch('https://api.brevo.com/v3/smtp/email', {
-        method: 'POST',
-        headers: {
-          'api-key': BREVO_API_KEY,
-          'Content-Type': 'application/json',
-          accept: 'application/json',
-        },
-        body: JSON.stringify({
-          sender: { name: 'GramSeva Admin Portal', email: 'admin@gramseva.in' },
-          to: [{ email: reqData.email || 'admin@gramseva.in', name: reqData.full_name || 'Applicant' }],
-          subject,
-          htmlContent,
-        }),
-      })
-    } catch (err) {
-      console.error('Brevo notification error:', err)
-    }
+  function showToast(msg, type = 'success') {
+    setToastMsg(msg)
+    setToastType(type)
+    setTimeout(() => setToastMsg(''), 5000)
   }
 
   async function handleApprove(req, notes) {
     setActionLoading(true)
     try {
-      // Update in primary db first
-      const payload = {
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-        reviewer_notes: notes || 'Verified & Approved by SuperAdmin',
-      }
-      await supabase.from('admin_requests').update(payload).eq('id', req.id)
-      await supabaseAux.from('admin_requests').update(payload).eq('id', req.id)
+      // Get current session token
+      const { data: { session } } = await supabase.auth.getSession()
+      const jwt = session?.access_token
 
-      await sendBrevoNotification('approval', req)
-      setToastMsg(`Approved request for ${req.full_name} (${req.village_name}). Brevo notification dispatched.`)
+      if (jwt) {
+        // Call server-side API for full workflow (village creation, invitation, email, FCM)
+        const resp = await fetch(`${API_BASE_URL}/admin-request-action`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({
+            action: 'approve',
+            requestId: req.id,
+            notes: notes || 'Verified & Approved by SuperAdmin',
+          }),
+        })
+
+        const result = await resp.json()
+        if (result.success) {
+          showToast(`✅ Approved: ${req.full_name} (${req.village_name}). Invitation sent to ${req.email}.`)
+        } else {
+          // Fallback: direct Supabase update
+          await directApprove(req, notes)
+        }
+      } else {
+        // Fallback: direct Supabase update
+        await directApprove(req, notes)
+      }
+
       setSelectedRequest(null)
-      loadRequests()
+      refresh()
     } catch (err) {
-      console.error(err)
+      console.error('Approve error:', err)
+      // Fallback
+      await directApprove(req, notes)
+      setSelectedRequest(null)
+      refresh()
     } finally {
       setActionLoading(false)
     }
   }
 
+  async function directApprove(req, notes) {
+    const payload = {
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      reviewer_notes: notes || 'Verified & Approved by SuperAdmin',
+    }
+    await supabase.from('admin_requests').update(payload).eq('id', req.id)
+    showToast(`Approved: ${req.full_name} (${req.village_name}).`)
+  }
+
   async function handleReject(req, reason) {
     setActionLoading(true)
     try {
-      const payload = {
-        status: 'rejected',
-        reviewed_at: new Date().toISOString(),
-        rejection_reason: reason,
-      }
-      await supabase.from('admin_requests').update(payload).eq('id', req.id)
-      await supabaseAux.from('admin_requests').update(payload).eq('id', req.id)
+      const { data: { session } } = await supabase.auth.getSession()
+      const jwt = session?.access_token
 
-      await sendBrevoNotification('rejection', req)
-      setToastMsg(`Rejected request for ${req.full_name} (${req.village_name}).`)
+      if (jwt) {
+        const resp = await fetch(`${API_BASE_URL}/admin-request-action`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${jwt}`,
+          },
+          body: JSON.stringify({
+            action: 'reject',
+            requestId: req.id,
+            reason: reason || 'Request could not be approved at this time.',
+          }),
+        })
+
+        const result = await resp.json()
+        if (result.success) {
+          showToast(`Rejected: ${req.full_name} (${req.village_name}). Notification sent.`, 'error')
+        } else {
+          await directReject(req, reason)
+        }
+      } else {
+        await directReject(req, reason)
+      }
+
       setSelectedRequest(null)
-      loadRequests()
+      refresh()
     } catch (err) {
-      console.error(err)
+      console.error('Reject error:', err)
+      await directReject(req, reason)
+      setSelectedRequest(null)
+      refresh()
     } finally {
       setActionLoading(false)
     }
+  }
+
+  async function directReject(req, reason) {
+    const payload = {
+      status: 'rejected',
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: reason,
+    }
+    await supabase.from('admin_requests').update(payload).eq('id', req.id)
+    showToast(`Rejected: ${req.full_name} (${req.village_name}).`, 'error')
   }
 
   const filteredRequests = requests.filter(
     (r) =>
       (r.full_name || '').toLowerCase().includes(search.toLowerCase()) ||
       (r.village_name || '').toLowerCase().includes(search.toLowerCase()) ||
-      (r.district || '').toLowerCase().includes(search.toLowerCase())
+      (r.district || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.request_id || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.email || '').toLowerCase().includes(search.toLowerCase())
   )
 
   return (
@@ -141,21 +146,39 @@ export default function Approvals() {
         <div>
           <h1 style={styles.pageTitle}>Admin Verification Requests</h1>
           <p style={styles.pageSubtitle}>
-            Review and approve village Sarpanch portal credentials · Pilot link generator available
+            Review and approve village Sarpanch portal credentials · Real-time sync enabled
             <span style={styles.dbTag}>LIVE · sompzqwvegygtpsrlhzt</span>
           </p>
         </div>
-        <button onClick={loadRequests} style={styles.refreshBtn} className="btn-interactive">
-          <RefreshCw style={{ width: 14, height: 14 }} /> Refresh
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* Stats Pills */}
+          <div style={styles.statsPill}>
+            <span style={{ ...styles.statDot, background: '#F59E0B' }} />
+            <span style={styles.statLabel}>Pending</span>
+            <span style={styles.statValue}>{stats.pending}</span>
+          </div>
+          <div style={styles.statsPill}>
+            <span style={{ ...styles.statDot, background: '#22C55E' }} />
+            <span style={styles.statLabel}>Approved</span>
+            <span style={styles.statValue}>{stats.approved}</span>
+          </div>
+          <div style={styles.statsPill}>
+            <span style={{ ...styles.statDot, background: '#EF4444' }} />
+            <span style={styles.statLabel}>Rejected</span>
+            <span style={styles.statValue}>{stats.rejected}</span>
+          </div>
+          <button onClick={refresh} style={styles.refreshBtn} className="btn-interactive">
+            <RefreshCw style={{ width: 14, height: 14 }} /> Refresh
+          </button>
+        </div>
       </div>
 
       {toastMsg && (
-        <div style={styles.toast}>
-          <CheckCircle2 style={{ width: 16, height: 16, color: '#166534' }} />
+        <div style={{ ...styles.toast, background: toastType === 'error' ? '#FEE2E2' : '#DCFCE7', borderColor: toastType === 'error' ? '#FCA5A5' : '#86EFAC', color: toastType === 'error' ? '#991B1B' : '#166534' }}>
+          {toastType === 'error' ? <XCircle style={{ width: 16, height: 16 }} /> : <CheckCircle2 style={{ width: 16, height: 16 }} />}
           <span>{toastMsg}</span>
           <button onClick={() => setToastMsg('')} style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer' }}>
-            <X style={{ width: 14, height: 14, color: '#166534' }} />
+            <X style={{ width: 14, height: 14 }} />
           </button>
         </div>
       )}
@@ -170,6 +193,7 @@ export default function Approvals() {
             className="btn-interactive"
           >
             <Clock style={{ width: 14, height: 14 }} /> Pending
+            {stats.pending > 0 && <span style={styles.tabBadge}>{stats.pending}</span>}
           </button>
           <button
             onClick={() => setFilter('approved')}
@@ -190,7 +214,7 @@ export default function Approvals() {
             style={{ ...styles.tabBtn, ...(filter === 'all' ? styles.tabBtnActive : {}) }}
             className="btn-interactive"
           >
-            All Requests
+            All ({stats.total})
           </button>
         </div>
 
@@ -199,7 +223,7 @@ export default function Approvals() {
           <Search style={{ width: 14, height: 14, color: '#94A3B8' }} />
           <input
             type="text"
-            placeholder="Filter applicant, village, district..."
+            placeholder="Filter by name, village, district, ID, email..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={styles.searchInput}
@@ -220,7 +244,10 @@ export default function Approvals() {
           <table style={styles.table}>
             <thead>
               <tr>
+                <th style={styles.th}>Request ID</th>
                 <th style={styles.th}>Applicant</th>
+                <th style={styles.th}>Email</th>
+                <th style={styles.th}>Phone</th>
                 <th style={styles.th}>Village</th>
                 <th style={styles.th}>District</th>
                 <th style={styles.th}>State</th>
@@ -232,12 +259,20 @@ export default function Approvals() {
             <tbody>
               {filteredRequests.map((r) => (
                 <tr key={r.id} style={styles.tr}>
+                  <td style={styles.tdMono}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Hash style={{ width: 10, height: 10, color: '#94A3B8' }} />
+                      {r.request_id || r.id?.slice(0, 8)}
+                    </div>
+                  </td>
                   <td style={styles.tdBold}>{r.full_name || 'Admin Applicant'}</td>
+                  <td style={styles.tdMuted}>{r.email || '—'}</td>
+                  <td style={styles.tdMuted}>{r.phone || '—'}</td>
                   <td style={styles.td}>{r.village_name}</td>
                   <td style={styles.tdMuted}>{r.district}</td>
                   <td style={styles.tdMuted}>{r.state || 'Andhra Pradesh'}</td>
                   <td style={styles.tdMono}>
-                    {r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '—'}
+                    {r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: '2-digit' }) : '—'}
                   </td>
                   <td style={styles.td}>
                     <span
@@ -262,10 +297,10 @@ export default function Approvals() {
 
                       {r.status === 'pending' && (
                         <>
-                          <button onClick={() => handleApprove(r, 'Approved')} style={styles.approveBtn} className="btn-interactive">
+                          <button onClick={() => handleApprove(r, 'Approved')} style={styles.approveBtn} className="btn-interactive" disabled={actionLoading}>
                             <Check style={{ width: 13, height: 13 }} /> Approve
                           </button>
-                          <button onClick={() => handleReject(r, 'Rejected')} style={styles.rejectBtn} className="btn-interactive">
+                          <button onClick={() => handleReject(r, 'Rejected')} style={styles.rejectBtn} className="btn-interactive" disabled={actionLoading}>
                             <X style={{ width: 13, height: 13 }} /> Reject
                           </button>
                         </>
@@ -301,7 +336,7 @@ export default function Approvals() {
 
 const styles = {
   container: { display: 'flex', flexDirection: 'column', gap: 20 },
-  pageHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  pageHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 },
   pageTitle: { fontSize: 22, fontWeight: 800, color: '#0F172A' },
   pageSubtitle: { fontSize: 13, color: '#64748B', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 },
   dbTag: {
@@ -315,6 +350,19 @@ const styles = {
     borderRadius: 6,
     letterSpacing: '0.04em',
   },
+  statsPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    borderRadius: 10,
+    background: '#FFFFFF',
+    border: '1px solid #E2E8F0',
+    fontSize: 11.5,
+  },
+  statDot: { width: 6, height: 6, borderRadius: 99 },
+  statLabel: { color: '#64748B', fontWeight: 600 },
+  statValue: { fontWeight: 800, color: '#0F172A' },
   refreshBtn: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -331,19 +379,18 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    background: '#DCFCE7',
-    border: '1px solid #86EFAC',
-    color: '#166534',
     padding: '10px 16px',
     borderRadius: 12,
     fontSize: 13,
     fontWeight: 600,
+    border: '1px solid',
   },
   controlBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' },
   tabGroup: { display: 'flex', alignItems: 'center', gap: 4, background: '#FFFFFF', padding: 4, borderRadius: 12, border: '1px solid #E2E8F0' },
   tabBtn: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: '#64748B', background: 'none', border: 'none', cursor: 'pointer' },
   tabBtnActive: { background: '#2563EB', color: '#FFFFFF' },
-  searchBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, padding: '0 12px', height: 38, width: 280 },
+  tabBadge: { fontSize: 10, fontWeight: 800, background: 'rgba(255,255,255,0.25)', borderRadius: 99, padding: '1px 6px', marginLeft: 2 },
+  searchBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 10, padding: '0 12px', height: 38, width: 320 },
   searchInput: { border: 'none', outline: 'none', fontSize: 12.5, width: '100%' },
   card: { background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)' },
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 },
@@ -351,8 +398,8 @@ const styles = {
   tr: { borderBottom: '1px solid #F1F5F9' },
   td: { padding: '12px 14px', color: '#0F172A' },
   tdBold: { padding: '12px 14px', fontWeight: 700, color: '#0F172A' },
-  tdMuted: { padding: '12px 14px', color: '#64748B' },
-  tdMono: { padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#64748B' },
+  tdMuted: { padding: '12px 14px', color: '#64748B', fontSize: 12 },
+  tdMono: { padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, color: '#64748B' },
   statusBadge: { fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 10px', textTransform: 'capitalize' },
   btnRow: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 },
   pilotBtn: { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, color: '#7C3AED', background: '#F3E8FF', border: '1px solid #E9D5FF', cursor: 'pointer' },

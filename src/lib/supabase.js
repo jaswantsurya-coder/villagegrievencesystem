@@ -23,3 +23,11 @@ export const supabaseAuxAdmin = supabaseAuxServiceKey
 // Citizen app base URL
 export const CITIZEN_APP_URL =
   import.meta.env.VITE_CITIZEN_APP_URL || 'https://villagegrievencesystem-fgxb.vercel.app'
+
+// Super Admin Dashboard URL (used in email links)
+export const SUPERADMIN_DASHBOARD_URL =
+  import.meta.env.VITE_SUPERADMIN_DASHBOARD_URL || 'https://gramseva-superadmin.vercel.app'
+
+// API base URL for serverless functions
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://villagegrievencesystem-fgxb.vercel.app/api'
