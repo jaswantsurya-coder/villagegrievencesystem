@@ -1,10 +1,10 @@
-import { X, MapPin, User, Phone, Calendar, Tag, AlertTriangle, MessageSquare, Image, CheckCircle2, Clock, Shield } from 'lucide-react'
+import { X, Trash2, MapPin, User, Phone, Calendar, Tag, AlertTriangle, MessageSquare, Image, CheckCircle2, Clock, Shield } from 'lucide-react'
 
 /**
  * Complaint Detail Modal — shows full details of a single complaint.
  * Includes citizen info, village, category, description, attachments, timeline.
  */
-export default function ComplaintDetailModal({ complaint, citizen, village, onClose }) {
+export default function ComplaintDetailModal({ complaint, citizen, village, onClose, onDelete }) {
   if (!complaint) return null
 
   function formatDate(iso) {
@@ -39,9 +39,16 @@ export default function ComplaintDetailModal({ complaint, citizen, village, onCl
               {complaint.ticket_number || (typeof complaint.id === 'string' ? complaint.id.slice(0, 8) : `TKT-${complaint.id}`)}
             </p>
           </div>
-          <button onClick={onClose} style={styles.closeBtn}>
-            <X style={{ width: 18, height: 18 }} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {onDelete && (
+              <button onClick={() => onDelete(complaint)} style={styles.deleteBtn}>
+                <Trash2 style={{ width: 15, height: 15 }} /> Delete
+              </button>
+            )}
+            <button onClick={onClose} style={styles.closeBtn}>
+              <X style={{ width: 18, height: 18 }} />
+            </button>
+          </div>
         </div>
 
         <div style={styles.body}>
@@ -265,6 +272,12 @@ const styles = {
     width: 36, height: 36, borderRadius: 10, border: '1px solid #E2E8F0',
     background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center',
     color: '#64748B', cursor: 'pointer',
+  },
+  deleteBtn: {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '8px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+    color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA',
+    cursor: 'pointer',
   },
   body: {
     padding: '20px 24px', overflowY: 'auto', display: 'flex',

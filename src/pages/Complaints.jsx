@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabaseAux } from '../lib/supabase'
 import ComplaintDetailModal from '../components/ComplaintDetailModal'
-import { AlertCircle, Search, Eye, Filter, RefreshCw, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { AlertCircle, Search, Eye, Trash2, Filter, RefreshCw, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 
 export default function Complaints() {
   const [complaints, setComplaints] = useState([])
@@ -11,6 +11,34 @@ export default function Complaints() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
   const [selectedComplaint, setSelectedComplaint] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+
+  async function deleteComplaint(complaint) {
+    const confirmMsg = `Are you sure you want to permanently delete this complaint?\n\nTicket: ${complaint.ticket_number || complaint.id}\nTitle: ${complaint.title || 'General Grievance'}\n\nThis action cannot be undone.`
+    if (!window.confirm(confirmMsg)) return
+
+    setDeleting(complaint.id)
+    try {
+      const { error } = await supabaseAux
+        .from('complaints')
+        .delete()
+        .eq('id', complaint.id)
+
+      if (error) {
+        alert('Failed to delete complaint: ' + error.message)
+      } else {
+        setComplaints(prev => prev.filter(c => c.id !== complaint.id))
+        if (selectedComplaint?.id === complaint.id) {
+          setSelectedComplaint(null)
+        }
+      }
+    } catch (err) {
+      console.error('Delete error:', err)
+      alert('Failed to delete complaint.')
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   useEffect(() => {
     loadComplaintsData()
@@ -182,7 +210,7 @@ export default function Complaints() {
                 <th style={styles.th}>Status</th>
                 <th style={styles.th}>Citizen</th>
                 <th style={styles.th}>Date</th>
-                <th style={{ ...styles.th, textAlign: 'center' }}>View</th>
+                <th style={{ ...styles.th, textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -236,13 +264,23 @@ export default function Complaints() {
                     <td style={styles.tdMuted}>{citizenObj.name || 'Anonymous'}</td>
                     <td style={styles.tdMono}>{formatDate(c.created_at)}</td>
                     <td style={{ textAlign: 'center', padding: '12px 14px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSelectedComplaint(c) }}
-                        style={styles.viewBtn}
-                        title="View Details"
-                      >
-                        <Eye style={{ width: 15, height: 15 }} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSelectedComplaint(c) }}
+                          style={styles.viewBtn}
+                          title="View Details"
+                        >
+                          <Eye style={{ width: 15, height: 15 }} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteComplaint(c) }}
+                          style={styles.deleteBtn}
+                          title="Delete Complaint"
+                          disabled={deleting === c.id}
+                        >
+                          <Trash2 style={{ width: 15, height: 15 }} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -259,6 +297,7 @@ export default function Complaints() {
           citizen={profiles[selectedComplaint.citizen_id]}
           village={villages[selectedComplaint.village_id]}
           onClose={() => setSelectedComplaint(null)}
+          onDelete={deleteComplaint}
         />
       )}
     </div>
@@ -332,5 +371,10 @@ const styles = {
     width: 32, height: 32, borderRadius: 8, border: '1px solid #E2E8F0',
     background: '#F8FAFC', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
     color: '#2563EB', cursor: 'pointer', transition: 'all 0.15s ease',
+  },
+  deleteBtn: {
+    width: 32, height: 32, borderRadius: 8, border: '1px solid #FECACA',
+    background: '#FEF2F2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    color: '#DC2626', cursor: 'pointer', transition: 'all 0.15s ease',
   },
 }
