@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabaseAux } from '../lib/supabase'
+import ComplaintDetailModal from '../components/ComplaintDetailModal'
 import { AlertCircle, Search, Eye, Filter, RefreshCw, Loader2, CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
 
 export default function Complaints() {
@@ -9,6 +10,7 @@ export default function Complaints() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('All')
+  const [selectedComplaint, setSelectedComplaint] = useState(null)
 
   useEffect(() => {
     loadComplaintsData()
@@ -179,7 +181,8 @@ export default function Complaints() {
                 <th style={styles.th}>Priority</th>
                 <th style={styles.th}>Status</th>
                 <th style={styles.th}>Citizen</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Date</th>
+                <th style={styles.th}>Date</th>
+                <th style={{ ...styles.th, textAlign: 'center' }}>View</th>
               </tr>
             </thead>
             <tbody>
@@ -187,7 +190,7 @@ export default function Complaints() {
                 const villageObj = villages[c.village_id] || {}
                 const citizenObj = profiles[c.citizen_id] || {}
                 return (
-                  <tr key={c.id} style={styles.tr}>
+                  <tr key={c.id} style={{ ...styles.tr, cursor: 'pointer' }} onClick={() => setSelectedComplaint(c)}>
                     <td style={styles.tdMono}>
                       {c.ticket_number || (typeof c.id === 'string' ? c.id.slice(0, 8) : `TKT-${c.id}`)}
                     </td>
@@ -231,7 +234,16 @@ export default function Complaints() {
                       </span>
                     </td>
                     <td style={styles.tdMuted}>{citizenObj.name || 'Anonymous'}</td>
-                    <td style={{ ...styles.tdMono, textAlign: 'right' }}>{formatDate(c.created_at)}</td>
+                    <td style={styles.tdMono}>{formatDate(c.created_at)}</td>
+                    <td style={{ textAlign: 'center', padding: '12px 14px' }}>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedComplaint(c) }}
+                        style={styles.viewBtn}
+                        title="View Details"
+                      >
+                        <Eye style={{ width: 15, height: 15 }} />
+                      </button>
+                    </td>
                   </tr>
                 )
               })}
@@ -239,6 +251,16 @@ export default function Complaints() {
           </table>
         )}
       </div>
+
+      {/* Complaint Detail Modal */}
+      {selectedComplaint && (
+        <ComplaintDetailModal
+          complaint={selectedComplaint}
+          citizen={profiles[selectedComplaint.citizen_id]}
+          village={villages[selectedComplaint.village_id]}
+          onClose={() => setSelectedComplaint(null)}
+        />
+      )}
     </div>
   )
 }
@@ -306,4 +328,9 @@ const styles = {
   statusBadge: { fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 10px' },
   loadingBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 60, fontSize: 13, color: '#64748B' },
   emptyBox: { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 60, fontSize: 13, color: '#94A3B8' },
+  viewBtn: {
+    width: 32, height: 32, borderRadius: 8, border: '1px solid #E2E8F0',
+    background: '#F8FAFC', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    color: '#2563EB', cursor: 'pointer', transition: 'all 0.15s ease',
+  },
 }
