@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendWhatsAppNotification } from './whatsapp.js';
 
 /**
  * POST /api/admin-request-action
@@ -197,6 +198,20 @@ export default async function handler(req, res) {
         link: invitationUrl,
       });
 
+      // 8. Send WhatsApp Notification to applicant
+      if (request.phone) {
+        try {
+          await sendWhatsAppNotification({
+            to: request.phone,
+            type: 'approval',
+            data: { ...request, invitation_url: invitationUrl },
+          });
+          console.log('[action] WhatsApp approval sent to:', request.phone);
+        } catch (waErr) {
+          console.error('[action] WhatsApp approval error:', waErr);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         action: 'approved',
@@ -272,6 +287,20 @@ export default async function handler(req, res) {
         body: `Your Village Administrator request for ${request.village_name} could not be approved.${reason ? ' Reason: ' + reason : ''}`,
         link: '/',
       });
+
+      // 4. Send WhatsApp notification to applicant
+      if (request.phone) {
+        try {
+          await sendWhatsAppNotification({
+            to: request.phone,
+            type: 'rejection',
+            data: { ...request, rejection_reason: reason },
+          });
+          console.log('[action] WhatsApp rejection sent to:', request.phone);
+        } catch (waErr) {
+          console.error('[action] WhatsApp rejection error:', waErr);
+        }
+      }
 
       return res.status(200).json({
         success: true,

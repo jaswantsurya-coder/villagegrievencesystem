@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { sendWhatsAppNotification } from './whatsapp.js';
 
 /**
  * POST /api/admin-request-webhook
@@ -133,13 +134,35 @@ export default async function handler(req, res) {
       } catch (emailErr) {
         console.error('[webhook] Brevo email error:', emailErr);
       }
-    }
-
     // ─── Send Firebase FCM to Super Admin ────────────────────────────
     try {
       await sendFCMToSuperAdmin(supabaseAdmin, inserted);
     } catch (fcmErr) {
       console.error('[webhook] FCM error:', fcmErr);
+    }
+
+    // ─── Send WhatsApp Notifications ──────────────────────────────────
+    try {
+      // Send to applicant
+      if (inserted.phone) {
+        await sendWhatsAppNotification({
+          to: inserted.phone,
+          type: 'submission_applicant',
+          data: inserted,
+        });
+      }
+      // Send to Super Admin
+      const superAdminPhone = process.env.SUPER_ADMIN_PHONE || process.env.SUPERADMIN_PHONE || '+919876543210';
+      if (superAdminPhone) {
+        await sendWhatsAppNotification({
+          to: superAdminPhone,
+          type: 'submission_superadmin',
+          data: inserted,
+        });
+      }
+      console.log('[webhook] WhatsApp notifications triggered successfully');
+    } catch (waErr) {
+      console.error('[webhook] WhatsApp notification error:', waErr);
     }
 
     return res.status(200).json({
