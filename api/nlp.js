@@ -156,18 +156,19 @@ export default async function handler(req, res) {
       const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
       const supabase = createClient(auxUrl, auxKey);
 
-      const threeDaysAgo = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
+      // Query all UNRESOLVED complaints in the village (regardless of age: 1 day, 1 month, 6 months)
       const { data: existing } = await supabase
         .from('complaints')
         .select('id, ticket_number, title, description, cleaned_complaint, created_at, status, urgency_score, duplicate_group_id')
         .eq('village_id', village_id)
-        .gte('created_at', threeDaysAgo)
+        .neq('status', 'Resolved')
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(150);
 
       const matches = [];
       let maxSim = 0.0;
-      let is_recurring_gap = false;
+      let is_unresolved_match = false;
+      let oldest_unresolved_days = 0;
 
       if (existing && existing.length > 0) {
         const now = Date.now();
@@ -178,9 +179,10 @@ export default async function handler(req, res) {
           if (sim > maxSim) maxSim = sim;
 
           if (sim >= threshold) {
-            const ageHours = (now - new Date(item.created_at).getTime()) / (1000 * 60 * 60);
-            if (ageHours >= 24 && item.status !== 'Resolved') {
-              is_recurring_gap = true;
+            const ageDays = Math.floor((now - new Date(item.created_at).getTime()) / (1000 * 60 * 60 * 24));
+            is_unresolved_match = true;
+            if (ageDays > oldest_unresolved_days) {
+              oldest_unresolved_days = ageDays;
             }
 
             matches.push({
@@ -190,7 +192,7 @@ export default async function handler(req, res) {
               similarity_score: Number(sim.toFixed(2)),
               created_at: item.created_at,
               status: item.status,
-              age_hours: Math.round(ageHours),
+              age_days: ageDays,
               duplicate_group_id: item.duplicate_group_id
             });
           }
@@ -200,18 +202,29 @@ export default async function handler(req, res) {
       matches.sort((a, b) => b.similarity_score - a.similarity_score);
       const has_duplicates = matches.length > 0 && maxSim >= 0.75;
 
+      // Urgency escalation logic based on age of unresolved complaint:
+      // If unresolved issue is > 7 days old -> Critical
+      // If unresolved issue is > 1 day old  -> High
+      let recommended_urgency = 'Low';
+      if (has_duplicates && is_unresolved_match) {
+        if (oldest_unresolved_days >= 7) recommended_urgency = 'Critical';
+        else if (oldest_unresolved_days >= 1) recommended_urgency = 'High';
+        else recommended_urgency = 'Medium';
+      }
+
       return res.status(200).json({
         success: true,
         has_duplicates,
         highest_similarity: Number(maxSim.toFixed(2)),
-        is_recurring_gap,
-        recommended_urgency: is_recurring_gap ? 'High' : (maxSim >= 0.85 ? 'High' : 'Low'),
+        is_unresolved_match,
+        oldest_unresolved_days,
+        recommended_urgency,
         similar_complaints: matches,
         message: has_duplicates
-          ? (is_recurring_gap
-              ? "⚠️ An unresolved complaint for this issue was submitted 1-3 days ago. Submitting this will escalate the urgency for village admins!"
-              : "A similar complaint already exists in your village. Would you like to support the existing complaint or continue submitting a new complaint?")
-          : "No duplicate complaints detected."
+          ? (oldest_unresolved_days >= 1
+              ? `⚠️ An unresolved complaint for this issue was submitted ${oldest_unresolved_days} day(s) ago! Submitting will group them and escalate urgency to ${recommended_urgency}.`
+              : "A similar unresolved complaint already exists in your village. Would you like to support it or submit a new ticket?")
+          : "No similar unresolved complaints detected."
       });
     } catch (err) {
       console.error('[api/nlp check-duplicate error]:', err);
