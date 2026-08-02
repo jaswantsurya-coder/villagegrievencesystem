@@ -1,14 +1,13 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { Clock, ArrowDownRight, Zap, RotateCcw } from 'lucide-react'
 
-const data = [
-  { name: 'Open', value: 22.7, color: '#3B82F6' },
-  { name: 'In Progress', value: 19.7, color: '#F59E0B' },
-  { name: 'Resolved', value: 54.6, color: '#22C55E' },
-  { name: 'Escalated', value: 3.0, color: '#EF4444' },
-]
-
-export default function StatusDonutChart({ totalComplaints = 18573 }) {
+export default function StatusDonutChart({ statusData = [], totalComplaints = 0, avgTurnaroundDays = 0 }) {
+  const data = statusData.length > 0 ? statusData : [
+    { name: 'Open', value: 0, color: '#3B82F6' },
+    { name: 'In Progress', value: 0, color: '#F59E0B' },
+    { name: 'Resolved', value: 0, color: '#22C55E' },
+    { name: 'Escalated', value: 0, color: '#EF4444' },
+  ]
   return (
     <div style={styles.grid}>
       {/* Donut Chart Card */}
@@ -84,7 +83,7 @@ export default function StatusDonutChart({ totalComplaints = 18573 }) {
 
         <div style={styles.resolutionBody}>
           <div style={styles.bigTime}>
-            4.6 <span style={{ fontSize: 16, fontWeight: 600, color: '#64748B' }}>Days</span>
+            {avgTurnaroundDays} <span style={{ fontSize: 16, fontWeight: 600, color: '#64748B' }}>Days</span>
           </div>
 
           <div style={styles.resolutionTrend}>

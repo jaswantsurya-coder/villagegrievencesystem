@@ -1,14 +1,10 @@
 import { Award, ShieldCheck, Trophy } from 'lucide-react'
 
-const topVillages = [
-  { village: 'Bhimavaram', district: 'West Godavari', resolutionRate: 98, solved: 312, score: 96, isTop: true },
-  { village: 'Tadepalligudem', district: 'West Godavari', resolutionRate: 95, solved: 298, score: 93 },
-  { village: 'Rajahmundry Rural', district: 'East Godavari', resolutionRate: 94, solved: 276, score: 92 },
-  { village: 'Pithapuram', district: 'Kakinada', resolutionRate: 91, solved: 243, score: 90 },
-  { village: 'Narasapur', district: 'West Godavari', resolutionRate: 89, solved: 231, score: 89 },
-]
-
-export default function BestPerformingVillages({ onViewAll }) {
+export default function BestPerformingVillages({ bestVillages = [], onViewAll }) {
+  const topVillages = bestVillages.length > 0 ? bestVillages : [
+    { village: 'Vizianagaram', district: 'Vizianagaram', resolutionRate: 100, solved: 1, score: 100, isTop: true },
+    { village: 'Visakhapatnam', district: 'Visakhapatnam', resolutionRate: 100, solved: 0, score: 100 },
+  ]
   return (
     <div style={styles.card}>
       <div style={styles.header}>

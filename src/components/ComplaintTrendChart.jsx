@@ -2,40 +2,10 @@ import { useState } from 'react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 
-const yearlyData = {
-  'This Year': [
-    { month: 'Jan', complaints: 4200 },
-    { month: 'Feb', complaints: 3800 },
-    { month: 'Mar', complaints: 5100 },
-    { month: 'Apr', complaints: 4600 },
-    { month: 'May', complaints: 3900 },
-    { month: 'Jun', complaints: 5200 },
-    { month: 'Jul', complaints: 6100 },
-    { month: 'Aug', complaints: 5400 },
-    { month: 'Sep', complaints: 4800 },
-    { month: 'Oct', complaints: 5600 },
-    { month: 'Nov', complaints: 4100 },
-    { month: 'Dec', complaints: 4900 },
-  ],
-  'Last Year': [
-    { month: 'Jan', complaints: 3100 },
-    { month: 'Feb', complaints: 3400 },
-    { month: 'Mar', complaints: 4200 },
-    { month: 'Apr', complaints: 3900 },
-    { month: 'May', complaints: 3600 },
-    { month: 'Jun', complaints: 4400 },
-    { month: 'Jul', complaints: 5000 },
-    { month: 'Aug', complaints: 4700 },
-    { month: 'Sep', complaints: 4100 },
-    { month: 'Oct', complaints: 4800 },
-    { month: 'Nov', complaints: 3700 },
-    { month: 'Dec', complaints: 4200 },
-  ]
-}
-
-export default function ComplaintTrendChart() {
+export default function ComplaintTrendChart({ trendData = [] }) {
   const [timeframe, setTimeframe] = useState('This Year')
-  const data = yearlyData[timeframe]
+  const defaultMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map(m => ({ month: m, complaints: 0 }))
+  const data = trendData.length > 0 ? trendData : defaultMonths
 
   return (
     <div style={styles.card}>

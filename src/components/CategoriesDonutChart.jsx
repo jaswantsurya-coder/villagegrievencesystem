@@ -1,17 +1,13 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 
-const data = [
-  { name: 'Roads & Infrastructure', value: 32.4, color: '#2563EB' },
-  { name: 'Water Supply', value: 18.7, color: '#38BDF8' },
-  { name: 'Drainage & Sewage', value: 14.8, color: '#34D399' },
-  { name: 'Electricity', value: 12.1, color: '#F59E0B' },
-  { name: 'Street Lights', value: 8.6, color: '#8B5CF6' },
-  { name: 'Sanitation', value: 6.2, color: '#EC4899' },
-  { name: 'Others', value: 7.2, color: '#94A3B8' },
-]
-
-export default function CategoriesDonutChart({ totalComplaints = 18573 }) {
+export default function CategoriesDonutChart({ categoryData = [], totalComplaints = 0 }) {
+  const data = categoryData.length > 0 ? categoryData : [
+    { name: 'Roads & Infrastructure', value: 0, color: '#2563EB' },
+    { name: 'Water Supply', value: 0, color: '#38BDF8' },
+    { name: 'Drainage & Sewage', value: 0, color: '#34D399' },
+    { name: 'Electricity', value: 0, color: '#F59E0B' },
+  ]
   return (
     <div style={styles.card}>
       <div style={styles.header}>
