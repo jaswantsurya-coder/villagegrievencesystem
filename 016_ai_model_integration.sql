@@ -473,10 +473,12 @@ CREATE TABLE IF NOT EXISTS platform_settings (
 -- RLS Security: Allow read to authenticated users, full write to service role / superadmin
 ALTER TABLE platform_settings ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Allow public read platform_settings" ON platform_settings;
 CREATE POLICY "Allow public read platform_settings"
   ON platform_settings FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Allow all write platform_settings" ON platform_settings;
 CREATE POLICY "Allow all write platform_settings"
   ON platform_settings FOR ALL
   USING (true);
