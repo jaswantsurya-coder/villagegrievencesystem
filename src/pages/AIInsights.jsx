@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { fetchSupabaseProjectsHealth } from '../lib/supabaseHealth'
-import { Bot, ServerCog, HardDrive, Sparkles, Database, ExternalLink, Activity, CheckCircle2 } from 'lucide-react'
+import { Bot, ServerCog, HardDrive, Sparkles, Database, ExternalLink, Activity, CheckCircle2, Cpu, BarChart3, Clock, AlertTriangle, Zap } from 'lucide-react'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || ''
 
 export default function AIInsights() {
   const [projects, setProjects] = useState([
@@ -32,10 +34,17 @@ export default function AIInsights() {
     },
   ])
 
+  // Phase 3: AI Engine Live State
+  const [aiHealth, setAiHealth] = useState(null)
+  const [queueStats, setQueueStats] = useState(null)
+  const [classStats, setClassStats] = useState(null)
+
   useEffect(() => {
     loadHealth()
-    const interval = setInterval(loadHealth, 15000)
-    return () => clearInterval(interval)
+    loadAIData()
+    const healthInterval = setInterval(loadHealth, 15000)
+    const aiInterval = setInterval(loadAIData, 10000)
+    return () => { clearInterval(healthInterval); clearInterval(aiInterval) }
   }, [])
 
   async function loadHealth() {
@@ -46,6 +55,22 @@ export default function AIInsights() {
       }
     } catch (err) {
       console.error(err)
+    }
+  }
+
+  async function loadAIData() {
+    try {
+      const [healthRes, queueRes] = await Promise.allSettled([
+        fetch(`${API_BASE}/api/nlp?action=ai-health`).then(r => r.json()),
+        fetch(`${API_BASE}/api/nlp?action=ai-queue-stats`).then(r => r.json()),
+      ])
+      if (healthRes.status === 'fulfilled' && healthRes.value) setAiHealth(healthRes.value)
+      if (queueRes.status === 'fulfilled' && queueRes.value) {
+        setQueueStats(queueRes.value.queue_stats)
+        setClassStats(queueRes.value.classification_stats)
+      }
+    } catch (err) {
+      console.error('AI data load error:', err)
     }
   }
 
@@ -119,7 +144,7 @@ export default function AIInsights() {
       </div>
 
       <div style={styles.gridThree}>
-        {/* AI Engine Status Card */}
+        {/* AI Engine Status Card (Live from Oracle /health) */}
         <div style={styles.card}>
           <div style={styles.cardHeader}>
             <div style={{ ...styles.iconBox, background: '#EFF6FF' }}>
@@ -127,31 +152,49 @@ export default function AIInsights() {
             </div>
             <div>
               <h3 style={styles.cardTitle}>AI Engine Status</h3>
-              <p style={styles.cardSubtitle}>NLP Complaint Classifier</p>
+              <p style={styles.cardSubtitle}>{aiHealth?.model_version || 'Qwen2.5-1.5B Fine-tuned'}</p>
             </div>
-            <span style={styles.onlineBadge}>● Online</span>
+            <span style={{
+              ...styles.onlineBadge,
+              color: aiHealth?.status === 'online' ? '#15803D' : aiHealth?.status === 'offline' ? '#B91C1C' : '#D97706',
+              background: aiHealth?.status === 'online' ? '#DCFCE7' : aiHealth?.status === 'offline' ? '#FEE2E2' : '#FEF3C7',
+            }}>● {aiHealth?.status === 'online' ? 'Online' : aiHealth?.status === 'offline' ? 'Offline' : aiHealth?.status || 'Checking...'}</span>
           </div>
 
           <div style={styles.specsGrid}>
             <div style={styles.specItem}>
-              <span style={styles.specLabel}>Model</span>
-              <strong>Qwen2.5-1.5B Fine-tuned</strong>
+              <span style={styles.specLabel}>Base Model</span>
+              <strong>{aiHealth?.base_model || 'Qwen/Qwen2.5-1.5B-Instruct'}</strong>
             </div>
             <div style={styles.specItem}>
-              <span style={styles.specLabel}>Execution Mode</span>
-              <strong>CPU Optimized</strong>
+              <span style={styles.specLabel}>Adapter Loaded</span>
+              <strong style={{ color: aiHealth?.adapter_loaded ? '#15803D' : '#B91C1C' }}>{aiHealth?.adapter_loaded ? '✅ Yes' : '❌ No'}</strong>
             </div>
             <div style={styles.specItem}>
-              <span style={styles.specLabel}>Inference Health</span>
-              <strong style={{ color: '#15803D' }}>Healthy</strong>
+              <span style={styles.specLabel}>Avg Inference Time</span>
+              <strong>{aiHealth?.avg_ai_time_ms || 0} ms</strong>
             </div>
             <div style={styles.specItem}>
-              <span style={styles.specLabel}>Avg Latency</span>
-              <strong>320 ms</strong>
+              <span style={styles.specLabel}>Total Processed</span>
+              <strong>{aiHealth?.total_requests || 0}</strong>
             </div>
             <div style={styles.specItem}>
-              <span style={styles.specLabel}>Active Queue</span>
-              <strong>2 Requests</strong>
+              <span style={styles.specLabel}>Success Rate</span>
+              <strong style={{ color: '#15803D' }}>
+                {aiHealth?.total_requests > 0 ? Math.round((aiHealth.successful_requests / aiHealth.total_requests) * 100) : 100}%
+              </strong>
+            </div>
+            <div style={styles.specItem}>
+              <span style={styles.specLabel}>Queue Throughput</span>
+              <strong>{aiHealth?.queue_throughput_per_min || 0}/min</strong>
+            </div>
+            <div style={styles.specItem}>
+              <span style={styles.specLabel}>Model Load Time</span>
+              <strong>{aiHealth?.model_load_time_ms ? `${(aiHealth.model_load_time_ms / 1000).toFixed(1)}s` : '—'}</strong>
+            </div>
+            <div style={styles.specItem}>
+              <span style={styles.specLabel}>Uptime</span>
+              <strong>{aiHealth?.uptime_seconds ? `${Math.floor(aiHealth.uptime_seconds / 3600)}h ${Math.floor((aiHealth.uptime_seconds % 3600) / 60)}m` : '—'}</strong>
             </div>
           </div>
         </div>
@@ -164,7 +207,7 @@ export default function AIInsights() {
             </div>
             <div>
               <h3 style={styles.cardTitle}>Cloud Compute</h3>
-              <p style={styles.cardSubtitle}>Oracle Cloud Instances</p>
+              <p style={styles.cardSubtitle}>Oracle Cloud ARM Instance</p>
             </div>
           </div>
 
@@ -172,27 +215,45 @@ export default function AIInsights() {
             <div style={styles.meterItem}>
               <div style={styles.meterHeader}>
                 <span>CPU Usage</span>
-                <strong>18%</strong>
+                <strong>{aiHealth?.cpu_usage_percent ?? 0}%</strong>
               </div>
               <div style={styles.barBg}>
-                <div style={{ ...styles.barFill, width: '18%', background: '#2563EB' }} />
+                <div style={{ ...styles.barFill, width: `${aiHealth?.cpu_usage_percent ?? 0}%`, background: (aiHealth?.cpu_usage_percent ?? 0) > 80 ? '#EF4444' : '#2563EB' }} />
               </div>
             </div>
 
             <div style={styles.meterItem}>
               <div style={styles.meterHeader}>
                 <span>RAM Usage</span>
-                <strong>39%</strong>
+                <strong>{aiHealth?.ram_usage_percent ?? 0}% ({aiHealth?.ram_used_gb ?? 0} / {aiHealth?.ram_total_gb ?? 24} GB)</strong>
               </div>
               <div style={styles.barBg}>
-                <div style={{ ...styles.barFill, width: '39%', background: '#3B82F6' }} />
+                <div style={{ ...styles.barFill, width: `${aiHealth?.ram_usage_percent ?? 0}%`, background: (aiHealth?.ram_usage_percent ?? 0) > 80 ? '#EF4444' : '#3B82F6' }} />
               </div>
             </div>
 
             <div style={styles.statusRow}>
-              <span>FastAPI Backend: <strong style={{ color: '#15803D' }}>Running</strong></span>
-              <span>WebSockets: <strong style={{ color: '#15803D' }}>Connected</strong></span>
+              <span>FastAPI Backend: <strong style={{ color: aiHealth?.status === 'online' ? '#15803D' : '#B91C1C' }}>{aiHealth?.status === 'online' ? 'Running' : 'Down'}</strong></span>
+              <span>Queue Worker: <strong style={{ color: '#15803D' }}>Active</strong></span>
             </div>
+
+            {/* AI Queue Stats */}
+            {queueStats && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
+                <div style={{ background: '#EFF6FF', padding: '8px 10px', borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>{queueStats.pending ?? 0}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#64748B' }}>Pending</div>
+                </div>
+                <div style={{ background: '#DCFCE7', padding: '8px 10px', borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#15803D' }}>{queueStats.completed ?? 0}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#64748B' }}>Completed</div>
+                </div>
+                <div style={{ background: '#FEE2E2', padding: '8px 10px', borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: '#B91C1C' }}>{(queueStats.failed ?? 0) + (queueStats.permanently_failed ?? 0)}</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: '#64748B' }}>Failed</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

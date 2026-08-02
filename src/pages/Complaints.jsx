@@ -229,6 +229,7 @@ export default function Complaints() {
                 <th style={styles.th}>Title</th>
                 <th style={styles.th}>Village</th>
                 <th style={styles.th}>Category</th>
+                <th style={styles.th}>AI Model</th>
                 <th style={styles.th}>Priority</th>
                 <th style={styles.th}>Status</th>
                 <th style={styles.th}>Citizen</th>
@@ -262,6 +263,22 @@ export default function Complaints() {
                     </td>
                     <td style={styles.td}>{villageObj.village_name || '—'}</td>
                     <td style={styles.tdMuted}>{c.category || 'General'}</td>
+                    <td style={styles.td}>
+                      {c.ai_status === 'Processing' ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#7C3AED', background: '#EDE9FE', padding: '2px 6px', borderRadius: 4 }}>🤖 Analyzing...</span>
+                      ) : c.ai_status === 'Completed' && c.ai_category ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#059669' }}>🤖 {c.ai_category}</span>
+                          {c.ai_confidence_category > 0 && (
+                            <span style={{ fontSize: 9, color: '#6B7280' }}>{Math.round(c.ai_confidence_category * 100)}% conf</span>
+                          )}
+                        </div>
+                      ) : c.ai_status === 'Failed' ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#B91C1C', background: '#FEE2E2', padding: '2px 6px', borderRadius: 4 }}>⚠️ Failed</span>
+                      ) : (
+                        <span style={{ fontSize: 10, color: '#9CA3AF' }}>—</span>
+                      )}
+                    </td>
                     <td style={styles.td}>
                       <span
                         style={{

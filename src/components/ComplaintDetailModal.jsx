@@ -109,6 +109,91 @@ export default function ComplaintDetailModal({ complaint, citizen, village, onCl
             </div>
           )}
 
+          {/* ─── AI Model Intelligence Card (Phase 3) ─── */}
+          {complaint.ai_status && complaint.ai_status !== 'Pending' && (
+            <div style={{
+              marginBottom: 16,
+              padding: '14px 16px',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #F5F3FF, #EFF6FF)',
+              border: '1px solid #DDD6FE',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>🤖</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#5B21B6', textTransform: 'uppercase', letterSpacing: 0.5 }}>GramSeva AI Analysis</span>
+                </div>
+                <span style={{
+                  fontSize: 10,
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: 99,
+                  background: complaint.ai_status === 'Completed' ? '#DCFCE7' : complaint.ai_status === 'Processing' ? '#EDE9FE' : '#FEE2E2',
+                  color: complaint.ai_status === 'Completed' ? '#15803D' : complaint.ai_status === 'Processing' ? '#7C3AED' : '#B91C1C',
+                }}>
+                  {complaint.ai_status === 'Completed' ? '✅ Completed' : complaint.ai_status === 'Processing' ? '⏳ Processing...' : '⚠️ Failed'}
+                </span>
+              </div>
+
+              {complaint.ai_status === 'Completed' && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>AI Category</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#1E40AF' }}>{complaint.ai_category || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>AI Department</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>{complaint.ai_department || '—'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 700, color: '#6B7280', textTransform: 'uppercase' }}>AI Priority</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: complaint.ai_priority === 'High' || complaint.ai_priority === 'Critical' ? '#B91C1C' : '#D97706' }}>{complaint.ai_priority || '—'}</div>
+                    </div>
+                  </div>
+
+                  {/* Confidence meters */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
+                    {[
+                      { label: "Category", val: complaint.ai_confidence_category },
+                      { label: "Priority", val: complaint.ai_confidence_priority },
+                      { label: "Dept", val: complaint.ai_confidence_department },
+                    ].filter(m => m.val > 0).map((meter, i) => (
+                      <div key={i}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontWeight: 700, color: '#4B5563', marginBottom: 2 }}>
+                          <span>{meter.label}</span>
+                          <span>{Math.round(meter.val * 100)}%</span>
+                        </div>
+                        <div style={{ height: 4, background: '#E5E7EB', borderRadius: 99, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.round(meter.val * 100)}%`, background: meter.val >= 0.8 ? '#16A34A' : '#2563EB', borderRadius: 99 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {complaint.ai_summary_english && (
+                    <div style={{ padding: '8px 10px', background: '#FFFFFF', borderRadius: 6, fontSize: 11, color: '#1F2937', marginTop: 6, lineHeight: 1.4 }}>
+                      <strong style={{ color: '#4C1D95' }}>AI Summary:</strong> {complaint.ai_summary_english}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 9.5, color: '#6B7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Model: <strong>{complaint.ai_model_version || 'GramSeva-Qwen2.5-v1'}</strong></span>
+                    {complaint.ai_processing_time_ms > 0 && (
+                      <span>Latency: <strong>{complaint.ai_processing_time_ms}ms</strong></span>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {complaint.ai_fallback && (
+                <div style={{ fontSize: 10, color: '#92400E', background: '#FEF3C7', padding: '4px 8px', borderRadius: 4, marginTop: 6 }}>
+                  ⚠️ Rule-based fallback was used because the AI server was offline.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Title / Subject */}
           <div style={styles.section}>
             <h3 style={styles.sectionTitle}>
