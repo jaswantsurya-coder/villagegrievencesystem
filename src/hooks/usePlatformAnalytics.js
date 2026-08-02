@@ -45,8 +45,17 @@ export function usePlatformAnalytics() {
       ])
 
       const complaints = complaintsRes.data || []
-      const villages = villagesRes.data || []
       const profiles = profilesRes.data || []
+
+      const superAdminIds = new Set(
+        profiles
+          .filter((p) => p.role === 'super_admin' || p.email === 'srijaswantsuryacherri@gmail.com')
+          .map((p) => p.id)
+      )
+
+      const villages = (villagesRes.data || []).filter(
+        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
+      )
 
       const total = complaints.length
       const resolved = complaints.filter((c) => c.status === 'Resolved' || c.status === 'Closed').length

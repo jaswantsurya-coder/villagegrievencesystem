@@ -1,9 +1,9 @@
 import { Award, ShieldCheck, Trophy } from 'lucide-react'
 
 export default function BestPerformingVillages({ bestVillages = [], onViewAll }) {
-  const topVillages = bestVillages.length > 0 ? bestVillages : [
-    { village: 'Vizianagaram', district: 'Vizianagaram', resolutionRate: 100, solved: 1, score: 100, isTop: true },
-    { village: 'Visakhapatnam', district: 'Visakhapatnam', resolutionRate: 100, solved: 0, score: 100 },
+  const displayVillages = bestVillages.filter((v) => v.village !== 'Visakhapatnam HQ')
+  const topVillages = displayVillages.length > 0 ? displayVillages : [
+    { village: 'Vizianagaram', district: 'Vizianagaram', resolutionRate: 100, solved: 0, score: 100, isTop: true },
   ]
   return (
     <div style={styles.card}>

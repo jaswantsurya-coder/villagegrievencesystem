@@ -19,10 +19,20 @@ export default function Villages() {
       const [villageRes, complaintRes, profileRes] = await Promise.all([
         supabaseAux.from('villages').select('*').order('village_name'),
         supabaseAux.from('complaints').select('id, village_id, status, is_escalated'),
-        supabaseAux.from('profiles').select('id, village_id, role'),
+        supabaseAux.from('profiles').select('id, email, village_id, role'),
       ])
 
-      if (villageRes.data) setVillages(villageRes.data)
+      const superAdminIds = new Set(
+        (profileRes.data || [])
+          .filter((p) => p.role === 'super_admin' || p.email === 'srijaswantsuryacherri@gmail.com')
+          .map((p) => p.id)
+      )
+
+      const citizenVillages = (villageRes.data || []).filter(
+        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
+      )
+
+      setVillages(citizenVillages)
       if (complaintRes.data) setComplaints(complaintRes.data)
       if (profileRes.data) setProfiles(profileRes.data)
     } catch (err) {

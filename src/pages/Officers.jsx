@@ -40,8 +40,18 @@ export default function Officers() {
         supabaseAux.from('complaints').select('id, village_id, assigned_officer_id, status'),
       ])
 
-      if (villageRes.data) setVillages(villageRes.data)
-      if (profileRes.data) setProfiles(profileRes.data)
+      const superAdminIds = new Set(
+        (profileRes.data || [])
+          .filter((p) => p.role === 'super_admin' || p.email === 'srijaswantsuryacherri@gmail.com')
+          .map((p) => p.id)
+      )
+
+      const citizenVillages = (villageRes.data || []).filter(
+        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
+      )
+
+      setVillages(citizenVillages)
+      if (profileRes.data) setProfiles(profileRes.data.filter((p) => !superAdminIds.has(p.id)))
       if (complaintRes.data) setComplaints(complaintRes.data)
     } catch (err) {
       console.error('Error loading panchayat personnel:', err)

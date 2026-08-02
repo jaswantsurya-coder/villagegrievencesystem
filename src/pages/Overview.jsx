@@ -104,6 +104,7 @@ export default function Overview() {
 
       const [
         villagesRes,
+        profilesRes,
         citizensRes,
         officersRes,
         sarpanchsRes,
@@ -116,7 +117,8 @@ export default function Overview() {
         pendingRes,
         requestsRes,
       ] = await Promise.all([
-        supabaseAux.from('villages').select('id', { count: 'exact', head: true }),
+        supabaseAux.from('villages').select('id, sarpanch_user_id, village_name'),
+        supabaseAux.from('profiles').select('id, email, role'),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'citizen'),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'officer'),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['sarpanch', 'village_admin']),
@@ -130,12 +132,22 @@ export default function Overview() {
         supabase.from('admin_requests').select('*').order('created_at', { ascending: false }).limit(5),
       ])
 
+      const superAdminIds = new Set(
+        (profilesRes.data || [])
+          .filter((p) => p.role === 'super_admin' || p.email === 'srijaswantsuryacherri@gmail.com')
+          .map((p) => p.id)
+      )
+
+      const citizenVillageCount = (villagesRes.data || []).filter(
+        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
+      ).length
+
       const totalComp = complaintsRes.count || 0
       const resolvedComp = resolvedTotalRes.count || 0
       const resRate = totalComp > 0 ? parseFloat(((resolvedComp / totalComp) * 100).toFixed(1)) : 0
 
       setStats({
-        villages: villagesRes.count || 0,
+        villages: citizenVillageCount,
         citizens: citizensRes.count || 0,
         officers: officersRes.count || 0,
         sarpanchs: sarpanchsRes.count || 0,
