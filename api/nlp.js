@@ -498,6 +498,99 @@ export default async function handler(req, res) {
       console.error('[api/nlp send-test-email error]:', err);
       return res.status(500).json({ success: false, error: err.message });
     }
+  // ─── 7.5. ACTION: SEND ESCALATION EMAIL (7-Day Stale Complaint Alert) ──────
+  if (action === 'send-escalation-email') {
+    try {
+      const {
+        admin_email,
+        admin_name = 'Village Admin',
+        ticket_number = 'VGS-1001',
+        title = 'Unresolved Grievance',
+        village_name = 'Gram Panchayat',
+        district = '',
+        days_stale = 7,
+      } = req.body || {};
+
+      if (!admin_email) {
+        return res.status(400).json({ success: false, error: 'admin_email is required.' });
+      }
+
+      const brevoKey = process.env.BREVO_API_KEY || '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';
+      const fromEmail = 'gramseva0089@gmail.com';
+      const fromName = 'GramSeva';
+
+      const actionUrl = `${process.env.VITE_CITIZEN_APP_URL || 'https://villagegrievencesystem-fgxb.vercel.app'}/login`;
+
+      const emailPayload = {
+        sender: { name: fromName, email: fromEmail },
+        to: [{ email: admin_email, name: admin_name }],
+        subject: `🚨 SLA Escalation Alert: Complaint #${ticket_number} Unresolved for ${days_stale} Days`,
+        htmlContent: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #fee2e2; border-radius: 12px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #dc2626; margin: 0;">🚨 GramSeva SLA Breach Alert</h2>
+              <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Automated 7-Day Unresolved Grievance Escalation</p>
+            </div>
+
+            <div style="background: #fef2f2; padding: 16px; border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 20px;">
+              <h3 style="color: #991b1b; margin: 0 0 8px;">⚠️ Complaint Overdue Notice</h3>
+              <p style="color: #7f1d1d; font-size: 14px; margin: 0;">
+                Dear <strong>${admin_name}</strong>, a citizen complaint in <strong>${village_name}</strong> (${district}) has remained unresolved for <strong>${days_stale} consecutive days</strong> without any status update.
+              </p>
+            </div>
+
+            <table style="width: 100%; font-size: 13px; color: #334155; border-collapse: collapse; margin-bottom: 20px;">
+              <tr><td style="padding: 6px 0; font-weight: bold; width: 35%;">Ticket Number:</td><td style="padding: 6px 0; font-family: monospace; font-weight: bold; color: #2563eb;">#${ticket_number}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Complaint Title:</td><td style="padding: 6px 0;">${title}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Panchayat Unit:</td><td style="padding: 6px 0;">${village_name}, ${district}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Days Overdue:</td><td style="padding: 6px 0; color: #dc2626; font-weight: bold;">${days_stale} Days (Critical Escalation)</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Escalated To:</td><td style="padding: 6px 0; color: #991b1b;">Village Admin & SuperAdmin Portal</td></tr>
+            </table>
+
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="${actionUrl}" style="background: #dc2626; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block; font-size: 14px;">
+                Log In & Resolve Complaint Now ➔
+              </a>
+            </div>
+
+            <hr style="border: none; border-top: 1px solid #fee2e2; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+              GramSeva Automated Governance System • Sent to ${admin_email}
+            </p>
+          </div>
+        `,
+      };
+
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(emailPayload),
+      });
+
+      const responseData = await brevoRes.json();
+
+      if (brevoRes.ok) {
+        return res.status(200).json({
+          success: true,
+          message_id: responseData.messageId,
+          recipient: admin_email,
+          ticket_number,
+        });
+      } else {
+        return res.status(200).json({
+          success: false,
+          error: responseData.message || 'Brevo API error',
+          details: responseData,
+        });
+      }
+    } catch (err) {
+      console.error('[api/nlp send-escalation-email error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
   }
 
   // ─── 8. ACTION: PREPROCESS (Default) ────────────────────────────────────────
