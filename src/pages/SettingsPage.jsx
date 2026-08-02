@@ -45,7 +45,7 @@ export default function SettingsPage() {
     realtime: { latency: 'Checking...', status: 'Connected' },
   })
 
-  // Security Toggles
+  // Security Toggles (Synced with Supabase auxiliary dtucrczgagpzjbbrwqit)
   const [securitySettings, setSecuritySettings] = useState({
     enforceMfa: true,
     hMacSignature: true,
@@ -53,10 +53,75 @@ export default function SettingsPage() {
     auditLogging: true,
   })
 
+  // Live Supabase Rate Limiting Telemetry
+  const [rateLimitInfo, setRateLimitInfo] = useState({
+    targetDb: 'dtucrczgagpzjbbrwqit',
+    maxPerDay: 3,
+    todayLinksCount: 0,
+    table: 'anonymous_complaint_link',
+  })
+
   function showToast(msg, type = 'success') {
     setToastMsg(msg)
     setToastType(type)
     setTimeout(() => setToastMsg(''), 4000)
+  }
+
+  // Load live security settings & rate limit count from Supabase Auxiliary
+  useEffect(() => {
+    loadSecuritySettings()
+  }, [])
+
+  async function loadSecuritySettings() {
+    try {
+      // 1. Fetch platform settings
+      const { data } = await supabaseAux.from('platform_settings').select('*')
+      if (data && data.length > 0) {
+        const newSec = { ...securitySettings }
+        data.forEach(item => {
+          if (newSec[item.key] !== undefined && item.value && typeof item.value.enabled === 'boolean') {
+            newSec[item.key] = item.value.enabled
+          }
+        })
+        setSecuritySettings(newSec)
+      }
+
+      // 2. Fetch today's rate-limited links count from anonymous_complaint_link
+      const todayStart = new Date()
+      todayStart.setHours(0,0,0,0)
+      const { count } = await supabaseAux
+        .from('anonymous_complaint_link')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', todayStart.toISOString())
+
+      if (typeof count === 'number') {
+        setRateLimitInfo(prev => ({ ...prev, todayLinksCount: count }))
+      }
+    } catch (err) {
+      console.error('Error loading security settings:', err)
+    }
+  }
+
+  async function handleToggleSecurity(key, newValue, label) {
+    const updated = { ...securitySettings, [key]: newValue }
+    setSecuritySettings(updated)
+
+    try {
+      // Persist to Supabase Auxiliary dtucrczgagpzjbbrwqit
+      await supabaseAux.from('platform_settings').upsert({
+        key,
+        value: {
+          enabled: newValue,
+          updated_at: new Date().toISOString(),
+          target_db: 'dtucrczgagpzjbbrwqit',
+        },
+        description: `Live ${label} setting updated from SuperAdmin Portal`,
+      })
+      showToast(`${label} ${newValue ? 'Enabled' : 'Disabled'} & saved to Supabase (dtucrczgagpzjbbrwqit)!`)
+    } catch (err) {
+      console.error('Failed to save setting:', err)
+      showToast(`${label} updated locally`, 'info')
+    }
   }
 
   // ─── Real-Time Live Latency & Health Diagnostic Engine ────────────────────
@@ -496,27 +561,59 @@ export default function SettingsPage() {
 
         <div style={styles.securityGrid}>
           {[
+            { key: 'rateLimiting', label: 'API Rate Limiting', desc: 'Throttle anonymous complaint requests to max 3 per phone number per day via Supabase Auxiliary' },
             { key: 'hMacSignature', label: 'HMAC Request Signing', desc: 'Enforces SHA256 HMAC signature verification between Vercel & Oracle AI server' },
             { key: 'enforceMfa', label: 'SuperAdmin 2FA Verification', desc: 'Require multi-factor authentication for sensitive administrative actions' },
-            { key: 'rateLimiting', label: 'API Rate Limiting', desc: 'Throttle anonymous complaint requests to max 3 per phone number per day' },
             { key: 'auditLogging', label: 'Audit Trail Logging', desc: 'Log every administrative status change and deletion to immutable audit logs' },
           ].map((sec) => (
             <div key={sec.key} style={styles.securityCard}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{sec.label}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>{sec.label}</div>
+                  {sec.key === 'rateLimiting' && (
+                    <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803D', background: '#DCFCE7', padding: '1px 6px', borderRadius: 4 }}>
+                      ⚡ LIVE · dtucrczgagpzjbbrwqit
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{sec.desc}</div>
               </div>
               <input
                 type="checkbox"
                 checked={securitySettings[sec.key]}
-                onChange={(e) => {
-                  setSecuritySettings({ ...securitySettings, [sec.key]: e.target.checked })
-                  showToast(`${sec.label} ${e.target.checked ? 'Enabled' : 'Disabled'}`)
-                }}
+                onChange={(e) => handleToggleSecurity(sec.key, e.target.checked, sec.label)}
                 style={{ width: 18, height: 18, accentColor: '#2563EB', cursor: 'pointer' }}
               />
             </div>
           ))}
+        </div>
+
+        {/* Supabase Auxiliary Rate Limiting Active Banner */}
+        <div style={{
+          marginTop: 16,
+          padding: '14px 16px',
+          borderRadius: 12,
+          background: '#F8FAFC',
+          border: '1px solid #E2E8F0',
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'space-between',
+          flexWrap: 'wrap',
+          gap: 10,
+        }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Database size={14} color="#2563EB" />
+              Supabase Rate Limiting Rule Engine (dtucrczgagpzjbbrwqit)
+            </div>
+            <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+              Table: <code>anonymous_complaint_link</code> • Limit: <strong>3 complaints / day / phone number</strong> • Status: <strong style={{ color: securitySettings.rateLimiting ? '#15803D' : '#DC2626' }}>{securitySettings.rateLimiting ? 'Active & Enforced' : 'Disabled'}</strong>
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#2563EB' }}>{rateLimitInfo.todayLinksCount}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B' }}>Today's Rate Checks</div>
+          </div>
         </div>
       </div>
 
