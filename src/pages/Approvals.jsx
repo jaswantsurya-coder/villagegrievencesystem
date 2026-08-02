@@ -151,6 +151,27 @@ export default function Approvals() {
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button
+            onClick={() => setPilotRequest({ full_name: '', email: '', village_name: '', district: 'Vizianagaram' })}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '9px 16px',
+              borderRadius: 10,
+              background: '#2563EB',
+              color: '#FFFFFF',
+              border: 'none',
+              fontWeight: 800,
+              fontSize: 12.5,
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(37,99,235,0.2)',
+            }}
+            className="btn-interactive"
+          >
+            <Sparkles style={{ width: 14, height: 14 }} /> Generate Pilot Link
+          </button>
+
           {/* Stats Pills */}
           <div style={styles.statsPill}>
             <span style={{ ...styles.statDot, background: '#F59E0B' }} />

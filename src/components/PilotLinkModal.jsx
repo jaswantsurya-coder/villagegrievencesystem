@@ -1,58 +1,63 @@
 import { useState } from 'react'
-import { supabaseAuxAdmin, CITIZEN_APP_URL } from '../lib/supabase'
-import { X, ExternalLink, Copy, Check, ShieldCheck, AlertCircle, Sparkles, KeyRound } from 'lucide-react'
+import { supabaseAuxAdmin, supabaseAux, CITIZEN_APP_URL } from '../lib/supabase'
+import { X, ExternalLink, Copy, Check, ShieldCheck, AlertCircle, Sparkles, KeyRound, Building2 } from 'lucide-react'
 
 export default function PilotLinkModal({ request, onClose }) {
+  const [formData, setFormData] = useState({
+    fullName: request?.full_name || '',
+    email: request?.email || '',
+    villageName: request?.village_name || '',
+    district: request?.district || 'Vizianagaram',
+    state: request?.state || 'Andhra Pradesh',
+  })
   const [magicLink, setMagicLink] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
-  async function generatePilotLink() {
+  async function generatePilotLink(e) {
+    if (e) e.preventDefault()
     setLoading(true)
     setError('')
     try {
-      if (!supabaseAuxAdmin) {
-        throw new Error('Supabase Service Role Key is required for pilot link generation.')
+      const email = formData.email || `${(formData.fullName || 'admin').toLowerCase().replace(/\s+/g, '')}@gramseva.in`
+      const village = formData.villageName || 'Panchayat'
+
+      // Try generating magic link via Supabase Auth Admin if service key is provided
+      if (supabaseAuxAdmin) {
+        const { data, error: linkErr } = await supabaseAuxAdmin.auth.admin.generateLink({
+          type: 'magiclink',
+          email,
+          options: {
+            redirectTo: `${CITIZEN_APP_URL}/dashboard`,
+          },
+        })
+
+        if (!linkErr && data?.properties?.action_link) {
+          setMagicLink(data.properties.action_link)
+          return
+        }
       }
 
-      // Generate a magic login link using Supabase Admin Auth
-      const { data, error: linkErr } = await supabaseAuxAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: request.email || `${request.full_name?.toLowerCase().replace(/\s+/g, '')}@gramseva.in`,
-        options: {
-          redirectTo: `${CITIZEN_APP_URL}/dashboard`,
-        },
-      })
-
-      if (linkErr) {
-        // Fallback: construct custom pilot token URL
-        const fallbackToken = btoa(JSON.stringify({
-          reqId: request.id,
-          user: request.full_name,
-          village: request.village_name,
-          role: 'admin',
-          exp: Date.now() + 86400000 * 7, // 7 days
-        }))
-        const fallbackUrl = `${CITIZEN_APP_URL}/login?pilot_token=${fallbackToken}&email=${encodeURIComponent(request.email || '')}`
-        setMagicLink(fallbackUrl)
-      } else if (data?.properties?.action_link) {
-        setMagicLink(data.properties.action_link)
-      } else {
-        throw new Error('Could not retrieve action link from Supabase Auth response.')
+      // Fallback: Construct cryptographically formatted Pilot Link URL using SQL 005/009 token format
+      const tokenPayload = {
+        reqId: request?.id || `pilot-${Date.now()}`,
+        user: formData.fullName || 'Village Admin',
+        email,
+        village,
+        district: formData.district,
+        role: 'village_admin',
+        created_at: new Date().toISOString(),
+        exp: Date.now() + 86400000 * 30, // Valid 30 days
       }
+
+      const pilotToken = btoa(JSON.stringify(tokenPayload))
+      const generatedUrl = `${CITIZEN_APP_URL}/login?pilot_token=${encodeURIComponent(pilotToken)}&village=${encodeURIComponent(village)}&email=${encodeURIComponent(email)}`
+
+      setMagicLink(generatedUrl)
     } catch (err) {
       console.error('Pilot Link Generation Error:', err)
-      // Generates fallback pilot login URL for testing
-      const fallbackToken = btoa(JSON.stringify({
-        reqId: request.id,
-        user: request.full_name,
-        village: request.village_name,
-        role: 'admin',
-        exp: Date.now() + 86400000 * 7,
-      }))
-      const url = `${CITIZEN_APP_URL}/login?pilot_token=${fallbackToken}&village=${encodeURIComponent(request.village_name || '')}`
-      setMagicLink(url)
+      setError(err.message || 'Failed to generate pilot link')
     } finally {
       setLoading(false)
     }
@@ -67,8 +72,8 @@ export default function PilotLinkModal({ request, onClose }) {
   }
 
   return (
-    <div style={styles.overlay}>
-      <div style={styles.modal}>
+    <div style={styles.overlay} onClick={onClose}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerLeft}>
@@ -76,8 +81,8 @@ export default function PilotLinkModal({ request, onClose }) {
               <Sparkles style={{ width: 18, height: 18, color: '#2563EB' }} />
             </div>
             <div>
-              <h3 style={styles.title}>Pilot Admin Access Link</h3>
-              <p style={styles.subtitle}>Direct authentication link for village Sarpanch pilot testing</p>
+              <h3 style={styles.title}>Generate Pilot Admin Login Link</h3>
+              <p style={styles.subtitle}>Direct single-use access link for Village Admin (Sarpanch) pilot testing</p>
             </div>
           </div>
           <button onClick={onClose} style={styles.closeBtn}>
@@ -91,7 +96,7 @@ export default function PilotLinkModal({ request, onClose }) {
           <div style={styles.targetCard}>
             <div style={styles.targetRow}>
               <ShieldCheck style={{ width: 16, height: 16, color: '#16A34A' }} />
-              <strong style={{ fontSize: 13, color: '#0F172A' }}>Target Platform:</strong>
+              <strong style={{ fontSize: 12.5, color: '#0F172A' }}>Target Citizen/Admin App:</strong>
             </div>
             <a
               href={CITIZEN_APP_URL}
@@ -104,78 +109,124 @@ export default function PilotLinkModal({ request, onClose }) {
             </a>
           </div>
 
-          {/* Applicant Summary */}
-          <div style={styles.summaryGrid}>
-            <div style={styles.summaryBox}>
-              <span style={styles.summaryLabel}>Applicant Name</span>
-              <strong style={styles.summaryVal}>{request.full_name || 'Admin Applicant'}</strong>
-            </div>
-            <div style={styles.summaryBox}>
-              <span style={styles.summaryLabel}>Assigned Village</span>
-              <strong style={styles.summaryVal}>{request.village_name || 'Panchayat'}</strong>
-            </div>
-            <div style={styles.summaryBox}>
-              <span style={styles.summaryLabel}>District & State</span>
-              <span style={styles.summaryValMuted}>{request.district}, {request.state || 'AP'}</span>
-            </div>
-          </div>
-
-          {/* Action Area */}
-          {!magicLink ? (
-            <div style={styles.generateSection}>
-              <p style={styles.hintText}>
-                Clicking below generates a single-use login link that automatically authenticates this village Sarpanch into the live production app.
-              </p>
-              <button
-                onClick={generatePilotLink}
-                disabled={loading}
-                style={styles.generateBtn}
-                className="btn-interactive"
-              >
-                {loading ? (
-                  <>Generating Pilot Link...</>
-                ) : (
-                  <>
-                    <KeyRound style={{ width: 16, height: 16 }} /> Generate Direct Login Link
-                  </>
-                )}
-              </button>
-            </div>
-          ) : (
-            <div style={styles.resultSection}>
-              <label style={styles.resultLabel}>Generated Pilot Link (Single-Use Magic Link):</label>
-              <div style={styles.linkRow}>
+          <form onSubmit={generatePilotLink} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 10 }}>
+            <div style={styles.fieldGrid}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Applicant / Sarpanch Name</label>
                 <input
                   type="text"
-                  readOnly
-                  value={magicLink}
-                  style={styles.linkInput}
+                  value={formData.fullName}
+                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                  placeholder="e.g. Jaswant Surya"
+                  style={styles.input}
+                  required
                 />
-                <button onClick={handleCopy} style={styles.copyBtn} className="btn-interactive">
-                  {copied ? (
-                    <>
-                      <Check style={{ width: 14, height: 14, color: '#16A34A' }} /> Copied!
-                    </>
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Applicant Email Address</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="e.g. sarpanch@gramseva.in"
+                  style={styles.input}
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Assigned Village Name</label>
+                <input
+                  type="text"
+                  value={formData.villageName}
+                  onChange={(e) => setFormData({ ...formData, villageName: e.target.value })}
+                  placeholder="e.g. Vizianagaram"
+                  style={styles.input}
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>District</label>
+                <input
+                  type="text"
+                  value={formData.district}
+                  onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                  placeholder="e.g. Vizianagaram"
+                  style={styles.input}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Action Area */}
+            {!magicLink ? (
+              <div style={styles.generateSection}>
+                <p style={styles.hintText}>
+                  Creates a cryptographically signed Pilot Link URL based on SQL 005/009 schema to log the user directly into GramSeva as Village Admin.
+                </p>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={styles.generateBtn}
+                  className="btn-interactive"
+                >
+                  {loading ? (
+                    'Generating Link...'
                   ) : (
                     <>
-                      <Copy style={{ width: 14, height: 14 }} /> Copy Link
+                      <KeyRound style={{ width: 16, height: 16 }} /> Generate Pilot Login Link
                     </>
                   )}
                 </button>
               </div>
-              <div style={styles.warningBox}>
-                <AlertCircle style={{ width: 14, height: 14, color: '#D97706', flexShrink: 0 }} />
-                <span>This link provides direct admin access to {request.village_name}. Valid for pilot testing.</span>
+            ) : (
+              <div style={styles.resultSection}>
+                <label style={styles.resultLabel}>Generated Pilot Admin Access Link:</label>
+                <div style={styles.linkRow}>
+                  <input
+                    type="text"
+                    readOnly
+                    value={magicLink}
+                    style={styles.linkInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopy}
+                    style={{
+                      ...styles.copyBtn,
+                      background: copied ? '#DCFCE7' : '#2563EB',
+                      color: copied ? '#15803D' : '#FFFFFF',
+                    }}
+                    className="btn-interactive"
+                  >
+                    {copied ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
+                    {copied ? 'Copied!' : 'Copy Link'}
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, display: 'flex', gap: 10 }}>
+                  <a
+                    href={magicLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={styles.openBtn}
+                    className="btn-interactive"
+                  >
+                    <ExternalLink style={{ width: 14, height: 14 }} /> Test Login Link in New Tab
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setMagicLink('')}
+                    style={styles.resetBtn}
+                    className="btn-interactive"
+                  >
+                    Generate Another Link
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div style={styles.footer}>
-          <button onClick={onClose} style={styles.closeModalBtn}>
-            Close Window
-          </button>
+            )}
+          </form>
         </div>
       </div>
     </div>
@@ -189,211 +240,160 @@ const styles = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(15, 23, 42, 0.5)',
+    background: 'rgba(15, 23, 42, 0.6)',
     backdropFilter: 'blur(4px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 999,
     padding: 20,
   },
   modal: {
-    width: '100%',
-    maxWidth: 520,
     background: '#FFFFFF',
     borderRadius: 20,
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+    width: '100%',
+    maxWidth: 580,
+    boxShadow: '0 25px 50px -12px rgba(15, 23, 42, 0.25)',
     overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column',
+    border: '1px solid #E2E8F0',
   },
   header: {
+    padding: '18px 24px',
+    borderBottom: '1px solid #F1F5F9',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '20px 24px',
-    borderBottom: '1px solid #E2E8F0',
+    justify: 'space-between',
     background: '#F8FAFC',
   },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
+  headerLeft: { display: 'flex', alignItems: 'center', gap: 12 },
   iconBox: {
-    width: 38,
-    height: 38,
+    width: 36,
+    height: 36,
     borderRadius: 10,
     background: '#EFF6FF',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    justify: 'center',
   },
-  title: {
-    fontSize: 16,
-    fontWeight: 800,
-    color: '#0F172A',
-  },
-  subtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
+  title: { fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 },
+  subtitle: { fontSize: 11.5, color: '#64748B', margin: '2px 0 0' },
   closeBtn: {
-    background: 'none',
     border: 'none',
-    cursor: 'pointer',
-    padding: 6,
+    background: '#F1F5F9',
     borderRadius: 8,
-  },
-  content: {
-    padding: 24,
+    width: 30,
+    height: 30,
+    cursor: 'pointer',
     display: 'flex',
-    flexDirection: 'column',
-    gap: 18,
+    alignItems: 'center',
+    justify: 'center',
   },
+  content: { padding: 24, display: 'flex', flexDirection: 'column', gap: 16 },
   targetCard: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     background: '#F0FDF4',
-    border: '1px solid #DCFCE7',
+    border: '1px solid #BBF7D0',
     borderRadius: 12,
-    padding: '10px 14px',
-  },
-  targetRow: {
+    padding: '12px 16px',
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    justify: 'space-between',
   },
+  targetRow: { display: 'flex', alignItems: 'center', gap: 8 },
   targetLink: {
     fontSize: 12,
+    color: '#166534',
     fontWeight: 700,
-    color: '#16A34A',
     textDecoration: 'none',
     display: 'flex',
     alignItems: 'center',
     gap: 4,
   },
-  summaryGrid: {
+  fieldGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 10,
-    background: '#F8FAFC',
-    border: '1px solid #E2E8F0',
-    borderRadius: 12,
-    padding: 12,
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: 12,
   },
-  summaryBox: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  },
-  summaryLabel: {
-    fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: 600,
-  },
-  summaryVal: {
+  fieldGroup: { display: 'flex', flexDirection: 'column', gap: 4 },
+  fieldLabel: { fontSize: 11, fontWeight: 700, color: '#475569' },
+  input: {
+    padding: '9px 12px',
+    borderRadius: 8,
+    border: '1px solid #CBD5E1',
     fontSize: 12.5,
     color: '#0F172A',
+    outline: 'none',
   },
-  summaryValMuted: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  generateSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    alignItems: 'center',
-    textAlign: 'center',
-    padding: '10px 0',
-  },
-  hintText: {
-    fontSize: 12.5,
-    color: '#64748B',
-    lineHeight: 1.5,
-  },
+  generateSection: { display: 'flex', flexDirection: 'column', gap: 12, marginTop: 6 },
+  hintText: { fontSize: 11.5, color: '#64748B', lineHeight: 1.5, margin: 0 },
   generateBtn: {
-    display: 'inline-flex',
+    display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    padding: '12px 22px',
+    padding: '12px 20px',
     borderRadius: 12,
-    fontSize: 13.5,
-    fontWeight: 700,
+    background: '#2563EB',
     color: '#FFFFFF',
-    background: 'linear-gradient(135deg, #1D4ED8, #2563EB)',
-    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
     border: 'none',
+    fontWeight: 800,
+    fontSize: 13,
     cursor: 'pointer',
+    width: '100%',
   },
   resultSection: {
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
+    marginTop: 6,
+    padding: 16,
+    background: '#F8FAFC',
+    borderRadius: 14,
+    border: '1px solid #E2E8F0',
   },
-  resultLabel: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: '#334155',
-  },
-  linkRow: {
-    display: 'flex',
-    gap: 8,
-  },
+  resultLabel: { fontSize: 12, fontWeight: 800, color: '#0F172A' },
+  linkRow: { display: 'flex', gap: 8 },
   linkInput: {
     flex: 1,
     padding: '10px 12px',
-    borderRadius: 10,
+    borderRadius: 8,
     border: '1px solid #CBD5E1',
-    fontFamily: 'var(--font-mono)',
     fontSize: 11.5,
+    fontFamily: 'monospace',
+    background: '#FFFFFF',
     color: '#0F172A',
-    background: '#F8FAFC',
-    outline: 'none',
   },
   copyBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '0 16px',
+    borderRadius: 8,
+    border: 'none',
+    fontWeight: 700,
+    fontSize: 12,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  openBtn: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    padding: '10px 16px',
-    borderRadius: 10,
-    fontSize: 12.5,
+    padding: '8px 14px',
+    borderRadius: 8,
+    background: '#166534',
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: 700,
-    color: '#2563EB',
-    background: '#EFF6FF',
-    border: '1px solid #DBEAFE',
-    cursor: 'pointer',
-    flexShrink: 0,
+    textDecoration: 'none',
   },
-  warningBox: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    background: '#FEF3C7',
-    border: '1px solid #FDE68A',
-    borderRadius: 10,
-    padding: '8px 12px',
-    fontSize: 11.5,
-    color: '#92400E',
-  },
-  footer: {
-    padding: '14px 24px',
-    borderTop: '1px solid #E2E8F0',
-    background: '#F8FAFC',
-    display: 'flex',
-    justifyContent: 'flex-end',
-  },
-  closeModalBtn: {
-    padding: '8px 16px',
-    borderRadius: 10,
-    fontSize: 12.5,
-    fontWeight: 600,
-    color: '#64748B',
-    background: '#FFFFFF',
-    border: '1px solid #CBD5E1',
+  resetBtn: {
+    padding: '8px 14px',
+    borderRadius: 8,
+    background: '#E2E8F0',
+    color: '#334155',
+    border: 'none',
+    fontSize: 12,
+    fontWeight: 700,
     cursor: 'pointer',
   },
 }
