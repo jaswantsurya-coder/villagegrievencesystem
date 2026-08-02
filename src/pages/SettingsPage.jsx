@@ -125,6 +125,10 @@ export default function SettingsPage() {
     })
   }
 
+  // Test Email Modal State
+  const [showTestModal, setShowTestModal] = useState(false)
+  const [recipientEmail, setRecipientEmail] = useState('')
+
   function handleSaveSmtp(e) {
     e.preventDefault()
     setSavingSmtp(true)
@@ -137,13 +141,37 @@ export default function SettingsPage() {
     }, 600)
   }
 
-  async function handleSendTestEmail() {
+  async function handleSendTestEmail(e) {
+    if (e) e.preventDefault()
+    if (!recipientEmail || !recipientEmail.includes('@')) {
+      showToast('Please enter a valid recipient email address', 'error')
+      return
+    }
+
     setTestEmailSending(true)
     try {
-      await new Promise(r => setTimeout(r, 1200))
-      showToast(`Test email sent to ${smtpConfig.senderEmail} via Brevo SMTP!`)
-    } catch {
-      showToast('Failed to send test email', 'error')
+      const res = await fetch(`${API_BASE_URL}/nlp?action=send-test-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipient_email: recipientEmail.trim(),
+          sender_email: smtpConfig.senderEmail,
+          sender_name: smtpConfig.senderName,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok && data.success) {
+        setShowTestModal(false)
+        showToast(`✅ Test email successfully sent to ${recipientEmail}! Check your inbox.`)
+        setRecipientEmail('')
+      } else {
+        showToast(`⚠️ Test Email Error: ${data.error || 'Failed to send email'}`, 'error')
+      }
+    } catch (err) {
+      console.error('Test email error:', err)
+      showToast(`⚠️ Error: ${err.message || 'Failed to connect to email gateway'}`, 'error')
     } finally {
       setTestEmailSending(false)
     }
@@ -348,7 +376,7 @@ export default function SettingsPage() {
             {!isEditingSmtp ? (
               <>
                 <button
-                  onClick={handleSendTestEmail}
+                  onClick={() => setShowTestModal(true)}
                   disabled={testEmailSending}
                   style={styles.secondaryBtn}
                   className="btn-interactive"
@@ -542,6 +570,70 @@ export default function SettingsPage() {
                 Run Live Diagnostic Check
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Test Email Recipient Modal ────────────────────────────────────────── */}
+      {showTestModal && (
+        <div style={styles.modalOverlay} onClick={() => setShowTestModal(false)}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ ...styles.iconBox, color: '#2563EB' }}>
+                  <Mail size={18} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0F172A', margin: 0 }}>Send Brevo SMTP Test Email</h3>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>Specify recipient email to verify transactional delivery</span>
+                </div>
+              </div>
+              <button onClick={() => setShowTestModal(false)} style={styles.closeBtn}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendTestEmail} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 14 }}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Recipient Email Address</label>
+                <input
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder="Enter recipient email (e.g. yourname@gmail.com)"
+                  style={styles.input}
+                  autoFocus
+                  required
+                />
+              </div>
+
+              <div style={{ padding: 12, background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0', fontSize: 11.5, color: '#475569', lineHeight: 1.5 }}>
+                <strong style={{ color: '#0F172A' }}>Test Message Details:</strong><br />
+                • <strong>Sender:</strong> {smtpConfig.senderName} ({smtpConfig.senderEmail})<br />
+                • <strong>Gateway:</strong> {smtpConfig.gateway}:{smtpConfig.port}<br />
+                • <strong>Content:</strong> Formal HTML test report verifying Brevo REST API & SMTP delivery.
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowTestModal(false)}
+                  style={styles.secondaryBtn}
+                  className="btn-interactive"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={testEmailSending}
+                  style={styles.primaryBtn}
+                  className="btn-interactive"
+                >
+                  {testEmailSending ? <RefreshCw size={14} className="animate-spin" /> : <Send size={14} />}
+                  {testEmailSending ? 'Dispatching...' : 'Dispatch Test Email'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
