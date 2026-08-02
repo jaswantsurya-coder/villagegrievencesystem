@@ -34,19 +34,20 @@ import {
 export default function Overview() {
   const navigate = useNavigate()
   const { requests: adminRequests, stats: adminRequestStats } = useAdminRequests('all')
+  const { loading: analyticsLoading, analytics } = usePlatformAnalytics()
   const [stats, setStats] = useState({
-    villages: 486,
-    citizens: 24892,
-    officers: 1248,
-    sarpanchs: 486,
-    complaints: 18573,
-    resolutionRate: 87.6,
-    openComplaints: 4218,
-    inProgress: 3654,
-    resolvedToday: 842,
-    escalated: 236,
-    pendingRequests: 12,
-    activeOfficers: 1102,
+    villages: 0,
+    citizens: 0,
+    officers: 0,
+    sarpanchs: 0,
+    complaints: 0,
+    resolutionRate: 0,
+    openComplaints: 0,
+    inProgress: 0,
+    resolvedToday: 0,
+    escalated: 0,
+    pendingRequests: 0,
+    activeOfficers: 0,
   })
   const [recentRequests, setRecentRequests] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,37 +68,85 @@ export default function Overview() {
 
   useEffect(() => {
     loadData()
+
+    // Realtime WebSocket Subscription: Subscribe to complaints, profiles, and villages in Auxiliary DB
+    const channel = supabaseAux
+      .channel('overview_realtime_sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'complaints' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'villages' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles' },
+        () => loadData()
+      )
+      .subscribe()
+
+    return () => {
+      supabaseAux.removeChannel(channel)
+    }
   }, [])
 
   async function loadData() {
     setLoading(true)
     try {
-      // Fetch real data from dtucrczgagpzjbbrwqit (villages, profiles, complaints)
-      const [villagesRes, profilesRes, officersRes, complaintsRes, escalatedRes, inProgressRes, pendingRes, requestsRes] = await Promise.all([
+      // 1. Fetch real counts from dtucrczgagpzjbbrwqit (villages, profiles, complaints)
+      const todayStart = new Date()
+      todayStart.setHours(0,0,0,0)
+
+      const [
+        villagesRes,
+        citizensRes,
+        officersRes,
+        sarpanchsRes,
+        complaintsRes,
+        openRes,
+        inProgressRes,
+        resolvedTodayRes,
+        resolvedTotalRes,
+        escalatedRes,
+        pendingRes,
+        requestsRes,
+      ] = await Promise.all([
         supabaseAux.from('villages').select('id', { count: 'exact', head: true }),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'citizen'),
-        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'officer'),
+        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['officer', 'village_admin']),
+        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['sarpanch', 'village_admin']),
         supabaseAux.from('complaints').select('id', { count: 'exact', head: true }),
-        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).eq('is_escalated', true),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).in('status', ['Open', 'Pending']),
         supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).eq('status', 'In Progress'),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).in('status', ['Resolved', 'Closed']).gte('updated_at', todayStart.toISOString()),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).in('status', ['Resolved', 'Closed']),
+        supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).eq('is_escalated', true),
         supabase.from('admin_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase
-          .from('admin_requests')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(5),
+        supabase.from('admin_requests').select('*').order('created_at', { ascending: false }).limit(5),
       ])
 
-      setStats((prev) => ({
-        ...prev,
-        villages: villagesRes.count || prev.villages,
-        citizens: profilesRes.count || prev.citizens,
-        officers: officersRes.count || prev.officers,
-        complaints: complaintsRes.count || prev.complaints,
-        escalated: escalatedRes.count || prev.escalated,
-        inProgress: inProgressRes.count || prev.inProgress,
-        pendingRequests: pendingRes.count !== null ? pendingRes.count : prev.pendingRequests,
-      }))
+      const totalComp = complaintsRes.count || 0
+      const resolvedComp = resolvedTotalRes.count || 0
+      const resRate = totalComp > 0 ? parseFloat(((resolvedComp / totalComp) * 100).toFixed(1)) : 0
+
+      setStats({
+        villages: villagesRes.count || 0,
+        citizens: citizensRes.count || 0,
+        officers: officersRes.count || 0,
+        sarpanchs: sarpanchsRes.count || 0,
+        complaints: totalComp,
+        resolutionRate: resRate,
+        openComplaints: openRes.count || 0,
+        inProgress: inProgressRes.count || 0,
+        resolvedToday: resolvedTodayRes.count || 0,
+        escalated: escalatedRes.count || 0,
+        pendingRequests: pendingRes.count || 0,
+        activeOfficers: officersRes.count || 0,
+      })
 
       if (requestsRes.data && requestsRes.data.length > 0) {
         setRecentRequests(requestsRes.data)
@@ -540,13 +589,17 @@ export default function Overview() {
       {/* GRAMSEVA ANALYTICS CHARTS — ROW 3 */}
       <section style={styles.chartsRow}>
         <div style={{ flex: 1.2, minWidth: 320 }}>
-          <ComplaintTrendChart />
+          <ComplaintTrendChart trendData={analytics.trendData} />
         </div>
         <div style={{ flex: 1, minWidth: 300 }}>
-          <CategoriesDonutChart totalComplaints={stats.complaints} />
+          <CategoriesDonutChart categoryData={analytics.categoryData} totalComplaints={stats.complaints} />
         </div>
         <div style={{ flex: 1.2, minWidth: 320 }}>
-          <StatusDonutChart totalComplaints={stats.complaints} />
+          <StatusDonutChart
+            statusData={analytics.statusData}
+            totalComplaints={stats.complaints}
+            avgTurnaroundDays={analytics.avgTurnaroundDays}
+          />
         </div>
       </section>
 
@@ -641,7 +694,7 @@ export default function Overview() {
         </div>
 
         <div style={{ flex: 1.1, minWidth: 320 }}>
-          <BestPerformingVillages onViewAll={() => navigate('/villages')} />
+          <BestPerformingVillages bestVillages={analytics.bestVillages} onViewAll={() => navigate('/villages')} />
         </div>
       </section>
 
