@@ -6,12 +6,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      onwarn(warning, warn) {
-        if (warning.code === 'MODULE_LEVEL_DIRECTIVE') return
-        if (warning.code === 'SOURCEMAP_ERROR') return
-        warn(warning)
-      }
-    }
   }
 })
+
