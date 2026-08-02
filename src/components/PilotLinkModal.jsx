@@ -20,7 +20,7 @@ export default function PilotLinkModal({ request, onClose }) {
     setLoading(true)
     setError('')
     try {
-      const email = formData.email || `${(formData.fullName || 'admin').toLowerCase().replace(/\s+/g, '')}@gramseva.in`
+      const email = formData.email || `${(formData.fullName || 'admin').toLowerCase().replace(/\s+/g, '')}@gmail.com`
       const village = formData.villageName || 'Panchayat'
 
       // Try generating magic link via Supabase Auth Admin if service key is provided
@@ -129,7 +129,7 @@ export default function PilotLinkModal({ request, onClose }) {
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="e.g. sarpanch@gramseva.in"
+                  placeholder="e.g. sarpanch@gmail.com"
                   style={styles.input}
                   required
                 />
