@@ -34,10 +34,18 @@ export default function AIInsights() {
     },
   ])
 
-  // Phase 3: AI Engine Live State
+  // Phase 3: AI Engine Live State & Real NLP Telemetry
   const [aiHealth, setAiHealth] = useState(null)
   const [queueStats, setQueueStats] = useState(null)
   const [classStats, setClassStats] = useState(null)
+  const [nlpMetrics, setNlpMetrics] = useState({
+    totalComplaints: 0,
+    topKeywords: [],
+    languages: [],
+    spamCount: 0,
+    spamPercent: 0,
+    urgencyCounts: { Critical: 0, High: 0, Medium: 0, Low: 0 },
+  })
 
   useEffect(() => {
     loadHealth()
@@ -60,14 +68,81 @@ export default function AIInsights() {
 
   async function loadAIData() {
     try {
-      const [healthRes, queueRes] = await Promise.allSettled([
+      // 1. Fetch AI health & queue stats
+      const [healthRes, queueRes, complaintsRes] = await Promise.allSettled([
         fetch(`${API_BASE}/api/nlp?action=ai-health`).then(r => r.json()),
         fetch(`${API_BASE}/api/nlp?action=ai-queue-stats`).then(r => r.json()),
+        // Query REAL complaints telemetry directly from Supabase Auxiliary
+        import('../lib/supabase').then(m =>
+          m.supabaseAux
+            .from('complaints')
+            .select('category, detected_language, extracted_keywords, spam_flag, spam_score, urgency_score')
+        ),
       ])
+
       if (healthRes.status === 'fulfilled' && healthRes.value) setAiHealth(healthRes.value)
       if (queueRes.status === 'fulfilled' && queueRes.value) {
         setQueueStats(queueRes.value.queue_stats)
         setClassStats(queueRes.value.classification_stats)
+      }
+
+      // 2. Process REAL NLP data from complaints table
+      if (complaintsRes.status === 'fulfilled' && complaintsRes.value?.data) {
+        const complaints = complaintsRes.value.data
+        const total = complaints.length
+
+        if (total > 0) {
+          // Keywords aggregation
+          const kwMap = {}
+          complaints.forEach((c) => {
+            if (Array.isArray(c.extracted_keywords) && c.extracted_keywords.length > 0) {
+              c.extracted_keywords.forEach((kw) => { kwMap[kw] = (kwMap[kw] || 0) + 1 })
+            } else if (c.category) {
+              kwMap[c.category] = (kwMap[c.category] || 0) + 1
+            }
+          })
+          const topKeywords = Object.entries(kwMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([kw, count]) => ({ keyword: kw, count }))
+
+          // Language distribution aggregation
+          const langMap = {}
+          complaints.forEach((c) => {
+            const lang = c.detected_language || 'English'
+            langMap[lang] = (langMap[lang] || 0) + 1
+          })
+          const languages = Object.entries(langMap)
+            .sort((a, b) => b[1] - a[1])
+            .map(([lang, count]) => ({
+              language: lang,
+              count,
+              percent: Math.round((count / total) * 100),
+            }))
+
+          // Spam ratio
+          const spamCount = complaints.filter(
+            (c) => c.spam_flag === true || (c.spam_score && c.spam_score >= 50)
+          ).length
+          const spamPercent = Number(((spamCount / total) * 100).toFixed(1))
+
+          // Urgency scores aggregation
+          const urgencyCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 }
+          complaints.forEach((c) => {
+            const u = c.urgency_score || 'Low'
+            if (urgencyCounts[u] !== undefined) urgencyCounts[u]++
+            else urgencyCounts['Low']++
+          })
+
+          setNlpMetrics({
+            totalComplaints: total,
+            topKeywords,
+            languages,
+            spamCount,
+            spamPercent,
+            urgencyCounts,
+          })
+        }
       }
     } catch (err) {
       console.error('AI data load error:', err)
@@ -306,38 +381,56 @@ export default function AIInsights() {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {/* Top Keywords */}
           <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>TOP KEYWORDS</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>TOP KEYWORDS ({nlpMetrics.totalComplaints} complaints)</span>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Water Supply (42)</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Road (31)</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Electricity (25)</span>
-              <span style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>#Drainage (19)</span>
+              {nlpMetrics.topKeywords.length > 0 ? (
+                nlpMetrics.topKeywords.map((item, idx) => (
+                  <span key={idx} style={{ fontSize: 10.5, fontWeight: 700, background: '#E0F2FE', color: '#0369A1', padding: '2px 6px', borderRadius: 4 }}>
+                    #{item.keyword} ({item.count})
+                  </span>
+                ))
+              ) : (
+                <span style={{ fontSize: 10.5, color: '#94A3B8' }}>No keywords extracted yet</span>
+              )}
             </div>
           </div>
 
+          {/* Languages Detected */}
           <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>LANGUAGES DETECTED</span>
             <div style={{ fontSize: 12, fontWeight: 700, marginTop: 6, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Telugu (తెలుగు)</span><span>54%</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>English</span><span>27%</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Telugu-English</span><span>15%</span></div>
+              {nlpMetrics.languages.length > 0 ? (
+                nlpMetrics.languages.map((lang, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{lang.language}</span>
+                    <span>{lang.percent}%</span>
+                  </div>
+                ))
+              ) : (
+                <span style={{ fontSize: 10.5, color: '#94A3B8' }}>English (100%)</span>
+              )}
             </div>
           </div>
 
+          {/* Spam & Fake Ratio */}
           <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>SPAM & FAKE RATIO</span>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>4.1% <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>(5 flagged)</span></div>
-            <p style={{ fontSize: 10.5, color: '#64748B', marginTop: 4 }}>Manual review enabled for Village Admin</p>
+            <div style={{ fontSize: 20, fontWeight: 800, color: nlpMetrics.spamPercent > 10 ? '#DC2626' : '#16A34A', marginTop: 4 }}>
+              {nlpMetrics.spamPercent}% <span style={{ fontSize: 11, color: '#64748B', fontWeight: 600 }}>({nlpMetrics.spamCount} flagged)</span>
+            </div>
+            <p style={{ fontSize: 10.5, color: '#64748B', marginTop: 4 }}>Live detection from citizen submissions</p>
           </div>
 
+          {/* Urgency Scores */}
           <div style={{ background: '#FFFFFF', padding: 14, borderRadius: 12, border: '1px solid #E2E8F0' }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748B' }}>URGENCY SCORES</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6, fontSize: 11.5, fontWeight: 700 }}>
-              <span style={{ color: '#7F1D1D' }}>🔴 Critical: 3</span>
-              <span style={{ color: '#991B1B' }}>🟠 High: 18</span>
-              <span style={{ color: '#D97706' }}>🟡 Medium: 45</span>
-              <span style={{ color: '#166534' }}>🟢 Low: 54</span>
+              <span style={{ color: '#7F1D1D' }}>🔴 Critical: {nlpMetrics.urgencyCounts.Critical || 0}</span>
+              <span style={{ color: '#991B1B' }}>🟠 High: {nlpMetrics.urgencyCounts.High || 0}</span>
+              <span style={{ color: '#D97706' }}>🟡 Medium: {nlpMetrics.urgencyCounts.Medium || 0}</span>
+              <span style={{ color: '#166534' }}>🟢 Low: {nlpMetrics.urgencyCounts.Low || 0}</span>
             </div>
           </div>
         </div>
