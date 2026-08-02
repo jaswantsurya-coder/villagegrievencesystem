@@ -121,7 +121,15 @@ CREATE INDEX IF NOT EXISTS idx_metrics_recorded
 -- This allows the Oracle worker to subscribe via WebSocket
 -- and receive INSERT events instantly instead of polling.
 
-ALTER PUBLICATION supabase_realtime ADD TABLE ai_processing_queue;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND tablename = 'ai_processing_queue'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE ai_processing_queue;
+  END IF;
+END $$;
 
 
 -- ─── 6. RPC: CLAIM NEXT QUEUE ITEM (ATOMIC) ─────────────────────────────────
