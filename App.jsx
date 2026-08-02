@@ -4400,6 +4400,24 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                             <User size={12} strokeWidth={2.5} /> Anon: {it.anonymous_user.anonymous_id}
                           </div>
                         )}
+                        {/* ─── AI Status Badges (Phase 3) ─── */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                          {it.ai_status === 'Processing' && (
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#7c3aed", background: "#ede9fe", padding: "2px 8px", borderRadius: THEME.radius.full, animation: "pulse 1.5s infinite" }}>🤖 AI Analyzing...</span>
+                          )}
+                          {it.ai_status === 'Completed' && it.ai_category && (
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: THEME.radius.full }}>✅ AI: {it.ai_category}</span>
+                          )}
+                          {it.ai_status === 'Failed' && (
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#b91c1c", background: "#fee2e2", padding: "2px 8px", borderRadius: THEME.radius.full }}>⚠️ AI Unavailable</span>
+                          )}
+                          {it.ai_status === 'Completed' && it.ai_category && it.ai_category !== it.category && (
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: THEME.radius.full }}>🤖 suggests: {it.ai_category}</span>
+                          )}
+                          {it.ai_confidence_category > 0 && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "2px 6px", borderRadius: THEME.radius.full }}>{Math.round(it.ai_confidence_category * 100)}% conf</span>
+                          )}
+                        </div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
                           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                             <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
@@ -4598,6 +4616,81 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     )}
                   </div>
                 </div>
+
+                {/* ─── Section 2.5: AI Intelligence Analysis (Phase 3) ─── */}
+                {selected.ai_status && selected.ai_status !== 'Pending' && (
+                  <div style={{ marginBottom: 16, padding: 0, borderRadius: THEME.radius.md, border: "1.5px solid transparent", backgroundClip: "padding-box", position: "relative", overflow: "hidden" }}>
+                    <div style={{ position: "absolute", inset: -1.5, borderRadius: THEME.radius.md, background: "linear-gradient(135deg, #7c3aed, #2563eb, #059669)", zIndex: 0 }} />
+                    <div style={{ position: "relative", zIndex: 1, background: THEME.colors.surface, borderRadius: `calc(${THEME.radius.md} - 1px)`, padding: "18px 18px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #7c3aed, #2563eb)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🤖</div>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.8 }}>AI Analysis</span>
+                        <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: selected.ai_status === 'Completed' ? "linear-gradient(135deg, rgba(5,150,105,0.12), rgba(37,99,235,0.12))" : selected.ai_status === 'Processing' ? "#ede9fe" : "#fee2e2", fontSize: 9, fontWeight: 800, color: selected.ai_status === 'Completed' ? "#059669" : selected.ai_status === 'Processing' ? "#7c3aed" : "#b91c1c" }}>
+                          {selected.ai_status === 'Completed' ? '✅ Completed' : selected.ai_status === 'Processing' ? '⏳ Processing...' : '⚠️ Failed'}
+                        </div>
+                      </div>
+
+                      {selected.ai_status === 'Completed' && (
+                        <>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px", marginBottom: 14 }}>
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Category</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: THEME.colors.primary }}>{selected.ai_category || '—'}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Department</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: THEME.colors.text }}>{selected.ai_department || '—'}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>AI Priority</div>
+                              <div style={{ fontSize: 12, fontWeight: 800, color: selected.ai_priority === 'High' || selected.ai_priority === 'Critical' ? '#b91c1c' : selected.ai_priority === 'Medium' ? '#d97706' : '#059669' }}>{selected.ai_priority || '—'}</div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Model</div>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, fontFamily: "monospace" }}>{selected.ai_model_version || '—'}</div>
+                            </div>
+                          </div>
+
+                          {/* Confidence Meters */}
+                          {[
+                            { label: "Category", value: selected.ai_confidence_category },
+                            { label: "Priority", value: selected.ai_confidence_priority },
+                            { label: "Department", value: selected.ai_confidence_department },
+                          ].filter(m => m.value > 0).map((meter, idx) => (
+                            <div key={idx} style={{ marginBottom: 6 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 2 }}>
+                                <span>{meter.label} Confidence</span>
+                                <span>{Math.round(meter.value * 100)}%</span>
+                              </div>
+                              <div style={{ height: 5, background: THEME.colors.border, borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ height: "100%", borderRadius: 99, width: `${Math.round(meter.value * 100)}%`, background: meter.value >= 0.8 ? "#059669" : meter.value >= 0.6 ? "#2563eb" : "#d97706", transition: "width 0.5s ease" }} />
+                              </div>
+                            </div>
+                          ))}
+
+                          {selected.ai_summary_english && (
+                            <div style={{ marginTop: 10, padding: "8px 12px", background: THEME.colors.background, borderRadius: THEME.radius.sm, fontSize: 11, color: THEME.colors.text, lineHeight: 1.5 }}>
+                              <strong style={{ color: THEME.colors.primary }}>AI Summary:</strong> {selected.ai_summary_english}
+                            </div>
+                          )}
+
+                          {selected.ai_processing_time_ms > 0 && (
+                            <div style={{ marginTop: 8, fontSize: 9.5, color: THEME.colors.textMuted }}>
+                              ⏱ Processed in {selected.ai_processing_time_ms}ms
+                              {selected.ai_processed_at && ` • ${new Date(selected.ai_processed_at).toLocaleString()}`}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {selected.ai_fallback && (
+                        <div style={{ marginTop: 8, padding: "6px 10px", background: "#fef3c7", borderRadius: THEME.radius.sm, fontSize: 10, fontWeight: 700, color: "#92400e" }}>
+                          ⚠️ AI server was unavailable. Using rule-based classification as fallback.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* ─── Section 3: Description ─── */}
                 <div style={{ marginBottom: 16 }}>

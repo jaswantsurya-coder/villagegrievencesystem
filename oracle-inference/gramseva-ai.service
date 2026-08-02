@@ -1,0 +1,43 @@
+[Unit]
+Description=GramSeva AI Inference Server (Qwen2.5 + LoRA)
+Documentation=https://github.com/your-org/gramseva-ai
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gramseva
+Group=gramseva
+WorkingDirectory=/opt/gramseva/inference
+ExecStart=/opt/gramseva/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level info
+
+# Environment
+Environment=HF_HOME=/opt/gramseva/models
+Environment=TRANSFORMERS_CACHE=/opt/gramseva/models
+Environment=PYTHONUNBUFFERED=1
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+# Resource limits (Oracle Always Free: 4 OCPU, 24GB RAM)
+MemoryMax=8G
+MemoryHigh=6G
+CPUQuota=300%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gramseva-ai
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/gramseva
+ReadWritePaths=/var/log/gramseva
+
+[Install]
+WantedBy=multi-user.target

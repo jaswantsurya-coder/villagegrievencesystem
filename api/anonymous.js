@@ -271,6 +271,27 @@ export default async function handler(req, res) {
           village_id: village_id || anonUser.village_id,
           updated_at: new Date().toISOString(),
         }).eq('id', anonymous_user_id);
+
+        // ─── Phase 3: Fire-and-forget AI enqueue (non-blocking) ─────
+        // Complaint is already saved. If this fails, the self-healing
+        // scanner on the Oracle worker will pick it up later.
+        const apiBase = process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : process.env.API_BASE_URL || '';
+        if (apiBase) {
+          fetch(`${apiBase}/api/nlp?action=enqueue-ai`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              complaint_id: complaintId,
+              text: description.trim(),
+              image_urls: photo_urls || [],
+              latitude: latitude || null,
+              longitude: longitude || null,
+              village_id: village_id || anonUser.village_id || null,
+            }),
+          }).catch(() => {}); // Never block submission
+        }
       }
 
       return res.status(200).json({

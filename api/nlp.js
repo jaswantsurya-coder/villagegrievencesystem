@@ -1,13 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 /**
  * POST /api/nlp?action=preprocess
  * POST /api/nlp?action=check-duplicate
  * GET  /api/nlp?action=analytics
+ * POST /api/nlp?action=enqueue-ai        — Phase 3: Insert into AI processing queue
+ * GET  /api/nlp?action=ai-status         — Phase 3: Check AI status for a complaint
+ * GET  /api/nlp?action=ai-health         — Phase 3: Proxy Oracle inference server health
+ * GET  /api/nlp?action=ai-queue-stats    — Phase 3: AI queue metrics for dashboard
  * 
- * Unified Serverless Function for all Phase 2 NLP features.
+ * Unified Serverless Function for all NLP + AI features.
  * Kept in a single function file to comply with Vercel Hobby Plan (max 12 functions).
  */
+
+// Oracle AI Inference Server URL (set in Vercel env vars)
+const ORACLE_AI_URL = process.env.ORACLE_AI_URL || '';
+const AI_API_KEY = process.env.AI_API_KEY || '';
+const AI_HMAC_SECRET = process.env.AI_HMAC_SECRET || '';
+
+/**
+ * Generate HMAC-signed headers for Oracle requests.
+ */
+function getOracleHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (AI_API_KEY) headers['X-API-Key'] = AI_API_KEY;
+  if (AI_HMAC_SECRET) {
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const signature = crypto.createHmac('sha256', AI_HMAC_SECRET).update(timestamp).digest('hex');
+    headers['X-Timestamp'] = timestamp;
+    headers['X-Signature'] = signature;
+  }
+  return headers;
+}
 
 // ─── 1. NLP PREPROCESSING HELPERS ─────────────────────────────────────────────
 
@@ -264,7 +289,141 @@ export default async function handler(req, res) {
     }
   }
 
-  // 3. ACTION: PREPROCESS (Default)
+  // ─── 4. ACTION: ENQUEUE AI PROCESSING (Phase 3) ─────────────────────────────
+  if (action === 'enqueue-ai') {
+    try {
+      const { complaint_id, text, image_urls, latitude, longitude, village_id, district } = req.body || {};
+      if (!complaint_id || !text) {
+        return res.status(400).json({ success: false, error: 'complaint_id and text are required.' });
+      }
+
+      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
+      const svcKey = process.env.SUPABASE_AUX_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
+      const supabase = createClient(auxUrl, svcKey);
+
+      // Insert into ai_processing_queue
+      const { data, error } = await supabase
+        .from('ai_processing_queue')
+        .insert({
+          complaint_id,
+          complaint_text: text,
+          image_urls: image_urls || [],
+          latitude: latitude || null,
+          longitude: longitude || null,
+          village_id: village_id || null,
+          district: district || null,
+        })
+        .select('id')
+        .single();
+
+      if (error) {
+        // If duplicate constraint (already enqueued), that's OK
+        if (error.code === '23505') {
+          return res.status(200).json({ success: true, queued: true, message: 'Already enqueued' });
+        }
+        console.error('[api/nlp enqueue-ai error]:', error);
+        return res.status(500).json({ success: false, error: error.message });
+      }
+
+      return res.status(200).json({ success: true, queued: true, queue_id: data?.id });
+    } catch (err) {
+      console.error('[api/nlp enqueue-ai error]:', err);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+
+  // ─── 5. ACTION: AI STATUS (Phase 3) ─────────────────────────────────────────
+  if (action === 'ai-status') {
+    try {
+      const complaint_id = req.query.complaint_id || (req.body && req.body.complaint_id);
+      if (!complaint_id) {
+        return res.status(400).json({ success: false, error: 'complaint_id is required.' });
+      }
+
+      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
+      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
+      const supabase = createClient(auxUrl, auxKey);
+
+      const { data } = await supabase
+        .from('complaints')
+        .select('ai_status, ai_category, ai_priority, ai_department, ai_confidence_category, ai_model_version, ai_processing_time_ms, ai_processed_at, ai_fallback')
+        .eq('id', complaint_id)
+        .single();
+
+      return res.status(200).json({ success: true, ...(data || {}) });
+    } catch (err) {
+      console.error('[api/nlp ai-status error]:', err);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+
+  // ─── 6. ACTION: AI HEALTH (Phase 3 — Proxy to Oracle) ──────────────────────
+  if (action === 'ai-health') {
+    try {
+      if (!ORACLE_AI_URL) {
+        return res.status(200).json({
+          success: true,
+          status: 'not_configured',
+          message: 'Oracle AI server URL not configured (ORACLE_AI_URL env var missing)',
+        });
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+      try {
+        const response = await fetch(`${ORACLE_AI_URL}/health`, {
+          headers: getOracleHeaders(),
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          const healthData = await response.json();
+          return res.status(200).json({ success: true, ...healthData });
+        } else {
+          return res.status(200).json({ success: true, status: 'unhealthy', http_status: response.status });
+        }
+      } catch (fetchErr) {
+        clearTimeout(timeout);
+        return res.status(200).json({
+          success: true,
+          status: 'offline',
+          message: 'Oracle AI server is unreachable',
+          error: fetchErr.message,
+        });
+      }
+    } catch (err) {
+      console.error('[api/nlp ai-health error]:', err);
+      return res.status(200).json({ success: true, status: 'error', error: err.message });
+    }
+  }
+
+  // ─── 7. ACTION: AI QUEUE STATS (Phase 3 — Dashboard) ───────────────────────
+  if (action === 'ai-queue-stats') {
+    try {
+      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
+      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
+      const supabase = createClient(auxUrl, auxKey);
+
+      const [queueRes, classRes] = await Promise.allSettled([
+        supabase.rpc('get_ai_queue_stats'),
+        supabase.rpc('get_ai_classification_stats'),
+      ]);
+
+      const queue_stats = queueRes.status === 'fulfilled' && queueRes.value?.data
+        ? queueRes.value.data : { pending: 0, processing: 0, completed: 0, failed: 0 };
+      const classification_stats = classRes.status === 'fulfilled' && classRes.value?.data
+        ? classRes.value.data : { total_ai_processed: 0, avg_confidence: 0 };
+
+      return res.status(200).json({ success: true, queue_stats, classification_stats });
+    } catch (err) {
+      console.error('[api/nlp ai-queue-stats error]:', err);
+      return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+  }
+
+  // ─── 8. ACTION: PREPROCESS (Default) ────────────────────────────────────────
   try {
     const { text } = req.body || {};
     if (!text) {
