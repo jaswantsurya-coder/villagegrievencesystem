@@ -423,6 +423,83 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── 8. ACTION: SEND TEST EMAIL (Brevo SMTP Test) ───────────────────────────
+  if (action === 'send-test-email') {
+    try {
+      const { recipient_email, recipient_name, sender_email, sender_name } = req.body || {};
+      if (!recipient_email) {
+        return res.status(400).json({ success: false, error: 'recipient_email is required.' });
+      }
+
+      const brevoKey = process.env.BREVO_API_KEY;
+      if (!brevoKey) {
+        return res.status(200).json({
+          success: false,
+          error: 'BREVO_API_KEY environment variable is not configured on Vercel.',
+        });
+      }
+
+      const fromEmail = sender_email || process.env.BREVO_SENDER_EMAIL || 'gramseva0089@gmail.com';
+      const fromName = sender_name || process.env.BREVO_SENDER_NAME || 'GramSeva';
+
+      const emailPayload = {
+        sender: { name: fromName, email: fromEmail },
+        to: [{ email: recipient_email, name: recipient_name || recipient_email }],
+        subject: '🧪 GramSeva SuperAdmin — Brevo SMTP Test Email',
+        htmlContent: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 20px;">
+              <h2 style="color: #2563eb; margin: 0;">🏛 GramSeva Admin Portal</h2>
+              <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Brevo SMTP Gateway Configuration Test</p>
+            </div>
+            <div style="background: #f8fafc; padding: 16px; border-radius: 8px; border-left: 4px solid #16a34a; margin-bottom: 20px;">
+              <h3 style="color: #16a34a; margin: 0 0 8px;">✅ Brevo SMTP Test Successful</h3>
+              <p style="color: #334155; font-size: 14px; margin: 0;">This is a test email sent from GramSeva SuperAdmin Portal to verify your transactional email relay settings.</p>
+            </div>
+            <table style="width: 100%; font-size: 13px; color: #475569; border-collapse: collapse;">
+              <tr><td style="padding: 6px 0; font-weight: bold;">Sender:</td><td style="padding: 6px 0;">${fromName} (${fromEmail})</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Recipient:</td><td style="padding: 6px 0;">${recipient_email}</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Gateway:</td><td style="padding: 6px 0;">smtp-relay.brevo.com:587</td></tr>
+              <tr><td style="padding: 6px 0; font-weight: bold;">Timestamp:</td><td style="padding: 6px 0;">${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</td></tr>
+            </table>
+            <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+            <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">GramSeva Digital Governance Platform • Automated System Diagnostics</p>
+          </div>
+        `,
+      };
+
+      const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': brevoKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(emailPayload),
+      });
+
+      const responseData = await brevoRes.json();
+
+      if (brevoRes.ok) {
+        return res.status(200).json({
+          success: true,
+          message_id: responseData.messageId,
+          recipient: recipient_email,
+          sender: fromEmail,
+        });
+      } else {
+        return res.status(200).json({
+          success: false,
+          error: responseData.message || 'Brevo API returned error',
+          details: responseData,
+        });
+      }
+    } catch (err) {
+      console.error('[api/nlp send-test-email error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   // ─── 8. ACTION: PREPROCESS (Default) ────────────────────────────────────────
   try {
     const { text } = req.body || {};
