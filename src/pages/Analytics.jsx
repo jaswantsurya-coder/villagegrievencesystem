@@ -163,7 +163,7 @@ const styles = {
     padding: '16px 20px',
     display: 'flex',
     alignItems: 'center',
-    justify: 'space-between',
+    justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 14,
     boxShadow: '0 1px 3px rgba(15,23,42,0.04)',

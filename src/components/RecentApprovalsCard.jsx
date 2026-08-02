@@ -1,12 +1,49 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { BadgeCheck, CheckCircle2 } from 'lucide-react'
 
-const approvals = [
-  { applicant: 'Madhava Rao', village: 'Addategala', district: 'Prakasam', time: '16 May, 04:21 PM' },
-  { applicant: 'Jyothi Prakash', village: 'Duggirala', district: 'Guntur', time: '16 May, 03:42 PM' },
-  { applicant: 'Ravi Teja', village: 'Peddapuram', district: 'Kakinada', time: '16 May, 02:15 PM' },
-]
-
 export default function RecentApprovalsCard({ onViewAll }) {
+  const [approvals, setApprovals] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchApprovedRequests()
+  }, [])
+
+  async function fetchApprovedRequests() {
+    setLoading(true)
+    try {
+      // Query DB2 (sompzqwvegygtpsrlhzt) for real approved admin requests
+      const { data } = await supabase
+        .from('admin_requests')
+        .select('*')
+        .eq('status', 'approved')
+        .order('reviewed_at', { ascending: false })
+        .limit(3)
+
+      if (data && data.length > 0) {
+        setApprovals(
+          data.map((item) => ({
+            id: item.id,
+            applicant: item.full_name || 'Sarpanch Applicant',
+            village: item.village_name || 'Panchayat',
+            district: item.district || 'District',
+            time: item.reviewed_at
+              ? new Date(item.reviewed_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+              : 'Recently',
+          }))
+        )
+      } else {
+        setApprovals([])
+      }
+    } catch (err) {
+      console.error('Error fetching approved admin requests:', err)
+      setApprovals([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div style={styles.card}>
       <div style={styles.header}>
@@ -20,33 +57,43 @@ export default function RecentApprovalsCard({ onViewAll }) {
           </div>
         </div>
 
-        <button onClick={onViewAll} style={styles.viewAllBtn}>
+        <button onClick={onViewAll} style={styles.viewAllBtn} className="btn-interactive">
           View All
         </button>
       </div>
 
       <div style={styles.list}>
-        {approvals.map((item, idx) => (
-          <div key={idx} style={styles.listItem}>
-            <div style={styles.userAvatar}>
-              {item.applicant.split(' ').map(n => n[0]).join('')}
-            </div>
+        {loading ? (
+          <div style={{ padding: '16px 0', textAlign: 'center', fontSize: 12, color: '#64748B' }}>
+            Loading approvals...
+          </div>
+        ) : approvals.length === 0 ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', fontSize: 12, color: '#94A3B8' }}>
+            No verified sarpanch credentials approved yet.
+          </div>
+        ) : (
+          approvals.map((item) => (
+            <div key={item.id} style={styles.listItem}>
+              <div style={styles.userAvatar}>
+                {item.applicant.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+              </div>
 
-            <div style={styles.userInfo}>
-              <div style={styles.name}>{item.applicant}</div>
-              <div style={styles.meta}>
-                {item.village}, {item.district}
+              <div style={styles.userInfo}>
+                <div style={styles.name}>{item.applicant}</div>
+                <div style={styles.meta}>
+                  {item.village}, {item.district}
+                </div>
+              </div>
+
+              <div style={styles.rightGroup}>
+                <span style={styles.time}>{item.time}</span>
+                <span style={styles.approvedBadge}>
+                  <CheckCircle2 style={{ width: 11, height: 11 }} /> Approved
+                </span>
               </div>
             </div>
-
-            <div style={styles.rightGroup}>
-              <span style={styles.time}>{item.time}</span>
-              <span style={styles.approvedBadge}>
-                <CheckCircle2 style={{ width: 11, height: 11 }} /> Approved
-              </span>
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   )
@@ -111,59 +158,59 @@ const styles = {
   listItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
-    padding: '8px 10px',
-    borderRadius: 10,
+    gap: 12,
+    padding: '10px 12px',
+    borderRadius: 12,
     background: '#F8FAFC',
     border: '1px solid #F1F5F9',
   },
   userAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 99,
+    width: 32,
+    height: 32,
+    borderRadius: '50%',
     background: '#DBEAFE',
     color: '#1D4ED8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 800,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    textTransform: 'uppercase',
   },
   userInfo: {
     flex: 1,
-    overflow: 'hidden',
+    minWidth: 0,
   },
   name: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: 700,
     color: '#0F172A',
-    lineHeight: 1.2,
   },
   meta: {
     fontSize: 11,
     color: '#64748B',
+    marginTop: 2,
   },
   rightGroup: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 4,
   },
   time: {
-    fontSize: 10.5,
+    fontSize: 10,
     color: '#94A3B8',
-    fontFamily: 'var(--font-mono)',
+    fontWeight: 600,
   },
   approvedBadge: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 3,
+    gap: 4,
+    padding: '2px 8px',
+    borderRadius: 12,
+    background: '#DCFCE7',
+    color: '#15803D',
     fontSize: 10.5,
     fontWeight: 700,
-    color: '#15803D',
-    background: '#DCFCE7',
-    borderRadius: 6,
-    padding: '1px 6px',
   },
 }

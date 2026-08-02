@@ -231,28 +231,23 @@ export default function Overview() {
         <StatCard
           title="Villages Registered"
           value={stats.villages.toLocaleString()}
-          trend="▲ 24"
-          subtitle="this month"
-          trendType="up"
+          subtitle="live panchayats"
           icon={Building2}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
-          sparklineData={[420, 435, 450, 442, 460, 472, 486]}
-          sparklineColor="#2563EB"
           onClick={() =>
             setSelectedStat({
               title: 'Villages Registered',
               value: stats.villages.toLocaleString(),
-              subtitle: '▲ 24 added this month',
+              subtitle: 'Registered Gram Panchayats',
               icon: Building2,
               iconBg: '#EFF6FF',
               iconColor: '#2563EB',
               targetPath: '/villages',
               details: [
-                { label: 'Active Panchayats', value: '486 Villages' },
-                { label: 'Growth this month', value: '+24 new villages' },
-                { label: 'Health Index', value: '98.2% Optimal' },
-                { label: 'Join Codes Active', value: '486 Codes Issued' },
+                { label: 'Active Panchayats in Database', value: `${stats.villages} Villages` },
+                { label: 'Citizens Enrolled', value: `${stats.citizens} Citizens` },
+                { label: 'Total Complaints Logged', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -261,28 +256,22 @@ export default function Overview() {
         <StatCard
           title="Citizens"
           value={stats.citizens.toLocaleString()}
-          trend="▲ 1,246"
-          subtitle="this month"
-          trendType="up"
+          subtitle="registered users"
           icon={Users}
           iconBg="#EFF6FF"
           iconColor="#3B82F6"
-          sparklineData={[21000, 22200, 23100, 23900, 24892]}
-          sparklineColor="#3B82F6"
           onClick={() =>
             setSelectedStat({
               title: 'Citizens Network',
               value: stats.citizens.toLocaleString(),
-              subtitle: '▲ 1,246 registered this month',
+              subtitle: 'Registered Citizen Profiles',
               icon: Users,
               iconBg: '#EFF6FF',
               iconColor: '#3B82F6',
               targetPath: '/citizens',
               details: [
-                { label: 'Total Registered Citizens', value: '24,892 Users' },
-                { label: 'Active This Week', value: '18,450 Citizens' },
-                { label: 'Awaiting Village Join', value: '342 Citizens' },
-                { label: 'Verification Rate', value: '99.4% Verified' },
+                { label: 'Total Registered Citizens', value: `${stats.citizens} Citizens` },
+                { label: 'Complaints Filed', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -291,28 +280,23 @@ export default function Overview() {
         <StatCard
           title="Officers"
           value={stats.officers.toLocaleString()}
-          trend="▲ 56"
-          subtitle="this month"
-          trendType="up"
+          subtitle="field personnel"
           icon={ShieldCheck}
           iconBg="#F3E8FF"
           iconColor="#8B5CF6"
-          sparklineData={[1120, 1150, 1180, 1210, 1248]}
-          sparklineColor="#8B5CF6"
           onClick={() =>
             setSelectedStat({
               title: 'Village Officers',
               value: stats.officers.toLocaleString(),
-              subtitle: '▲ 56 assigned this month',
+              subtitle: 'Registered Panchayat Officers & Leads',
               icon: ShieldCheck,
               iconBg: '#F3E8FF',
               iconColor: '#8B5CF6',
               targetPath: '/officers',
               details: [
-                { label: 'Total Field Inspectors', value: '1,248 Officers' },
-                { label: 'Currently On Duty', value: '1,102 Active' },
-                { label: 'Pending Assignments', value: '46 Villages' },
-                { label: 'Avg SLA Speed', value: '4.6 Days' },
+                { label: 'Total Field Inspectors', value: `${stats.officers} Officers` },
+                { label: 'Currently Active', value: `${stats.activeOfficers} Officers` },
+                { label: 'Assigned Villages', value: `${stats.villages} Villages` },
               ],
             })
           }
@@ -321,27 +305,22 @@ export default function Overview() {
         <StatCard
           title="Sarpanchs"
           value={stats.sarpanchs.toLocaleString()}
-          trend="▲ 18"
-          subtitle="this month"
-          trendType="up"
+          subtitle="verified village leads"
           icon={Award}
           iconBg="#FEF3C7"
           iconColor="#D97706"
-          sparklineData={[420, 438, 452, 470, 486]}
-          sparklineColor="#F59E0B"
           onClick={() =>
             setSelectedStat({
               title: 'Sarpanch Network',
               value: stats.sarpanchs.toLocaleString(),
-              subtitle: '▲ 18 verified this month',
+              subtitle: 'Verified Village Admins & Sarpanchs',
               icon: Award,
               iconBg: '#FEF3C7',
               iconColor: '#D97706',
               targetPath: '/approvals',
               details: [
-                { label: 'Verified Sarpanchs', value: '486 Leaders' },
-                { label: 'Pending Approvals', value: '12 Applicants' },
-                { label: 'Verification Method', value: 'Aadhaar + GP Seal' },
+                { label: 'Verified Sarpanchs', value: `${stats.sarpanchs} Leaders` },
+                { label: 'Pending Admin Applications', value: `${stats.pendingRequests} Applicants` },
               ],
             })
           }
@@ -350,27 +329,24 @@ export default function Overview() {
         <StatCard
           title="Total Complaints"
           value={stats.complaints.toLocaleString()}
-          trend="▲ 2,153"
-          subtitle="this month"
-          trendType="up"
+          subtitle="tracked in DB"
           icon={ClipboardList}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
-          sparklineData={[14000, 15200, 16800, 17900, 18573]}
-          sparklineColor="#2563EB"
           onClick={() =>
             setSelectedStat({
               title: 'Total Complaints',
               value: stats.complaints.toLocaleString(),
-              subtitle: '▲ 2,153 filed this month',
+              subtitle: 'Tracked Citizen Issues',
               icon: ClipboardList,
               iconBg: '#EFF6FF',
               iconColor: '#2563EB',
               targetPath: '/complaints',
               details: [
-                { label: 'Total Tracked Complaints', value: '18,573 Tickets' },
-                { label: 'Resolved Complaints', value: '10,465 (56.3%)' },
-                { label: 'Top Category', value: 'Roads & Infrastructure' },
+                { label: 'Total Complaints Logged', value: `${stats.complaints} Tickets` },
+                { label: 'Open Issues', value: `${stats.openComplaints} Tickets` },
+                { label: 'In Progress Issues', value: `${stats.inProgress} Tickets` },
+                { label: 'Escalated Cases', value: `${stats.escalated} Cases` },
               ],
             })
           }
@@ -379,27 +355,23 @@ export default function Overview() {
         <StatCard
           title="Resolution Rate"
           value={`${stats.resolutionRate}%`}
-          trend="▲ 5.3%"
-          subtitle="vs last month"
-          trendType="up"
+          subtitle="SLA completion"
           icon={TrendingUp}
           iconBg="#DCFCE7"
           iconColor="#166534"
-          sparklineData={[78, 80, 82, 85, 87.6]}
-          sparklineColor="#22C55E"
           onClick={() =>
             setSelectedStat({
               title: 'Resolution Rate & SLA',
               value: `${stats.resolutionRate}%`,
-              subtitle: '▲ 5.3% improvement vs last month',
+              subtitle: 'Real calculated SLA resolution metric',
               icon: TrendingUp,
               iconBg: '#DCFCE7',
               iconColor: '#166534',
               targetPath: '/analytics',
               details: [
-                { label: 'Resolution Rate', value: '87.6%' },
-                { label: 'Average Resolution Time', value: '4.6 Days' },
-                { label: 'SLA Success Target', value: '94.2%' },
+                { label: 'Resolution Rate', value: `${stats.resolutionRate}%` },
+                { label: 'Average Turnaround', value: `${analytics?.avgTurnaroundDays || '0.0'} Days` },
+                { label: 'Total Tracked Complaints', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -411,28 +383,25 @@ export default function Overview() {
         <StatCard
           title="Open Complaints"
           value={stats.openComplaints.toLocaleString()}
-          subtitle="22.7% of total"
+          subtitle="awaiting action"
           icon={AlertCircle}
           iconBg="#EFF6FF"
           iconColor="#3B82F6"
           badgeText="Open"
           badgeBg="#DBEAFE"
           badgeColor="#1D4ED8"
-          sparklineData={[4800, 4600, 4400, 4300, 4218]}
-          sparklineColor="#3B82F6"
           onClick={() =>
             setSelectedStat({
               title: 'Open Complaints',
               value: stats.openComplaints.toLocaleString(),
-              subtitle: '22.7% of total complaints',
+              subtitle: 'Open Citizen Issues',
               icon: AlertCircle,
               iconBg: '#EFF6FF',
               iconColor: '#3B82F6',
               targetPath: '/complaints',
               details: [
-                { label: 'Active Open Issues', value: '4,218 Tickets' },
-                { label: 'Priority High', value: '1,120 Tickets' },
-                { label: 'Assigned to Officers', value: '3,890 Tickets' },
+                { label: 'Active Open Issues', value: `${stats.openComplaints} Tickets` },
+                { label: 'Total Logged Complaints', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -441,28 +410,25 @@ export default function Overview() {
         <StatCard
           title="In Progress"
           value={stats.inProgress.toLocaleString()}
-          subtitle="19.7% of total"
+          subtitle="under resolution"
           icon={Clock}
           iconBg="#FEF3C7"
           iconColor="#D97706"
           badgeText="Pending"
           badgeBg="#FEF3C7"
           badgeColor="#B45309"
-          sparklineData={[3200, 3400, 3550, 3654]}
-          sparklineColor="#F59E0B"
           onClick={() =>
             setSelectedStat({
               title: 'In Progress Issues',
               value: stats.inProgress.toLocaleString(),
-              subtitle: '19.7% of total complaints',
+              subtitle: 'Active Field Resolution',
               icon: Clock,
               iconBg: '#FEF3C7',
               iconColor: '#D97706',
               targetPath: '/complaints',
               details: [
-                { label: 'Work Orders Active', value: '3,654 Tickets' },
-                { label: 'On-site Field Work', value: '2,890 Tickets' },
-                { label: 'Expected Close', value: '< 48 Hours' },
+                { label: 'Work Orders Active', value: `${stats.inProgress} Tickets` },
+                { label: 'Total Logged Complaints', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -471,26 +437,22 @@ export default function Overview() {
         <StatCard
           title="Resolved Today"
           value={stats.resolvedToday.toLocaleString()}
-          trend="▲ 12.5%"
-          subtitle="vs yesterday"
-          trendType="up"
+          subtitle="closed today"
           icon={CheckCircle2}
           iconBg="#DCFCE7"
           iconColor="#15803D"
-          sparklineData={[650, 720, 780, 842]}
-          sparklineColor="#22C55E"
           onClick={() =>
             setSelectedStat({
               title: 'Resolved Today',
               value: stats.resolvedToday.toLocaleString(),
-              subtitle: '▲ 12.5% increase vs yesterday',
+              subtitle: 'Complaints Closed Today',
               icon: CheckCircle2,
               iconBg: '#DCFCE7',
               iconColor: '#15803D',
               targetPath: '/complaints',
               details: [
-                { label: 'Closed Today', value: '842 Complaints' },
-                { label: 'Citizen Satisfaction', value: '96.4% Positive' },
+                { label: 'Closed Today', value: `${stats.resolvedToday} Complaints` },
+                { label: 'Resolution Rate', value: `${stats.resolutionRate}%` },
               ],
             })
           }
@@ -506,21 +468,18 @@ export default function Overview() {
           badgeText="Critical"
           badgeBg="#FEE2E2"
           badgeColor="#B91C1C"
-          sparklineData={[280, 260, 250, 236]}
-          sparklineColor="#EF4444"
           onClick={() =>
             setSelectedStat({
               title: 'Escalated Cases',
               value: stats.escalated.toLocaleString(),
-              subtitle: 'Requires immediate Super Admin attention',
+              subtitle: 'Requires Super Admin attention',
               icon: AlertTriangle,
               iconBg: '#FEE2E2',
               iconColor: '#B91C1C',
               targetPath: '/complaints',
               details: [
-                { label: 'Overdue Complaints (>48h)', value: '236 Cases' },
-                { label: 'Department Escalations', value: 'Water & Electricity' },
-                { label: 'Action Required', value: 'Reassign Field Officer' },
+                { label: 'Escalated Complaints', value: `${stats.escalated} Cases` },
+                { label: 'Total Logged Complaints', value: `${stats.complaints} Tickets` },
               ],
             })
           }
@@ -533,24 +492,18 @@ export default function Overview() {
           icon={UserCheck}
           iconBg="#EFF6FF"
           iconColor="#2563EB"
-          badgeText={`${stats.pendingRequests} Action`}
-          badgeBg="#DBEAFE"
-          badgeColor="#1D4ED8"
-          sparklineData={[18, 15, 14, 12]}
-          sparklineColor="#2563EB"
           onClick={() =>
             setSelectedStat({
-              title: 'Pending Admin Requests',
+              title: 'Pending Admin Verification Requests',
               value: stats.pendingRequests.toLocaleString(),
-              subtitle: 'Sarpanch onboarding requests waiting for verification',
+              subtitle: 'Panchayat Sarpanch onboarding applications',
               icon: UserCheck,
               iconBg: '#EFF6FF',
               iconColor: '#2563EB',
               targetPath: '/approvals',
               details: [
-                { label: 'Unreviewed Applications', value: `${stats.pendingRequests} Requests` },
-                { label: 'Documents Uploaded', value: 'Aadhaar & Panchayat Proof' },
-                { label: 'Avg Review Time', value: '1.2 Hours' },
+                { label: 'Pending Review', value: `${stats.pendingRequests} Applications` },
+                { label: 'Verified Sarpanchs', value: `${stats.sarpanchs} Approved` },
               ],
             })
           }
@@ -559,28 +512,25 @@ export default function Overview() {
         <StatCard
           title="Active Officers"
           value={stats.activeOfficers.toLocaleString()}
-          subtitle="88.3% active"
+          subtitle="on duty"
           icon={ShieldCheck}
           iconBg="#DCFCE7"
           iconColor="#15803D"
           badgeText="Online"
           badgeBg="#DCFCE7"
           badgeColor="#15803D"
-          sparklineData={[980, 1020, 1060, 1102]}
-          sparklineColor="#22C55E"
           onClick={() =>
             setSelectedStat({
               title: 'Active Field Officers',
               value: stats.activeOfficers.toLocaleString(),
-              subtitle: '88.3% on duty across Panchayats',
+              subtitle: 'On duty across Panchayats',
               icon: ShieldCheck,
               iconBg: '#DCFCE7',
               iconColor: '#15803D',
               targetPath: '/officers',
               details: [
-                { label: 'Officers Currently Active', value: '1,102 Inspectors' },
-                { label: 'Off-duty / Leave', value: '146 Inspectors' },
-                { label: 'Top Department', value: 'Roads & Infrastructure' },
+                { label: 'Officers Currently Active', value: `${stats.activeOfficers} Active` },
+                { label: 'Total Officers', value: `${stats.officers} Officers` },
               ],
             })
           }

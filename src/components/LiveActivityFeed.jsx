@@ -205,7 +205,7 @@ const styles = {
   header: {
     display: 'flex',
     alignItems: 'center',
-    justify: 'space-between',
+    justifyContent: 'space-between',
     marginBottom: 14,
   },
   titleGroup: {
