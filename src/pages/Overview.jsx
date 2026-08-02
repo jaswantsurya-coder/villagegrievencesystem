@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, supabaseAux } from '../lib/supabase'
 import { useAdminRequests } from '../hooks/useAdminRequests'
+import { usePlatformAnalytics } from '../hooks/usePlatformAnalytics'
 import StatCard from '../components/StatCard'
 import PlatformHealth from '../components/PlatformHealth'
 import ComplaintTrendChart from '../components/ComplaintTrendChart'
