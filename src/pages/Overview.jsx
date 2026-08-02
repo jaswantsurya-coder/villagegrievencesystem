@@ -118,7 +118,7 @@ export default function Overview() {
       ] = await Promise.all([
         supabaseAux.from('villages').select('id', { count: 'exact', head: true }),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'citizen'),
-        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['officer', 'village_admin']),
+        supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'officer'),
         supabaseAux.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['sarpanch', 'village_admin']),
         supabaseAux.from('complaints').select('id', { count: 'exact', head: true }),
         supabaseAux.from('complaints').select('id', { count: 'exact', head: true }).in('status', ['Open', 'Pending']),
