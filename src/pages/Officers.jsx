@@ -46,9 +46,11 @@ export default function Officers() {
           .map((p) => p.id)
       )
 
-      const citizenVillages = (villageRes.data || []).filter(
-        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
-      )
+      const citizenVillages = (villageRes.data || []).filter((v) => {
+        if (superAdminIds.has(v.sarpanch_user_id)) return false
+        const name = (v.village_name || '').toLowerCase().trim()
+        return name !== 'visakhapatnam' && !name.startsWith('visakhapatnam')
+      })
 
       setVillages(citizenVillages)
       if (profileRes.data) setProfiles(profileRes.data.filter((p) => !superAdminIds.has(p.id)))

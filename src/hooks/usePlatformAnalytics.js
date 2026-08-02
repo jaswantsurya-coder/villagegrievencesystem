@@ -53,9 +53,11 @@ export function usePlatformAnalytics() {
           .map((p) => p.id)
       )
 
-      const villages = (villagesRes.data || []).filter(
-        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
-      )
+      const villages = (villagesRes.data || []).filter((v) => {
+        if (superAdminIds.has(v.sarpanch_user_id)) return false
+        const name = (v.village_name || '').toLowerCase().trim()
+        return name !== 'visakhapatnam' && !name.startsWith('visakhapatnam')
+      })
 
       const total = complaints.length
       const resolved = complaints.filter((c) => c.status === 'Resolved' || c.status === 'Closed').length

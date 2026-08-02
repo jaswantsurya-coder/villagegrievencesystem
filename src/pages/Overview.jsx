@@ -138,9 +138,11 @@ export default function Overview() {
           .map((p) => p.id)
       )
 
-      const citizenVillageCount = (villagesRes.data || []).filter(
-        (v) => !superAdminIds.has(v.sarpanch_user_id) && v.village_name !== 'Visakhapatnam HQ'
-      ).length
+      const citizenVillageCount = (villagesRes.data || []).filter((v) => {
+        if (superAdminIds.has(v.sarpanch_user_id)) return false
+        const name = (v.village_name || '').toLowerCase().trim()
+        return name !== 'visakhapatnam' && !name.startsWith('visakhapatnam')
+      }).length
 
       const totalComp = complaintsRes.count || 0
       const resolvedComp = resolvedTotalRes.count || 0
