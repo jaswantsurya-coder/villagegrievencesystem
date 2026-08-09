@@ -32,12 +32,23 @@ export default function AppShell() {
   const location = useLocation()
   const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications()
   const { stats: requestStats } = useAdminRequests('all')
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768)
+  const [sidebarOpen, setSidebarOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth > 768)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentDateTime, setCurrentDateTime] = useState('')
   const [showNotifDropdown, setShowNotifDropdown] = useState(false)
   const [fcmToast, setFcmToast] = useState(null)
   const notifRef = useRef(null)
+
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768
+      setIsMobile(mobile)
+      if (mobile) setSidebarOpen(false)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Clock
   useEffect(() => {
@@ -102,10 +113,36 @@ export default function AppShell() {
 
   return (
     <div style={styles.appContainer}>
+      {/* MOBILE BACKDROP OVERLAY */}
+      {isMobile && sidebarOpen && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.4)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 90,
+          }}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside style={{ ...styles.sidebar, width: sidebarOpen ? 260 : 78 }}>
+      <aside
+        style={{
+          ...styles.sidebar,
+          width: sidebarOpen ? 260 : (isMobile ? 0 : 78),
+          position: isMobile ? 'fixed' : 'relative',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 100,
+          display: isMobile && !sidebarOpen ? 'none' : 'flex',
+          boxShadow: isMobile && sidebarOpen ? '4px 0 24px rgba(0,0,0,0.15)' : 'none',
+        }}
+      >
         {/* Top Logo Header */}
-        <div style={styles.logoSection} onClick={() => navigate('/')}>
+        <div style={styles.logoSection} onClick={() => { navigate('/'); if (isMobile) setSidebarOpen(false); }}>
           <div style={styles.logoBox}>
             <Building2 style={{ width: 22, height: 22, color: '#2563EB' }} />
           </div>
@@ -130,6 +167,7 @@ export default function AppShell() {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/'}
+                onClick={() => { if (isMobile) setSidebarOpen(false) }}
                 style={{
                   ...styles.navItem,
                   ...(isActive ? styles.navItemActive : {}),

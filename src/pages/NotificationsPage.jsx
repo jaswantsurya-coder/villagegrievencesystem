@@ -122,7 +122,7 @@ export default function NotificationsPage() {
         <div style={styles.list}>
           {filtered.map((n) => {
             const typeStyle = TYPE_STYLES[n.type] || TYPE_STYLES.system
-            const IconComponent = ICON_MAP[n.icon] || typeStyle.icon
+            const IconComponent = ICON_MAP[n.icon] || (typeStyle && typeStyle.icon) || Bell
 
             return (
               <div
