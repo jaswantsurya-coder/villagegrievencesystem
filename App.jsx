@@ -4346,6 +4346,37 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
             </>
           )}
           <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
+          {!t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) && (
+            <button
+              onClick={async () => {
+                try {
+                  notify("Scanning overdue grievances for SLA breaches...", "ok");
+                  const { data: { session: currentSession } } = await supabase.auth.getSession();
+                  const token = currentSession?.access_token;
+                  const res = await fetch('/api/nlp?action=trigger-escalation-scan', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                    }
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    notify(`⚡ SLA Scan Complete: ${data.overdue_count} overdue, ${data.emails_sent} alert emails sent!`, "success");
+                    fetchData();
+                  } else {
+                    notify(data.error || "Escalation scan failed", "err");
+                  }
+                } catch (e) {
+                  notify("Escalation check error: " + e.message, "err");
+                }
+              }}
+              style={{ background: "#fef2f2", border: "1.5px solid #ef4444", color: "#b91c1c", padding: "10px 14px", borderRadius: THEME.radius.md, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, display: "flex", alignItems: "center", gap: 6 }}
+              title="Scan complaints unresolved for 7+ days and dispatch negligence alerts to administration"
+            >
+              🚨 Scan SLA Breaches
+            </button>
+          )}
         </div>
       </div>
 
@@ -6271,7 +6302,7 @@ const PermissionsView = ({ t, notify }) => {
   const [perms, setPerms] = useState({
     notifications: "prompt",
     location: "prompt",
-    microphone: "prompt"
+    microphone: (typeof localStorage !== "undefined" && localStorage.getItem("gramseva_mic_permission")) || "prompt"
   });
 
   useEffect(() => {
@@ -6280,7 +6311,8 @@ const PermissionsView = ({ t, notify }) => {
 
   const checkPermissions = async () => {
     try {
-      const state = { notifications: "prompt", location: "prompt", microphone: "prompt" };
+      const cachedMic = (typeof localStorage !== "undefined" && localStorage.getItem("gramseva_mic_permission")) || "prompt";
+      const state = { notifications: "prompt", location: "prompt", microphone: cachedMic };
       
       // Notifications
       if ("Notification" in window) {
@@ -6298,14 +6330,31 @@ const PermissionsView = ({ t, notify }) => {
         }
       }
       
-      // Microphone
-      if (navigator.permissions && navigator.permissions.query) {
+      // Microphone: Mobile-friendly check
+      // 1. If audio input devices already have non-empty labels, permission is active
+      if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioInputs = devices.filter(d => d.kind === 'audioinput');
+          if (audioInputs.some(d => d.label && d.label.length > 0)) {
+            state.microphone = "granted";
+            if (typeof localStorage !== "undefined") localStorage.setItem("gramseva_mic_permission", "granted");
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+
+      // 2. Query permissions API if not already marked granted
+      if (state.microphone !== "granted" && navigator.permissions && navigator.permissions.query) {
         try {
           const micPerm = await navigator.permissions.query({ name: 'microphone' });
           state.microphone = micPerm.state;
+          if (typeof localStorage !== "undefined") localStorage.setItem("gramseva_mic_permission", micPerm.state);
           micPerm.onchange = () => checkPermissions();
         } catch (e) {
-          console.warn(e);
+          // On WebKit/iOS Safari, { name: 'microphone' } throws TypeError.
+          // Keep existing cached state instead of overwriting with prompt.
         }
       }
       
@@ -6342,17 +6391,25 @@ const PermissionsView = ({ t, notify }) => {
 
   const requestMicrophone = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      return notify("Microphone not supported", "err");
+      return notify("Microphone not supported in this browser", "err");
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // stop stream immediately since we just wanted permission
+      // Stop stream immediately since we just wanted permission
       stream.getTracks().forEach(track => track.stop());
+      if (typeof localStorage !== "undefined") localStorage.setItem("gramseva_mic_permission", "granted");
+      setPerms(prev => ({ ...prev, microphone: "granted" }));
       notify("Microphone permission granted!", "success");
-      checkPermissions();
+      await checkPermissions();
     } catch (err) {
-      notify("Microphone permission denied", "err");
-      checkPermissions();
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        if (typeof localStorage !== "undefined") localStorage.setItem("gramseva_mic_permission", "denied");
+        setPerms(prev => ({ ...prev, microphone: "denied" }));
+        notify("Microphone permission denied. Allow access in your browser settings.", "err");
+      } else {
+        notify(err?.message || "Could not access microphone", "err");
+      }
+      await checkPermissions();
     }
   };
 

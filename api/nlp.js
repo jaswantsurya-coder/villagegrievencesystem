@@ -213,9 +213,18 @@ async function authorizeAction(req, res, action) {
     }
   }
 
-  // Tier 3: Admin only (analytics, ai-queue-stats, ai-health, send-test-email, send-escalation-email)
-  const adminActions = ['analytics', 'ai-queue-stats', 'ai-health', 'send-test-email', 'send-escalation-email'];
+  // Tier 3: Admin only (analytics, ai-queue-stats, ai-health, send-test-email, send-escalation-email, trigger-escalation-scan)
+  const adminActions = ['analytics', 'ai-queue-stats', 'ai-health', 'send-test-email', 'send-escalation-email', 'trigger-escalation-scan'];
   if (adminActions.includes(action)) {
+    // Accept internal secret OR Vercel cron secret
+    if (verifyInternalSecret(req)) return true;
+    const cronSecret = process.env.CRON_SECRET;
+    const cronHeader = req.headers['x-vercel-cron-secret'] || '';
+    const authHeader = req.headers.authorization || '';
+    if (cronSecret && (cronHeader === cronSecret || authHeader.replace('Bearer ', '').trim() === cronSecret)) {
+      return true;
+    }
+
     try {
       const admin = getPrimaryAdmin();
       await requireRole(req, ['village_admin', 'district_admin', 'super_admin'], admin);

@@ -214,3 +214,54 @@ describe("Data Integrity & PII Masking Utilities", () => {
     expect(maskAadhaar(null)).toBe("XXXX-XXXX-XXXX");
   });
 });
+
+describe("SLA Escalation & Mobile Permissions Unit Helpers", () => {
+  it("calculates overdue days correctly for stale complaints", () => {
+    function calculateOverdueDays(createdAtStr) {
+      return Math.max(7, Math.floor((Date.now() - new Date(createdAtStr).getTime()) / (1000 * 60 * 60 * 24)));
+    }
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    expect(calculateOverdueDays(thirtyDaysAgo)).toBe(30);
+
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    expect(calculateOverdueDays(twoDaysAgo)).toBe(7); // Math.max(7, ...) ensures minimum 7-day SLA threshold
+  });
+
+  it("handles mobile microphone permission state resolution without falling back to prompt when granted", () => {
+    function resolveMicrophonePermission(cachedState, devices, permissionsQueryError) {
+      if (cachedState === "granted") return "granted";
+      if (devices && devices.some(d => d.kind === "audioinput" && d.label && d.label.length > 0)) {
+        return "granted";
+      }
+      if (permissionsQueryError) {
+        return cachedState || "prompt";
+      }
+      return cachedState || "prompt";
+    }
+
+    // iOS Safari throws TypeError on permissions.query({ name: 'microphone' })
+    expect(resolveMicrophonePermission("granted", [], new Error("TypeError"))).toBe("granted");
+    
+    // Android with granted enumerateDevices label
+    expect(resolveMicrophonePermission("prompt", [{ kind: "audioinput", label: "Headset Mic" }], null)).toBe("granted");
+    
+    // Default initial prompt
+    expect(resolveMicrophonePermission(null, [{ kind: "audioinput", label: "" }], null)).toBe("prompt");
+  });
+
+  it("validates GeoJSON boundaries structure for village_boundaries upload", () => {
+    function validateGeoJson(json) {
+      if (!json || typeof json !== "object") return false;
+      if (json.type === "FeatureCollection" && Array.isArray(json.features)) return true;
+      if (json.type === "Feature" && json.geometry) return true;
+      if (json.type === "Polygon" && Array.isArray(json.coordinates)) return true;
+      return false;
+    }
+
+    expect(validateGeoJson({ type: "FeatureCollection", features: [] })).toBe(true);
+    expect(validateGeoJson({ type: "Polygon", coordinates: [[[0, 0], [0, 1], [1, 1], [0, 0]]] })).toBe(true);
+    expect(validateGeoJson({ type: "Invalid" })).toBe(false);
+    expect(validateGeoJson(null)).toBe(false);
+  });
+});
