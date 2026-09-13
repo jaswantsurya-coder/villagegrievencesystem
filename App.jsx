@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import * as Sentry from "@sentry/react";
 import { createPortal } from "react-dom";
 import { supabase, supabaseConfigError, ensureUUID } from "./supabaseClient";
 import { useTranslation } from 'react-i18next';
@@ -6546,6 +6547,13 @@ export default function App() {
         const { data: res } = supabase.auth.onAuthStateChange(async (event, sessionState) => {
           console.log('[Auth] onAuthStateChange:', event, sessionState?.user?.email);
           
+          // Sentry user identity (id + role only, never phone/email for PII compliance)
+          if (sessionState?.user) {
+            Sentry.setUser({ id: sessionState.user.id });
+          } else {
+            Sentry.setUser(null);
+          }
+          
           let s = sessionState;
           if (s?.user?.id) {
             s.user.id = ensureUUID(s.user.id);
@@ -6562,6 +6570,14 @@ export default function App() {
             setShowLogin(false);
           } else if (s) {
             await fetchProfile(s.user.id);
+            // Tag Sentry with role context for error attribution
+            try {
+              const p = typeof profile === 'object' ? profile : null;
+              if (p) {
+                Sentry.setTag("role", p.role || "unknown");
+                Sentry.setTag("village_id", p.village_id || "none");
+              }
+            } catch (_) {}
           } else {
             setProfile(null);
             setRole(null);

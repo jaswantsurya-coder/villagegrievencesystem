@@ -1,3 +1,4 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { sendWhatsAppNotification } from './whatsapp.js';
@@ -11,7 +12,7 @@ import { verifyInternalSecret } from './_lib/requireRole.js';
  * - Sends Firebase FCM push notification to Super Admin
  * - Sends WhatsApp notifications to Applicant & Super Admin
  */
-export default async function handler(req, res) {
+async function handler(req, res) {
   // CORS
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
   const origin = req.headers.origin || '';
@@ -313,3 +314,6 @@ async function getFirebaseAccessToken(serviceAccount) {
     return null;
   }
 }
+
+
+export default withSentry(handler);

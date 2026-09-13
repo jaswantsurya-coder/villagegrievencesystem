@@ -1,3 +1,4 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
@@ -56,7 +57,7 @@ async function sendOTPEmail(email, otp) {
   }
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -312,3 +313,6 @@ export default async function handler(req, res) {
 
   return res.status(400).json({ error: 'Invalid action requested' });
 }
+
+
+export default withSentry(handler);

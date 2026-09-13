@@ -1,9 +1,10 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 import { createClient } from '@supabase/supabase-js';
 
 const ADMIN_ROLES = ['village_admin', 'district_admin', 'super_admin'];
 const ALLOWED_ROLES = ['citizen', 'officer', 'village_admin'];
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -176,3 +177,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
+export default withSentry(handler);

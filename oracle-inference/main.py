@@ -39,6 +39,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# --- Sentry Error Tracking ----------------------------------------------------
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+sentry_sdk.init(
+    dsn=os.environ.get("SENTRY_DSN_AI"),
+    environment=os.environ.get("DEPLOY_ENV", "production"),
+    release=os.environ.get("APP_VERSION", "oracle-inference-1.0"),
+    integrations=[FastApiIntegration()],
+    traces_sample_rate=0.1,
+    send_default_pii=False,
+)
+
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,

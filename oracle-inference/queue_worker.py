@@ -9,6 +9,7 @@ import time
 import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
+import sentry_sdk
 
 logger = logging.getLogger("gramseva.queue_worker")
 

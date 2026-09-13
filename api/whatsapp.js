@@ -1,3 +1,4 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 /**
  * POST /api/whatsapp
  * Vercel Serverless Function to send WhatsApp notifications.
@@ -150,7 +151,7 @@ export async function sendWhatsAppNotification({ to, type, data, message }) {
   };
 }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // CORS
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
   const origin = req.headers.origin || '';
@@ -184,3 +185,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, error: err.message || 'Internal server error' });
   }
 }
+
+
+export default withSentry(handler);

@@ -1,3 +1,4 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { requireRole, verifyInternalSecret, handleAuthError } from './_lib/requireRole.js';
@@ -232,7 +233,7 @@ async function authorizeAction(req, res, action) {
 
 // ─── MAIN UNIFIED HANDLER ───────────────────────────────────────────────────
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // CORS: whitelist only known origins
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
   const origin = req.headers.origin || '';
@@ -704,3 +705,6 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 }
+
+
+export default withSentry(handler);

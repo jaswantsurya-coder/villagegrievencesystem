@@ -1,3 +1,4 @@
+import { withSentry, captureSilentFailure, Sentry } from './_lib/sentry.js';
 import { createClient } from '@supabase/supabase-js';
 import { requireRole, handleAuthError } from './_lib/requireRole.js';
 
@@ -90,7 +91,7 @@ const ADMIN_ROLES = ['village_admin', 'district_admin', 'super_admin'];
  *   2. Checks caller's profile.role is in ADMIN_ROLES
  *   3. Uses SERVICE_ROLE_KEY (server-side only) to update the target user's password
  */
-export default async function handler(req, res) {
+async function handler(req, res) {
   // ── CORS headers ──────────────────────────────────────────────────────────
   const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
   const origin = req.headers.origin || '';
@@ -272,3 +273,6 @@ export default async function handler(req, res) {
     });
   }
 }
+
+
+export default withSentry(handler);
