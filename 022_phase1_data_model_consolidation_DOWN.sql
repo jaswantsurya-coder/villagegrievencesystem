@@ -5,8 +5,10 @@
 
 BEGIN;
 
--- 1. Restore wide profiles select policy
+-- 1. Restore wide profiles select policy (idempotent drops)
 DROP POLICY IF EXISTS "profiles_select_scoped" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
+
 CREATE POLICY "profiles_select_authenticated" ON public.profiles
   FOR SELECT TO authenticated
   USING (auth.uid() IS NOT NULL);
