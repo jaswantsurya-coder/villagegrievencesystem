@@ -849,32 +849,40 @@ async function handler(req, res) {
           .eq('id', complaint.id);
 
         // Record to escalation_logs and notification_queue
-        await supabase.from('escalation_logs').insert({
-          complaint_id: complaint.id,
-          escalated_at: new Date().toISOString(),
-          escalation_date: new Date().toISOString().split('T')[0],
-          escalation_reason: `${daysStale}-day unresolved SLA negligence alert`,
-          notified_roles: ['village_admin', 'super_admin'],
-          village_id: complaint.village_id,
-        }).catch(() => {});
+        try {
+          await supabase.from('escalation_logs').insert({
+            complaint_id: complaint.id,
+            escalated_at: new Date().toISOString(),
+            escalation_date: new Date().toISOString().split('T')[0],
+            escalation_reason: `${daysStale}-day unresolved SLA negligence alert`,
+            notified_roles: ['village_admin', 'super_admin'],
+            village_id: complaint.village_id,
+          });
+        } catch (elErr) {
+          console.warn('[trigger-escalation-scan] escalation_logs insert warn:', elErr.message);
+        }
 
         if (emailSent) {
-          await supabase.from('notification_queue').insert({
-            notification_type: 'complaint_escalated',
-            channel: 'email',
-            recipient_identifier: adminEmail,
-            subject: `🚨 SLA Escalation Alert: #${ticketNumber} (${daysStale} days overdue)`,
-            body_text: `Complaint #${ticketNumber} in ${villageName} has been unresolved for ${daysStale} days.`,
-            status: 'sent',
-            village_id: complaint.village_id,
-            sent_at: new Date().toISOString(),
-            payload: {
-              complaint_id: complaint.id,
-              ticket_number: ticketNumber,
-              days_stale: daysStale,
-              brevo_message_id: messageId,
-            }
-          }).catch(() => {});
+          try {
+            await supabase.from('notification_queue').insert({
+              notification_type: 'complaint_escalated',
+              channel: 'email',
+              recipient_identifier: adminEmail,
+              subject: `🚨 SLA Escalation Alert: #${ticketNumber} (${daysStale} days overdue)`,
+              body_text: `Complaint #${ticketNumber} in ${villageName} has been unresolved for ${daysStale} days.`,
+              status: 'sent',
+              village_id: complaint.village_id,
+              sent_at: new Date().toISOString(),
+              payload: {
+                complaint_id: complaint.id,
+                ticket_number: ticketNumber,
+                days_stale: daysStale,
+                brevo_message_id: messageId,
+              }
+            });
+          } catch (nqErr) {
+            console.warn('[trigger-escalation-scan] notification_queue insert warn:', nqErr.message);
+          }
         }
 
         emailResults.push({
