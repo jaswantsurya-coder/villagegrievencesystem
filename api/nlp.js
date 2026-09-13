@@ -255,7 +255,13 @@ async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const action = req.query.action || (req.body && req.body.action) || 'preprocess';
+  let action = 'preprocess';
+  try {
+    const urlObj = new URL(req.url, 'http://localhost');
+    action = urlObj.searchParams.get('action') || (req.query && req.query.action) || (req.body && req.body.action) || 'preprocess';
+  } catch (e) {
+    action = (req.query && req.query.action) || (req.body && req.body.action) || 'preprocess';
+  }
 
   // ─── AUTH GATE ────────────────────────────────────────────────────────────
   const authorized = await authorizeAction(req, res, action);
@@ -680,6 +686,215 @@ async function handler(req, res) {
       }
     } catch (err) {
       console.error('[api/nlp send-escalation-email error]:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // ─── 7.6. ACTION: TRIGGER ESCALATION SCAN (Automated Overdue SLA Scanner) ─
+  if (action === 'trigger-escalation-scan') {
+    try {
+      const supabase = getPrimaryAdmin();
+      const brevoKey = process.env.BREVO_API_KEY;
+
+      // 1. Trigger the DB procedure to ensure newly stale items are marked
+      try {
+        await supabase.rpc('svc_escalate_stale_complaints');
+      } catch (rpcErr) {
+        console.warn('[trigger-escalation-scan] RPC svc_escalate_stale_complaints warn:', rpcErr.message);
+      }
+
+      // 2. Fetch all unresolved complaints older than 7 days
+      // Includes complaints that are 7, 14, 20, 30, 40+ days old!
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: overdueComplaints, error: fetchErr } = await supabase
+        .from('complaints')
+        .select(`
+          id, ticket_id, title, description, status, priority, created_at, updated_at,
+          village_id, escalation_count, is_escalated,
+          village:villages!village_id ( id, village_name, district, sarpanch_user_id )
+        `)
+        .in('status', ['Open', 'Assigned', 'In Progress'])
+        .lt('created_at', sevenDaysAgo)
+        .order('created_at', { ascending: true });
+
+      if (fetchErr) {
+        console.error('[trigger-escalation-scan] Error querying overdue complaints:', fetchErr);
+        return res.status(500).json({ success: false, error: fetchErr.message });
+      }
+
+      if (!overdueComplaints || overdueComplaints.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: 'No overdue grievances found. All complaints are within SLA.',
+          overdue_count: 0,
+          emails_sent: 0,
+          results: []
+        });
+      }
+
+      // 3. Collect unique village IDs and fetch admin profiles
+      const { data: adminProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, role, village_id')
+        .in('role', ['village_admin', 'district_admin', 'super_admin']);
+
+      const adminMap = new Map();
+      (adminProfiles || []).forEach(p => {
+        if (p.village_id && p.email) {
+          adminMap.set(p.village_id, p);
+        }
+      });
+      const superAdmin = (adminProfiles || []).find(p => p.role === 'super_admin' && p.email);
+
+      const emailResults = [];
+
+      for (const complaint of overdueComplaints) {
+        const daysStale = Math.max(7, Math.floor((Date.now() - new Date(complaint.created_at).getTime()) / (1000 * 60 * 60 * 24)));
+        const village = complaint.village;
+        const villageName = village?.village_name || `Village #${complaint.village_id}`;
+        const district = village?.district || '';
+
+        // Find assigned admin: check sarpanch first, then village_id match, then super_admin
+        let admin = null;
+        if (village?.sarpanch_user_id) {
+          admin = (adminProfiles || []).find(p => p.id === village.sarpanch_user_id && p.email);
+        }
+        if (!admin && complaint.village_id) {
+          admin = adminMap.get(complaint.village_id);
+        }
+        if (!admin) {
+          admin = superAdmin || { email: 'srijaswantsuryac@gmail.com', name: 'Village Administrator' };
+        }
+
+        const adminEmail = admin?.email;
+        const adminName = admin?.name || 'Village Administrator';
+        const ticketNumber = complaint.ticket_id || complaint.id.slice(0, 8).toUpperCase();
+
+        let emailSent = false;
+        let messageId = null;
+
+        if (brevoKey && adminEmail) {
+          const actionUrl = `${process.env.VITE_CITIZEN_APP_URL || 'https://villagegrievencesystem-fgxb.vercel.app'}/login`;
+          const emailPayload = {
+            sender: { name: 'GramSeva Automated Escalations', email: 'gramseva0089@gmail.com' },
+            to: [{ email: adminEmail, name: adminName }],
+            subject: `🚨 Critical SLA Negligence Alert: #${ticketNumber} Unresolved for ${daysStale} Days`,
+            htmlContent: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 620px; margin: 0 auto; padding: 24px; border: 1px solid #fee2e2; border-radius: 12px; background: #ffffff;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <span style="background: #fee2e2; color: #dc2626; font-size: 11px; font-weight: 800; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 0.5px;">SLA Breach Escalation</span>
+                  <h2 style="color: #b91c1c; margin: 12px 0 4px 0; font-size: 22px;">🚨 Grievance Negligence Warning</h2>
+                  <p style="color: #64748b; font-size: 13px; margin: 0;">Automated Alert for Panchayat Administration</p>
+                </div>
+
+                <div style="background: #fef2f2; padding: 18px; border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 20px;">
+                  <p style="color: #7f1d1d; font-size: 14px; margin: 0; line-height: 1.5;">
+                    Dear <strong>${adminName}</strong>, a citizen grievance filed in <strong>${villageName}</strong> (${district}) has remained unresolved for <strong>${daysStale} days</strong>. This ticket has exceeded all statutory resolution windows and requires immediate intervention.
+                  </p>
+                </div>
+
+                <table style="width: 100%; font-size: 13px; color: #334155; border-collapse: collapse; margin-bottom: 24px; background: #fafafa; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb;">
+                  <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 10px 14px; font-weight: bold; width: 35%; color: #475569;">Ticket Number:</td><td style="padding: 10px 14px; font-family: monospace; font-weight: bold; color: #2563eb;">#${ticketNumber}</td></tr>
+                  <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 10px 14px; font-weight: bold; color: #475569;">Title:</td><td style="padding: 10px 14px; font-weight: 600;">${complaint.title || 'Untitled Complaint'}</td></tr>
+                  <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 10px 14px; font-weight: bold; color: #475569;">Current Status:</td><td style="padding: 10px 14px;"><span style="background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">${complaint.status}</span></td></tr>
+                  <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 10px 14px; font-weight: bold; color: #475569;">Jurisdiction:</td><td style="padding: 10px 14px;">${villageName}, ${district}</td></tr>
+                  <tr style="border-bottom: 1px solid #e5e7eb;"><td style="padding: 10px 14px; font-weight: bold; color: #475569;">Days Overdue:</td><td style="padding: 10px 14px; color: #dc2626; font-weight: 800; font-size: 14px;">${daysStale} Days</td></tr>
+                  <tr><td style="padding: 10px 14px; font-weight: bold; color: #475569;">Date Submitted:</td><td style="padding: 10px 14px;">${new Date(complaint.created_at).toLocaleDateString('en-IN', { dateStyle: 'long' })}</td></tr>
+                </table>
+
+                <div style="text-align: center; margin: 24px 0;">
+                  <a href="${actionUrl}" style="background: #dc2626; color: #ffffff; padding: 14px 28px; border-radius: 8px; font-weight: 800; text-decoration: none; display: inline-block; font-size: 14px; box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);">
+                    Review & Resolve Grievance ➔
+                  </a>
+                </div>
+
+                <hr style="border: none; border-top: 1px solid #fee2e2; margin: 20px 0;" />
+                <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+                  GramSeva Automated Governance System • Sent to ${adminEmail}
+                </p>
+              </div>
+            `,
+          };
+
+          try {
+            const brevoRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+              method: 'POST',
+              headers: {
+                'accept': 'application/json',
+                'api-key': brevoKey,
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify(emailPayload),
+            });
+            const bJson = await brevoRes.json();
+            if (brevoRes.ok) {
+              emailSent = true;
+              messageId = bJson.messageId;
+            } else {
+              console.error(`[trigger-escalation-scan] Brevo error for ticket ${ticketNumber}:`, bJson);
+            }
+          } catch (e) {
+            console.error(`[trigger-escalation-scan] Failed to send email for ticket ${ticketNumber}:`, e.message);
+          }
+        }
+
+        // Update database: set is_escalated = true, increment escalation_count
+        await supabase
+          .from('complaints')
+          .update({
+            is_escalated: true,
+            escalation_count: (complaint.escalation_count || 0) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', complaint.id);
+
+        // Record to escalation_logs and notification_queue
+        await supabase.from('escalation_logs').insert({
+          complaint_id: complaint.id,
+          escalated_at: new Date().toISOString(),
+          escalation_date: new Date().toISOString().split('T')[0],
+          escalation_reason: `${daysStale}-day unresolved SLA negligence alert`,
+          notified_roles: ['village_admin', 'super_admin'],
+          village_id: complaint.village_id,
+        }).catch(() => {});
+
+        if (emailSent) {
+          await supabase.from('notification_queue').insert({
+            notification_type: 'complaint_escalated',
+            channel: 'email',
+            recipient_identifier: adminEmail,
+            subject: `🚨 SLA Escalation Alert: #${ticketNumber} (${daysStale} days overdue)`,
+            body_text: `Complaint #${ticketNumber} in ${villageName} has been unresolved for ${daysStale} days.`,
+            status: 'sent',
+            village_id: complaint.village_id,
+            sent_at: new Date().toISOString(),
+            payload: {
+              complaint_id: complaint.id,
+              ticket_number: ticketNumber,
+              days_stale: daysStale,
+              brevo_message_id: messageId,
+            }
+          }).catch(() => {});
+        }
+
+        emailResults.push({
+          ticket_number: ticketNumber,
+          days_stale: daysStale,
+          village: villageName,
+          admin_email: adminEmail,
+          email_sent: emailSent,
+          message_id: messageId,
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        overdue_count: overdueComplaints.length,
+        emails_sent: emailResults.filter(r => r.email_sent).length,
+        results: emailResults,
+      });
+    } catch (err) {
+      console.error('[api/nlp trigger-escalation-scan error]:', err);
       return res.status(500).json({ success: false, error: err.message });
     }
   }
