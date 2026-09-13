@@ -1,8 +1,9 @@
+﻿import os
 import requests
 import random
 
-BASE_URL = "https://dtucrczgagpzjbbrwqit.supabase.co/rest/v1"
-API_KEY = "sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK"
+BASE_URL = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/rest/v1"
+API_KEY = os.environ.get("VITE_SUPABASE_AUX_ANON_KEY") or os.environ.get("SUPABASE_AUX_ANON_KEY", "")
 HEADERS_NO_AUTH = {
     "apikey": API_KEY,
     "Content-Type": "application/json"

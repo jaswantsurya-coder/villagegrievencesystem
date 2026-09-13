@@ -1823,21 +1823,25 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     const ticketId = generateTicketId();
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
 
-    // Build the RPC payload — svc_create_complaint is the only way to insert
+    // Build the RPC payload - svc_create_complaint is the only way to insert
     // (direct INSERT on complaints is revoked for authenticated users)
+    const isDefaultCoords = (form.latitude === 17.3850 && form.longitude === 78.4867);
+    const resolvedLat = isDefaultCoords ? null : (form.latitude || null);
+    const resolvedLng = isDefaultCoords ? null : (form.longitude || null);
+
     const rpcPayload = {
       p_title: form.title,
       p_description: fullDescription,
       p_category: form.categories.join(", "),
       p_location: form.location || null,
-      p_latitude: form.latitude || null,
-      p_longitude: form.longitude || null,
+      p_latitude: resolvedLat,
+      p_longitude: resolvedLng,
       p_photos: [],
       p_photo_urls: [],
       p_related_scheme: form.relatedScheme || null,
       p_is_anonymous: false,
       p_anonymous_phone: null,
-      p_village_id: null,
+      p_village_id: profile?.village_id || null,
     };
 
     // Check if offline - photos need Storage, so only text-only drafts can be queued.
@@ -1865,6 +1869,27 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       if (error) throw error;
       const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
       if (!parsed?.success) throw new Error(parsed?.error || 'Complaint submission failed');
+
+      // Async fire-and-forget AI classification trigger
+      if (parsed.complaint_id) {
+        fetch('/api/nlp?action=enqueue-ai', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
+          },
+          body: JSON.stringify({
+            complaint_id: parsed.complaint_id,
+            text: `${form.title}: ${form.description}`,
+            image_urls: photoUrls,
+            latitude: (form.latitude === 17.3850 && form.longitude === 78.4867) ? null : (form.latitude || null),
+            longitude: (form.latitude === 17.3850 && form.longitude === 78.4867) ? null : (form.longitude || null),
+            village_id: parsed.village_id || profile?.village_id || null,
+            district: profile?.district || null,
+          }),
+        }).catch(err => console.warn('[enqueue-ai trigger failed]:', err.message));
+      }
+
       notify(`${t("success_submit")} Ticket: ${parsed.ticket_id || ticketId}`);
       navigate("track");
     } catch (err) {
@@ -3958,8 +3983,8 @@ const BulkImportTab = ({ t, notify }) => {
       category: row.Category || row.category || 'Other',
       location: row.Location || row.location || 'Unknown',
       status: row.Status || row.status || 'Open',
-      latitude: 17.3850,
-      longitude: 78.4867,
+      latitude: (row.Latitude && row.Latitude !== 17.3850) ? row.Latitude : null,
+      longitude: (row.Longitude && row.Longitude !== 78.4867) ? row.Longitude : null,
       is_anonymous: true // For admin bulk import without specific citizen
     }));
 
@@ -6587,19 +6612,20 @@ export default function App() {
             }
           } else {
             // Legacy format: old direct-insert shape — attempt RPC with mapped fields
+            const isDefaultCoords = (data.latitude === 17.3850 && data.longitude === 78.4867);
             const legacyPayload = {
               p_title: data.title || 'Offline Draft',
               p_description: data.description || '',
               p_category: data.category || 'Other',
               p_location: data.location || null,
-              p_latitude: data.latitude || null,
-              p_longitude: data.longitude || null,
+              p_latitude: isDefaultCoords ? null : (data.latitude || null),
+              p_longitude: isDefaultCoords ? null : (data.longitude || null),
               p_photos: [],
               p_photo_urls: data.photo_urls || [],
               p_related_scheme: data.related_scheme || null,
               p_is_anonymous: false,
               p_anonymous_phone: null,
-              p_village_id: null,
+              p_village_id: profile?.village_id || null,
             };
             ({ data: rpcRes, error } = await supabase.rpc("svc_create_complaint", legacyPayload));
             if (!error) {
@@ -6709,7 +6735,6 @@ export default function App() {
         try {
           const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
             p_token: activePilotToken,
-            p_user_id: targetId,
           });
 
           const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
@@ -6746,7 +6771,6 @@ export default function App() {
         try {
           const { data: rpcRes, error: rpcErr } = await supabase.rpc("claim_pilot_token", {
             p_token: activePilotToken,
-            p_user_id: targetId,
           });
 
           const parsedRes = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;

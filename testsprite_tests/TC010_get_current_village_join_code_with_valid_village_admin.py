@@ -1,9 +1,10 @@
+﻿import os
 import requests
 
 def test_get_current_village_join_code_with_valid_village_admin():
-    base_url = "https://dtucrczgagpzjbbrwqit.supabase.co/rest/v1"
-    auth_url = "https://dtucrczgagpzjbbrwqit.supabase.co/auth/v1/token"
-    apikey = "sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK"
+    BASE_URL = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/rest/v1"
+    auth_url = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/auth/v1/token"
+    APIKEY = os.environ.get("VITE_SUPABASE_AUX_ANON_KEY") or os.environ.get("SUPABASE_AUX_ANON_KEY", "")
     village_id = 1  # Pre-seeded village
 
     # Step 1: Authenticate as Village Admin with password token login
@@ -58,3 +59,4 @@ def test_get_current_village_join_code_with_valid_village_admin():
     assert join_code == "GSV12345", f"Join code mismatch, expected 'GSV12345' but got '{join_code}'"
 
 test_get_current_village_join_code_with_valid_village_admin()
+

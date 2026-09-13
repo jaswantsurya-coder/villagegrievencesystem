@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { sendWhatsAppNotification } from './whatsapp.js';
+import { requireRole, handleAuthError } from './_lib/requireRole.js';
 
 /**
  * POST /api/admin-request-action
@@ -11,19 +12,24 @@ import { sendWhatsAppNotification } from './whatsapp.js';
  */
 export default async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed.' });
   }
 
-  // Config
-  const primaryUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://sompzqwvegygtpsrlhzt.supabase.co';
+  // Config â€” fail closed if env vars are missing
+  const primaryUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const primaryServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const auxUrl = process.env.SUPABASE_AUX_URL || process.env.VITE_SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
+  const auxUrl = process.env.SUPABASE_AUX_URL || process.env.VITE_SUPABASE_AUX_URL;
   const auxServiceKey = process.env.SUPABASE_AUX_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   const brevoApiKey = process.env.BREVO_API_KEY;
   const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || 'gramseva0089@gmail.com';
@@ -31,25 +37,26 @@ export default async function handler(req, res) {
   const dashboardUrl = process.env.SUPERADMIN_DASHBOARD_URL || 'https://gramseva-superadmin.vercel.app';
   const citizenAppUrl = process.env.CITIZEN_APP_URL || 'https://villagegrievencesystem-fgxb.vercel.app';
 
-  if (!primaryServiceKey) {
-    return res.status(500).json({ success: false, error: 'Missing SUPABASE_SERVICE_ROLE_KEY.' });
+  if (!primaryUrl || !primaryServiceKey) {
+    return res.status(500).json({ success: false, error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.' });
+  }
+  if (!auxUrl || !auxServiceKey) {
+    return res.status(500).json({ success: false, error: 'Missing SUPABASE_AUX_URL or SUPABASE_AUX_SERVICE_ROLE_KEY.' });
   }
 
   try {
-    // Authenticate caller
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ success: false, error: 'Missing Authorization header.' });
-    }
-
-    const jwt = authHeader.replace('Bearer ', '').trim();
+    // Authenticate caller AND verify super_admin role
     const supabaseAdmin = createClient(primaryUrl, primaryServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: { user }, error: authErr } = await supabaseAdmin.auth.getUser(jwt);
-    if (authErr || !user) {
-      return res.status(401).json({ success: false, error: 'Invalid or expired token.' });
+    let callerUser, callerProfile;
+try {
+  const result = await requireRole(req, ['super_admin'], supabaseAdmin);
+  callerUser = result.user;
+  callerProfile = result.profile;
+} catch (err) {
+      return handleAuthError(res, err);
     }
 
     // Parse body
@@ -77,9 +84,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ success: false, error: `Request is already ${request.status}.` });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // APPROVE
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (action === 'approve') {
       // 1. Initialize aux Supabase for village/invitation operations
       const supabaseAuxAdmin = auxServiceKey
@@ -124,14 +131,14 @@ export default async function handler(req, res) {
       // 4. Store invitation in aux DB
       if (supabaseAuxAdmin && villageId) {
         const expiresAt = new Date();
-        expiresAt.setFullYear(expiresAt.getFullYear() + 100);
+        expiresAt.setDate(expiresAt.getDate() + 14);
 
         await supabaseAuxAdmin.from('invitations').insert({
           token: invitationToken,
           village_id: villageId,
           role: 'village_admin',
           email: request.email || null,
-          created_by: user.id,
+          created_by: callerUser.id,
           expires_at: expiresAt.toISOString(),
           status: 'pending',
         });
@@ -141,7 +148,7 @@ export default async function handler(req, res) {
       await supabaseAdmin.from('admin_requests').update({
         status: 'approved',
         reviewed_at: new Date().toISOString(),
-        reviewed_by: user.id,
+        reviewed_by: callerUser.id,
         reviewer_notes: notes || 'Verified & Approved by SuperAdmin',
         invitation_token: invitationToken,
         invitation_url: invitationUrl,
@@ -160,11 +167,11 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               sender: { name: brevoSenderName, email: brevoSenderEmail },
               to: [{ email: request.email, name: request.full_name || 'Applicant' }],
-              subject: `[GramSeva] 🎉 Admin Request APPROVED — ${request.village_name}`,
+              subject: `[GramSeva] ðŸŽ‰ Admin Request APPROVED â€” ${request.village_name}`,
               htmlContent: `
                 <div style="font-family:'Inter',Arial,sans-serif;max-width:600px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;">
                   <div style="background:linear-gradient(135deg,#15803D,#22C55E);padding:28px 32px;text-align:center;">
-                    <h1 style="color:#FFFFFF;font-size:20px;font-weight:800;margin:0;">✅ Admin Access Approved!</h1>
+                    <h1 style="color:#FFFFFF;font-size:20px;font-weight:800;margin:0;">âœ… Admin Access Approved!</h1>
                     <p style="color:#BBF7D0;font-size:13px;margin:8px 0 0;">Your Village Administrator request has been approved.</p>
                   </div>
                   <div style="padding:28px 32px;">
@@ -175,12 +182,12 @@ export default async function handler(req, res) {
                       <a href="${invitationUrl}" style="display:inline-block;padding:14px 32px;background:#2563EB;color:#FFFFFF;text-decoration:none;border-radius:12px;font-weight:700;font-size:14px;">Accept Invitation & Set Up Account</a>
                     </div>
                     <div style="background:#F0FDF4;border:1px solid #DCFCE7;border-radius:10px;padding:12px 16px;margin:16px 0;">
-                      <p style="font-size:12px;color:#166534;margin:0;"><strong>Request ID:</strong> ${request.request_id || '—'}</p>
+                      <p style="font-size:12px;color:#166534;margin:0;"><strong>Request ID:</strong> ${request.request_id || 'â€”'}</p>
                       <p style="font-size:12px;color:#166534;margin:4px 0 0;"><strong>Village:</strong> ${request.village_name}</p>
                     </div>
                   </div>
                   <div style="padding:16px 32px;background:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
-                    <p style="font-size:11px;color:#94A3B8;margin:0;">GramSeva — Village Grievance Management System</p>
+                    <p style="font-size:11px;color:#94A3B8;margin:0;">GramSeva â€” Village Grievance Management System</p>
                   </div>
                 </div>
               `,
@@ -194,7 +201,7 @@ export default async function handler(req, res) {
 
       // 7. Send FCM push to applicant
       await sendFCMToApplicant(supabaseAuxAdmin || supabaseAdmin, request, {
-        title: '🎉 Admin Request Approved!',
+        title: 'ðŸŽ‰ Admin Request Approved!',
         body: `Your Village Administrator request for ${request.village_name} has been approved. Check your email for the invitation link.`,
         link: invitationUrl,
       });
@@ -222,15 +229,15 @@ export default async function handler(req, res) {
       });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     // REJECT
-    // ═══════════════════════════════════════════════════════════════════
+    // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     if (action === 'reject') {
       // 1. Update admin_requests status
       await supabaseAdmin.from('admin_requests').update({
         status: 'rejected',
         reviewed_at: new Date().toISOString(),
-        reviewed_by: user.id,
+        reviewed_by: callerUser.id,
         rejection_reason: reason || 'Request could not be approved at this time.',
       }).eq('id', requestId);
 
@@ -247,7 +254,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               sender: { name: brevoSenderName, email: brevoSenderEmail },
               to: [{ email: request.email, name: request.full_name || 'Applicant' }],
-              subject: `[GramSeva] Admin Request Update — ${request.village_name}`,
+              subject: `[GramSeva] Admin Request Update â€” ${request.village_name}`,
               htmlContent: `
                 <div style="font-family:'Inter',Arial,sans-serif;max-width:600px;margin:0 auto;background:#FFFFFF;border:1px solid #E2E8F0;border-radius:16px;overflow:hidden;">
                   <div style="background:linear-gradient(135deg,#991B1B,#DC2626);padding:28px 32px;text-align:center;">
@@ -266,7 +273,7 @@ export default async function handler(req, res) {
                     <p style="font-size:13px;color:#64748B;margin:16px 0 0;">You may reapply after addressing the above concerns.</p>
                   </div>
                   <div style="padding:16px 32px;background:#F8FAFC;border-top:1px solid #E2E8F0;text-align:center;">
-                    <p style="font-size:11px;color:#94A3B8;margin:0;">GramSeva — Village Grievance Management System</p>
+                    <p style="font-size:11px;color:#94A3B8;margin:0;">GramSeva â€” Village Grievance Management System</p>
                   </div>
                 </div>
               `,

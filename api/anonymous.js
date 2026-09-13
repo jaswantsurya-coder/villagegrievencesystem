@@ -281,7 +281,10 @@ export default async function handler(req, res) {
         if (apiBase) {
           fetch(`${apiBase}/api/nlp?action=enqueue-ai`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Internal-Secret': process.env.INTERNAL_API_SECRET || '',
+            },
             body: JSON.stringify({
               complaint_id: complaintId,
               text: description.trim(),
@@ -290,7 +293,7 @@ export default async function handler(req, res) {
               longitude: longitude || null,
               village_id: village_id || anonUser.village_id || null,
             }),
-          }).catch(() => {}); // Never block submission
+          }).catch(err => console.error('[anonymous enqueue-ai failed]:', err.message));
         }
       }
 

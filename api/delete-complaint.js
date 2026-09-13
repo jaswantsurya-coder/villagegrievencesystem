@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireRole, handleAuthError } from './_lib/requireRole.js';
 
 /**
  * POST /api/delete-complaint
@@ -11,9 +12,14 @@ import { createClient } from '@supabase/supabase-js';
  */
 export default async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
@@ -29,21 +35,22 @@ export default async function handler(req, res) {
   const token = authHeader.replace('Bearer ', '');
 
   // Primary Supabase — verify the Super Admin's JWT
-  const primaryUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://sompzqwvegygtpsrlhzt.supabase.co';
+  const primaryUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const primaryServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!primaryServiceKey) {
-    return res.status(500).json({ success: false, error: 'Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY.' });
+  if (!primaryUrl || !primaryServiceKey) {
+    return res.status(500).json({ success: false, error: 'Server misconfigured: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.' });
   }
 
   const primaryAdmin = createClient(primaryUrl, primaryServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Verify caller is authenticated
-  const { data: { user }, error: authError } = await primaryAdmin.auth.getUser(token);
-  if (authError || !user) {
-    return res.status(401).json({ success: false, error: 'Invalid or expired token.' });
+  // Verify caller is authenticated AND has super_admin role
+  try {
+    await requireRole(req, ['super_admin'], primaryAdmin);
+  } catch (err) {
+    return handleAuthError(res, err);
   }
 
   // Parse body
@@ -53,8 +60,12 @@ export default async function handler(req, res) {
   }
 
   // Auxiliary Supabase — service role to bypass RLS and delete
-  const auxUrl = process.env.SUPABASE_AUX_URL || process.env.VITE_SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
+  const auxUrl = process.env.SUPABASE_AUX_URL || process.env.VITE_SUPABASE_AUX_URL;
   const auxServiceKey = process.env.SUPABASE_AUX_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!auxUrl || !auxServiceKey) {
+    return res.status(500).json({ success: false, error: 'Server misconfigured: missing SUPABASE_AUX_URL or SUPABASE_AUX_SERVICE_ROLE_KEY.' });
+  }
 
   const auxAdmin = createClient(auxUrl, auxServiceKey, {
     auth: { autoRefreshToken: false, persistSession: false },

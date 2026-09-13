@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { requireRole, handleAuthError } from './_lib/requireRole.js';
 
 // ─── Type Definitions (JSDoc) ─────────────────────────────────────────────────
 
@@ -91,9 +92,14 @@ const ADMIN_ROLES = ['village_admin', 'district_admin', 'super_admin'];
  */
 export default async function handler(req, res) {
   // ── CORS headers ──────────────────────────────────────────────────────────
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -122,64 +128,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ── Extract and validate JWT ──────────────────────────────────────────
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        error: 'Missing or invalid Authorization header. Use: Bearer <token>',
-      });
-    }
-
-    const jwt = authHeader.replace('Bearer ', '').trim();
-    if (!jwt) {
-      return res.status(401).json({
-        success: false,
-        error: 'Empty JWT token.',
-      });
-    }
-
-    // ── Verify the caller's identity using the anon key ───────────────────
-    // We use the anon key to verify the JWT (read-only, safe for this purpose)
-    const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-
-    // Create an admin client (with service role) for password update
+    // ── Authenticate caller and verify admin role ───────────────────────
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
+      auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Verify the JWT by getting the user it belongs to
-    const { data: { user: callerUser }, error: authError } = await supabaseAdmin.auth.getUser(jwt);
-
-    if (authError || !callerUser) {
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or expired authentication token. Please log in again.',
-      });
-    }
-
-    // ── Check caller's admin role ─────────────────────────────────────────
-    const { data: callerProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', callerUser.id)
-      .single();
-
-    if (profileError || !callerProfile) {
-      return res.status(403).json({
-        success: false,
-        error: 'Unable to verify your admin role. Profile not found.',
-      });
-    }
-
-    if (!ADMIN_ROLES.includes(callerProfile.role)) {
-      return res.status(403).json({
-        success: false,
-        error: `Unauthorized. Admin role required. Your current role: "${callerProfile.role}".`,
-      });
+    let callerUser, callerProfile;
+    try {
+      const result = await requireRole(req, ADMIN_ROLES, supabaseAdmin);
+      callerUser = result.user;
+      callerProfile = result.profile;
+    } catch (err) {
+      return handleAuthError(res, err);
     }
 
     // ── Parse and validate request body ───────────────────────────────────
@@ -196,13 +156,71 @@ export default async function handler(req, res) {
     }
 
     // ── Prevent self-password-reset via admin endpoint ─────────────────────
-    // Admins should use the normal password change flow for their own account
     if (userId.trim() === callerUser.id) {
       return res.status(400).json({
         success: false,
         error: 'Cannot reset your own password via admin endpoint. Use the normal password change flow.',
       });
     }
+
+    // ── Load target user's profile for role hierarchy enforcement ─────────
+    const { data: targetProfile, error: targetProfileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role, village_id, district')
+      .eq('id', userId.trim())
+      .single();
+
+    if (targetProfileError || !targetProfile) {
+      return res.status(404).json({
+        success: false,
+        error: 'Target user profile not found.',
+      });
+    }
+
+    // ── Role hierarchy enforcement (§2.6) ─────────────────────────────────
+    const callerRole = callerProfile.role;
+    const targetRole = targetProfile.role;
+
+    if (callerRole === 'village_admin') {
+      // village_admin can only reset citizen/officer within their own village
+      const allowedTargetRoles = ['citizen', 'officer'];
+      if (!allowedTargetRoles.includes(targetRole)) {
+        return res.status(403).json({
+          success: false,
+          error: `Village admins can only reset passwords for citizens and officers. Target role: "${targetRole}".`,
+        });
+      }
+      if (targetProfile.village_id !== callerProfile.village_id) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only reset passwords for users in your own village.',
+        });
+      }
+    } else if (callerRole === 'district_admin') {
+      // district_admin can reset citizen, officer, village_admin in their district
+      const allowedTargetRoles = ['citizen', 'officer', 'village_admin'];
+      if (!allowedTargetRoles.includes(targetRole)) {
+        return res.status(403).json({
+          success: false,
+          error: `District admins cannot reset passwords for role: "${targetRole}".`,
+        });
+      }
+      // Check district ownership: target's village must be in caller's district
+      if (targetProfile.village_id && callerProfile.district) {
+        const { data: targetVillage } = await supabaseAdmin
+          .from('villages')
+          .select('district')
+          .eq('id', targetProfile.village_id)
+          .single();
+        if (targetVillage && targetVillage.district !== callerProfile.district) {
+          return res.status(403).json({
+            success: false,
+            error: 'You can only reset passwords for users in your district.',
+          });
+        }
+      }
+    }
+    // super_admin: no restrictions (can reset anyone)
 
     // ── Update the target user's password ─────────────────────────────────
     const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(

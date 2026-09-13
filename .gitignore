@@ -5,6 +5,9 @@ dist/
 .DS_Store
 *.log
 *.sql
+!0*.sql
+vite.config.js.timestamp-*
+_model_inspect/
 .vercel
 antigravity-skills/
 

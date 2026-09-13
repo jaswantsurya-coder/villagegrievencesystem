@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { requireRole, verifyInternalSecret, handleAuthError } from './_lib/requireRole.js';
 
 /**
  * POST /api/nlp?action=preprocess
@@ -158,16 +159,97 @@ function calculateJaccard(str1, str2) {
   return union > 0 ? intersection / union : 0.0;
 }
 
+// ─── AUTH HELPERS ──────────────────────────────────────────────────────────
+
+/**
+ * Get aux Supabase client. Fails closed if env vars are missing.
+ */
+function getAuxClient() {
+  const auxUrl = process.env.SUPABASE_AUX_URL || process.env.VITE_SUPABASE_AUX_URL;
+  const auxKey = process.env.SUPABASE_AUX_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_AUX_ANON_KEY;
+  if (!auxUrl || !auxKey) {
+    throw new Error('Missing SUPABASE_AUX_URL or SUPABASE_AUX_SERVICE_ROLE_KEY environment variables.');
+  }
+  return createClient(auxUrl, auxKey);
+}
+
+/**
+ * Get primary Supabase admin client (for JWT verification).
+ */
+function getPrimaryAdmin() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
+  }
+  return createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
+}
+
+/**
+ * 3-tier auth: internal secret → JWT → admin role.
+ * Returns true if authorized, sends error response and returns false otherwise.
+ */
+async function authorizeAction(req, res, action) {
+  // Tier 1: Internal server-to-server (enqueue-ai, preprocess)
+  const internalActions = ['enqueue-ai', 'preprocess'];
+  if (internalActions.includes(action)) {
+    if (verifyInternalSecret(req)) return true;
+    // Fall through to JWT check — authenticated users can also call these
+  }
+
+  // Tier 2: Authenticated user (check-duplicate, ai-status, enqueue-ai, preprocess)
+  const userActions = ['check-duplicate', 'ai-status', 'enqueue-ai', 'preprocess'];
+  if (userActions.includes(action)) {
+    // Accept internal secret OR valid JWT
+    if (verifyInternalSecret(req)) return true;
+    try {
+      const admin = getPrimaryAdmin();
+      await requireRole(req, ['citizen', 'village_admin', 'district_admin', 'super_admin'], admin);
+      return true;
+    } catch (err) {
+      handleAuthError(res, err);
+      return false;
+    }
+  }
+
+  // Tier 3: Admin only (analytics, ai-queue-stats, ai-health, send-test-email, send-escalation-email)
+  const adminActions = ['analytics', 'ai-queue-stats', 'ai-health', 'send-test-email', 'send-escalation-email'];
+  if (adminActions.includes(action)) {
+    try {
+      const admin = getPrimaryAdmin();
+      await requireRole(req, ['village_admin', 'district_admin', 'super_admin'], admin);
+      return true;
+    } catch (err) {
+      handleAuthError(res, err);
+      return false;
+    }
+  }
+
+  // Unknown action
+  res.status(400).json({ success: false, error: `Unknown action: ${action}` });
+  return false;
+}
+
 // ─── MAIN UNIFIED HANDLER ───────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS: whitelist only known origins
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Internal-Secret');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   const action = req.query.action || (req.body && req.body.action) || 'preprocess';
+
+  // ─── AUTH GATE ────────────────────────────────────────────────────────────
+  const authorized = await authorizeAction(req, res, action);
+  if (!authorized) return; // Response already sent by authorizeAction
 
   // 1. ACTION: CHECK DUPLICATE
   if (action === 'check-duplicate' || req.url.includes('check-duplicate')) {
@@ -177,9 +259,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'text and village_id are required.' });
       }
 
-      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
-      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
-      const supabase = createClient(auxUrl, auxKey);
+      const supabase = getAuxClient();
 
       // Query all UNRESOLVED complaints in the village (regardless of age: 1 day, 1 month, 6 months)
       const { data: existing } = await supabase
@@ -258,11 +338,9 @@ export default async function handler(req, res) {
   }
 
   // 2. ACTION: ANALYTICS
-  if (action === 'analytics' || req.method === 'GET') {
+  if (action === 'analytics') {
     try {
-      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
-      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
-      const supabase = createClient(auxUrl, auxKey);
+      const supabase = getAuxClient();
 
       const [overviewRes, keywordsRes, langRes] = await Promise.allSettled([
         supabase.rpc('get_nlp_overview_stats'),
@@ -272,15 +350,19 @@ export default async function handler(req, res) {
 
       const overview = overviewRes.status === 'fulfilled' && overviewRes.value?.data
         ? overviewRes.value.data
-        : { total_complaints: 120, spam_count: 5, spam_percentage: 4.1, duplicate_count: 14, critical_urgency_count: 3, high_urgency_count: 18 };
+        : null;
 
       const top_keywords = keywordsRes.status === 'fulfilled' && keywordsRes.value?.data && keywordsRes.value.data.length > 0
         ? keywordsRes.value.data
-        : [{ keyword: 'Water Supply', count: 42 }, { keyword: 'Road', count: 31 }, { keyword: 'Electricity', count: 25 }, { keyword: 'Drainage', count: 19 }];
+        : null;
 
       const language_distribution = langRes.status === 'fulfilled' && langRes.value?.data && langRes.value.data.length > 0
         ? langRes.value.data
-        : [{ language: 'Telugu', count: 65 }, { language: 'English', count: 32 }, { language: 'Telugu-English', count: 18 }];
+        : null;
+
+      if (!overview && !top_keywords && !language_distribution) {
+        return res.status(200).json({ success: false, error: 'Analytics RPCs not configured or returned no data', is_demo: true });
+      }
 
       return res.status(200).json({ success: true, overview, top_keywords, language_distribution });
     } catch (err) {
@@ -297,9 +379,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'complaint_id and text are required.' });
       }
 
-      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
-      const svcKey = process.env.SUPABASE_AUX_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
-      const supabase = createClient(auxUrl, svcKey);
+      const supabase = getAuxClient();
 
       // Insert into ai_processing_queue
       const { data, error } = await supabase
@@ -340,9 +420,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'complaint_id is required.' });
       }
 
-      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
-      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
-      const supabase = createClient(auxUrl, auxKey);
+      const supabase = getAuxClient();
 
       const { data } = await supabase
         .from('complaints')
@@ -402,9 +480,7 @@ export default async function handler(req, res) {
   // ─── 7. ACTION: AI QUEUE STATS (Phase 3 — Dashboard) ───────────────────────
   if (action === 'ai-queue-stats') {
     try {
-      const auxUrl = process.env.VITE_SUPABASE_AUX_URL || process.env.SUPABASE_AUX_URL || 'https://dtucrczgagpzjbbrwqit.supabase.co';
-      const auxKey = process.env.VITE_SUPABASE_AUX_ANON_KEY || 'sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK';
-      const supabase = createClient(auxUrl, auxKey);
+      const supabase = getAuxClient();
 
       const [queueRes, classRes] = await Promise.allSettled([
         supabase.rpc('get_ai_queue_stats'),
@@ -498,6 +574,8 @@ export default async function handler(req, res) {
       console.error('[api/nlp send-test-email error]:', err);
       return res.status(500).json({ success: false, error: err.message });
     }
+  }
+
   // ─── 7.5. ACTION: SEND ESCALATION EMAIL (7-Day Stale Complaint Alert) ──────
   if (action === 'send-escalation-email') {
     try {
@@ -515,7 +593,10 @@ export default async function handler(req, res) {
         return res.status(400).json({ success: false, error: 'admin_email is required.' });
       }
 
-      const brevoKey = process.env.BREVO_API_KEY || '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';
+      const brevoKey = process.env.BREVO_API_KEY;
+      if (!brevoKey) {
+        return res.status(500).json({ success: false, error: 'BREVO_API_KEY environment variable is not configured.' });
+      }
       const fromEmail = 'gramseva0089@gmail.com';
       const fromName = 'GramSeva';
 

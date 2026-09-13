@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { sendWhatsAppNotification } from './whatsapp.js';
+import { verifyInternalSecret } from './_lib/requireRole.js';
 
 /**
  * POST /api/admin-request-webhook
@@ -12,23 +13,33 @@ import { sendWhatsAppNotification } from './whatsapp.js';
  */
 export default async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Internal-Secret, X-Requested-With');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use POST.' });
   }
 
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://sompzqwvegygtpsrlhzt.supabase.co';
+  // Auth: server-to-server only
+  if (!verifyInternalSecret(req)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized. X-Internal-Secret required.' });
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const brevoApiKey = process.env.BREVO_API_KEY;
   const brevoSenderEmail = process.env.BREVO_SENDER_EMAIL || 'gramseva0089@gmail.com';
   const brevoSenderName = process.env.BREVO_SENDER_NAME || 'GramSeva';
 
-  if (!serviceRoleKey) {
-    return res.status(500).json({ success: false, error: 'Server configuration error: missing SUPABASE_SERVICE_ROLE_KEY.' });
+  if (!supabaseUrl || !serviceRoleKey) {
+    return res.status(500).json({ success: false, error: 'Server configuration error: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.' });
   }
 
   try {

@@ -477,9 +477,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: restrict to known application origins
+_allowed_origins = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -521,9 +527,10 @@ async def verify_request(request: Request):
 
         raise HTTPException(status_code=401, detail="Invalid HMAC signature")
 
-    # No auth configured = open (development mode)
+    # SECURITY: No auth configured = REJECT ALL (fail closed)
     if not API_KEY and not HMAC_SECRET:
-        return True
+        logger.critical("SECURITY: Neither AI_API_KEY nor AI_HMAC_SECRET is set. All requests will be rejected.")
+        raise HTTPException(status_code=401, detail="Server misconfigured — no authentication credentials set")
 
     raise HTTPException(status_code=401, detail="Unauthorized — provide X-API-Key or HMAC signature")
 

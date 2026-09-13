@@ -2,6 +2,7 @@
  * POST /api/whatsapp
  * Vercel Serverless Function to send WhatsApp notifications.
  * Supports Meta WhatsApp Cloud API (Graph API) and generic REST webhooks.
+ * Auth: X-Internal-Secret (server-to-server only)
  *
  * Body:
  * {
@@ -11,6 +12,8 @@
  *   message?: string; // Custom message text if type is 'custom'
  * }
  */
+
+import { verifyInternalSecret } from './_lib/requireRole.js';
 
 export function formatPhoneNumber(phone) {
   if (!phone) return '';
@@ -149,13 +152,23 @@ export async function sendWhatsAppNotification({ to, type, data, message }) {
 
 export default async function handler(req, res) {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'https://villagegrievencesystem-fgxb.vercel.app,https://gramseva-superadmin.vercel.app,http://localhost:5173').split(',');
+  const origin = req.headers.origin || '';
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Internal-Secret');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed. Use POST.' });
+  }
+
+  // Auth: server-to-server only
+  if (!verifyInternalSecret(req)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized. X-Internal-Secret required.' });
   }
 
   try {

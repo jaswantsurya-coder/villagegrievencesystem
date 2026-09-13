@@ -8,7 +8,7 @@ import os
 import time
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger("gramseva.queue_worker")
 
@@ -109,7 +109,7 @@ class QueueWorker:
             await asyncio.sleep(self.HEAL_INTERVAL)
             try:
                 # 1. Reset stuck 'processing' items
-                stuck_cutoff = datetime.now(timezone.utc).isoformat()
+                stuck_cutoff = (datetime.now(timezone.utc) - timedelta(seconds=self.STUCK_THRESHOLD)).isoformat()
                 result = self.sb.from_("ai_processing_queue") \
                     .update({"status": "pending", "started_at": None, "worker_id": None}) \
                     .eq("status", "processing") \

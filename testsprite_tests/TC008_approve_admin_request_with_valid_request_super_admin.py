@@ -1,12 +1,13 @@
+﻿import os
 import requests
 
-BASE_URL = "https://dtucrczgagpzjbbrwqit.supabase.co/rest/v1"
-APIKEY = "sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK"
+BASE_URL = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/rest/v1"
+APIKEY = os.environ.get("VITE_SUPABASE_AUX_ANON_KEY") or os.environ.get("SUPABASE_AUX_ANON_KEY", "")
 TIMEOUT = 30
 
 
 def login_super_admin():
-    url = "https://dtucrczgagpzjbbrwqit.supabase.co/auth/v1/token?grant_type=password"
+    url = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/auth/v1/token?grant_type=password"
     headers = {
         "Content-Type": "application/json",
         "apikey": APIKEY,
@@ -100,3 +101,4 @@ def test_approve_admin_request_with_valid_request_super_admin():
 
 
 test_approve_admin_request_with_valid_request_super_admin()
+

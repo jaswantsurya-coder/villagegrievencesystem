@@ -1,10 +1,11 @@
+﻿import os
 import requests
 
 def test_join_village_without_authentication():
-    base_url = "https://dtucrczgagpzjbbrwqit.supabase.co/rest/v1"
+    BASE_URL = os.environ.get("SUPABASE_AUX_URL", "http://localhost:54321").rstrip("/") + "/rest/v1"
     endpoint = f"{base_url}/rpc/svc_join_village"
     headers = {
-        "apikey": "sb_publishable_k0ti3YbQtd3y7J2cHF8yMA_HnRa1bhK",
+        "apikey": (os.environ.get("VITE_SUPABASE_AUX_ANON_KEY") or os.environ.get("SUPABASE_AUX_ANON_KEY", "")),
         "Content-Type": "application/json"
     }
     payload = {
