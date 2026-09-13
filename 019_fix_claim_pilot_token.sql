@@ -5,6 +5,14 @@
 -- Adds guards to resolve_village: prevents village-hopping, rate limits, checks role.
 -- ============================================================================
 
+-- 0. Drop ALL existing overloads (return type change requires DROP first)
+DROP FUNCTION IF EXISTS public.claim_pilot_token(TEXT, UUID, TEXT, TEXT, TEXT, DATE, INT, TEXT, TEXT, TEXT, BIGINT, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.claim_pilot_token(TEXT, TEXT, TEXT, TEXT, DATE, INT, TEXT, TEXT, TEXT, BIGINT, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.claim_pilot_token(TEXT);
+DROP FUNCTION IF EXISTS public.claim_pilot_token(TEXT, UUID);
+DROP FUNCTION IF EXISTS public.resolve_village(TEXT, TEXT, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.resolve_village(TEXT, TEXT, TEXT);
+
 -- 1. Main secure claim_pilot_token (1-parameter token signature)
 CREATE OR REPLACE FUNCTION public.claim_pilot_token(
   p_token          TEXT,
