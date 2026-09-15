@@ -81,15 +81,81 @@ WHERE p.id = u.id
 -- ============================================================================
 -- 4. PII Protection: Scoped RLS on public.profiles
 -- ============================================================================
+-- Re-affirm security definer helpers to prevent RLS recursion (stack depth limit exceeded)
+CREATE OR REPLACE FUNCTION public.sec_get_role()
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_role TEXT;
+BEGIN
+  v_role := (auth.jwt() ->> 'user_role');
+  IF v_role IS NOT NULL AND v_role != '' THEN
+    RETURN v_role;
+  END IF;
+  IF auth.uid() IS NULL THEN
+    RETURN 'anon';
+  END IF;
+  SELECT role INTO v_role FROM public.profiles WHERE id = auth.uid();
+  RETURN COALESCE(v_role, 'citizen');
+END;
+$$;
+ALTER FUNCTION public.sec_get_role() OWNER TO postgres;
+
+CREATE OR REPLACE FUNCTION public.sec_get_village()
+RETURNS BIGINT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_village_id BIGINT;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN NULL;
+  END IF;
+  SELECT village_id INTO v_village_id FROM public.profiles WHERE id = auth.uid();
+  RETURN v_village_id;
+END;
+$$;
+ALTER FUNCTION public.sec_get_village() OWNER TO postgres;
+
+CREATE OR REPLACE FUNCTION public.sec_is_district_village(p_village_id BIGINT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_user_district TEXT;
+  v_village_district TEXT;
+BEGIN
+  IF auth.uid() IS NULL OR p_village_id IS NULL THEN
+    RETURN FALSE;
+  END IF;
+  SELECT district INTO v_user_district FROM public.profiles WHERE id = auth.uid();
+  IF v_user_district IS NULL THEN
+    RETURN FALSE;
+  END IF;
+  SELECT district INTO v_village_district FROM public.villages WHERE id = p_village_id;
+  RETURN v_user_district = v_village_district;
+END;
+$$;
+ALTER FUNCTION public.sec_is_district_village(BIGINT) OWNER TO postgres;
+
 -- Ensure execute grants on security definer helper functions
-GRANT EXECUTE ON FUNCTION public.sec_get_role() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sec_get_village() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sec_is_district_village(bigint) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.sec_get_role() TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.sec_get_village() TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.sec_is_district_village(BIGINT) TO authenticated, anon;
 
 -- Replace wide policy with scoped RLS
 DROP POLICY IF EXISTS "profiles_select_authenticated" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_select" ON public.profiles;
 DROP POLICY IF EXISTS "profiles_select_scoped" ON public.profiles;
+DROP POLICY IF EXISTS "Allow authenticated users to read profiles" ON public.profiles;
+DROP POLICY IF EXISTS "profiles_read_authenticated" ON public.profiles;
 
 CREATE POLICY "profiles_select_scoped" ON public.profiles
 FOR SELECT TO authenticated
@@ -102,9 +168,11 @@ USING (
     AND public.sec_is_district_village(village_id)
   )
   OR (
-    public.sec_get_village() IS NOT NULL
-    AND village_id = public.sec_get_village()
-    AND public.sec_get_role() IN ('village_admin', 'officer')
+    public.sec_get_role() IN ('village_admin', 'officer', 'sarpanch')
+    AND (
+      village_id = public.sec_get_village()
+      OR public.sec_get_village() IS NULL
+    )
   )
 );
 
