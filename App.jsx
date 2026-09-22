@@ -259,6 +259,48 @@ const removeFromOfflineQueue = (offlineId) => {
   window.dispatchEvent(new Event("offline-queue-updated"));
 };
 
+// ─── Network Reliability Helpers ──────────────────────────────────────────────
+
+/** Wraps a promise with a timeout. Rejects with a descriptive error if it takes too long. */
+const withTimeout = (promise, ms = 15000) => {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('Request timed out \u2014 you may be offline.')), ms);
+    })
+  ]).finally(() => clearTimeout(timer));
+};
+
+/**
+ * Reliable online check: navigator.onLine is unreliable (returns true when WiFi
+ * is connected but there's no actual internet). This does a fast HEAD probe
+ * against the Supabase REST endpoint to confirm real connectivity.
+ */
+const isActuallyOnline = async () => {
+  if (!navigator.onLine) return false;
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    if (!url || !key) return navigator.onLine; // fallback if env vars missing
+    const resp = await withTimeout(
+      fetch(`${url}/rest/v1/`, { method: 'HEAD', headers: { 'apikey': key }, mode: 'cors' }),
+      5000
+    );
+    return resp.ok || resp.status === 400; // 400 = reachable, just no table specified
+  } catch {
+    return false;
+  }
+};
+
+/** Returns true if the error looks like a timeout or network failure. */
+const isNetworkError = (err) => {
+  const msg = (err?.message || '').toLowerCase();
+  return msg.includes('timed out') || msg.includes('networkerror') ||
+         msg.includes('failed to fetch') || msg.includes('network request failed') ||
+         msg.includes('load failed') || err?.name === 'AbortError';
+};
+
 const toPhotoUrl = (value) => {
   if (typeof value === "string") return value.trim();
   if (value && typeof value.url === "string") return value.url.trim();
@@ -1632,27 +1674,49 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     setUploadError("");
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
     
+    // Reliable offline check before attempting network calls
+    const online = await isActuallyOnline();
+    if (!online) {
+      if (photos.length > 0) {
+        const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
+        setUploadError(message);
+        notify(message, "err");
+        setLoading(false);
+        return;
+      }
+      // Anonymous offline not supported (no session to sync later)
+      notify("You are offline. Please try again when connected.", "err");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // First, upload photos
-      const photoUrls = await uploadEvidencePhotos(photos, { ticketId: 'ANONYMOUS_UPLOAD', userId: 'anonymous' });
+      // First, upload photos (with timeout to prevent hanging)
+      const photoUrls = await withTimeout(
+        uploadEvidencePhotos(photos, { ticketId: 'ANONYMOUS_UPLOAD', userId: 'anonymous' }),
+        30000 // 30s for photo uploads
+      );
       
-      // Then, submit complaint via API
-      const res = await fetch('/api/anonymous/submit-complaint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          anonymous_user_id: anonymousUserId,
-          title: form.title,
-          description: fullDescription,
-          category: form.categories.join(", "),
-          location: form.location,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          photo_urls: photoUrls,
-          village_id: villageId,
-          related_scheme: form.relatedScheme || null
-        })
-      });
+      // Then, submit complaint via API (with timeout)
+      const res = await withTimeout(
+        fetch('/api/anonymous/submit-complaint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            anonymous_user_id: anonymousUserId,
+            title: form.title,
+            description: fullDescription,
+            category: form.categories.join(", "),
+            location: form.location,
+            latitude: form.latitude,
+            longitude: form.longitude,
+            photo_urls: photoUrls,
+            village_id: villageId,
+            related_scheme: form.relatedScheme || null
+          })
+        }),
+        15000
+      );
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit complaint");
@@ -1660,7 +1724,9 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
       notify(`${t("success_submit")} Ticket: ${data.ticket_id}`);
       navigate("track");
     } catch (err) {
-      const message = err?.message || "Failed to submit grievance with photo evidence.";
+      const message = isNetworkError(err)
+        ? "Network unavailable \u2014 please check your connection and try again."
+        : (err?.message || "Failed to submit grievance with photo evidence.");
       setUploadError(message);
       notify(message, "err");
     } finally {
@@ -1788,6 +1854,18 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
   const [photos, setPhotos] = useState([]);
   const [uploadError, setUploadError] = useState("");
   const [boundaries, setBoundaries] = useState([]);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const goOffline = () => setIsOffline(true);
+    const goOnline = () => setIsOffline(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
 
   useEffect(() => {
     supabase.from("village_boundaries").select("*").eq("is_active", true).then(({ data }) => {
@@ -1845,8 +1923,9 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       p_village_id: profile?.village_id || null,
     };
 
-    // Check if offline - photos need Storage, so only text-only drafts can be queued.
-    if (!navigator.onLine) {
+    // Reliable offline check — navigator.onLine is unreliable on rural 3G
+    const online = await isActuallyOnline();
+    if (!online) {
       if (photos.length > 0) {
         const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
         setUploadError(message);
@@ -1864,9 +1943,15 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     }
 
     try {
-      const photoUrls = photos.length > 0 ? await uploadEvidencePhotos(photos, { ticketId, userId: session.user.id }) : [];
+      // Wrap all network calls in withTimeout to prevent infinite hangs
+      const photoUrls = photos.length > 0
+        ? await withTimeout(uploadEvidencePhotos(photos, { ticketId, userId: session.user.id }), 30000)
+        : [];
       const finalPayload = { ...rpcPayload, p_photo_urls: photoUrls };
-      const { data: rpcRes, error } = await supabase.rpc("svc_create_complaint", finalPayload);
+      const { data: rpcRes, error } = await withTimeout(
+        supabase.rpc("svc_create_complaint", finalPayload),
+        15000
+      );
       if (error) throw error;
       const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
       if (!parsed?.success) throw new Error(parsed?.error || 'Complaint submission failed');
@@ -1896,10 +1981,13 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     } catch (err) {
       const message = err?.message || "Failed to submit grievance.";
       setUploadError(message);
-      if (photos.length === 0) {
+      // On timeout/network errors, save text-only complaints to offline queue
+      if (isNetworkError(err) && photos.length === 0) {
         addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
         notify(`${t('saved_offline')} Ticket: ${ticketId}`);
         navigate("track");
+      } else if (isNetworkError(err)) {
+        notify("Network unavailable \u2014 photo uploads require a connection. Please retry when online.", "err");
       } else {
         notify(message, "err");
       }
@@ -1916,7 +2004,7 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       </div>
 
       {/* Offline draft indicator */}
-      {!navigator.onLine && (
+      {isOffline && (
         <div style={{ background: THEME.colors.warningBg, border: `1px solid #fcd34d`, borderRadius: THEME.radius.md, padding: "12px 18px", marginBottom: 20, color: "#92400e", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}>
           📡 {t('offline_mode_msg')}
         </div>
