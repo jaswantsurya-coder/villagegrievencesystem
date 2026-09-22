@@ -1868,9 +1868,15 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
   }, []);
 
   useEffect(() => {
-    supabase.from("village_boundaries").select("*").eq("is_active", true).then(({ data }) => {
-      if (data) setBoundaries(data);
-    });
+    const fetchBoundaries = () => {
+      if (!navigator.onLine) return;
+      supabase.from("village_boundaries").select("*").eq("is_active", true).then(({ data }) => {
+        if (data) setBoundaries(data);
+      });
+    };
+    fetchBoundaries();
+    window.addEventListener('online', fetchBoundaries);
+    return () => window.removeEventListener('online', fetchBoundaries);
   }, []);
 
   const generateTicketId = () => {
@@ -6979,6 +6985,11 @@ export default function App() {
       }
     } catch (err) {
       console.error("Profile fetch/sync error:", err);
+      // Don't show scary red error banners when the user is simply offline
+      if (isNetworkError(err) || !navigator.onLine) {
+        console.warn("[Profile] Offline — skipping profile fetch. Will retry when back online.");
+        return;
+      }
       let authId = "none";
       let authEmail = "none";
       try {
