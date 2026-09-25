@@ -2,7 +2,7 @@
 // GramSeva — Manages FCM token lifecycle, saves to Supabase, foreground alerts
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { requestFCMToken, initMessaging, onForegroundMessage } from './firebase';
+import { requestFCMToken, initMessaging, onForegroundMessage, getFirebaseSWUrl } from './firebase';
 import { supabase } from './supabaseClient';
 
 /**
@@ -28,7 +28,7 @@ export async function registerFirebaseSW() {
     return null;
   }
   try {
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+    const registration = await navigator.serviceWorker.register(getFirebaseSWUrl ? getFirebaseSWUrl() : '/firebase-messaging-sw.js', {
       scope: '/',
     });
     console.log('[FCM-Push] Firebase SW registered:', registration.scope);

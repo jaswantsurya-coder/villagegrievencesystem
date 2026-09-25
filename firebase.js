@@ -6,24 +6,39 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
-const firebaseConfig = {
-  apiKey: 'AIzaSyBEjFdqBGcVn_fce-bLFjacJBltNQiCRjA',
-  authDomain: 'grievance-system-e72c5.firebaseapp.com',
-  projectId: 'grievance-system-e72c5',
-  storageBucket: 'grievance-system-e72c5.firebasestorage.app',
-  messagingSenderId: '588141633888',
-  appId: '1:588141633888:web:516a05530cbf4322af7e05',
-  measurementId: 'G-H5YDV1YPDS',
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
 };
 
 // VAPID key for Web Push (from Firebase Console → Cloud Messaging → Web Push certificates)
-export const VAPID_KEY = 'BHxo1RSwKQS5FRIjJdWGsJSO1722Fv92F2XlPHG13ICt3_PwAu3fe8qGsfgQXWyiTl4PFXFnpHJd379NxCZ4rX8';
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
+
+// ─── Dynamic SW URL with env params (avoids hardcoding keys in service worker) ──
+export function getFirebaseSWUrl() {
+  const url = new URL('/firebase-messaging-sw.js', window.location.origin);
+  if (firebaseConfig.apiKey) {
+    url.searchParams.set('apiKey', firebaseConfig.apiKey);
+    url.searchParams.set('authDomain', firebaseConfig.authDomain);
+    url.searchParams.set('projectId', firebaseConfig.projectId);
+    url.searchParams.set('storageBucket', firebaseConfig.storageBucket);
+    url.searchParams.set('messagingSenderId', firebaseConfig.messagingSenderId);
+    url.searchParams.set('appId', firebaseConfig.appId);
+    url.searchParams.set('measurementId', firebaseConfig.measurementId);
+  }
+  return url.pathname + url.search;
+}
 
 // ─── App Initialization ─────────────────────────────────────────────────────
-const app = initializeApp(firebaseConfig);
+const app = firebaseConfig.apiKey ? initializeApp(firebaseConfig) : null;
 
-// ─── Auth (existing) ─────────────────────────────────────────────────────────
-export const auth = getAuth(app);
+// ─── Auth ───────────────────────────────────────────────────────────────────
+export const auth = app ? getAuth(app) : null;
 export const googleProvider = new GoogleAuthProvider();
 export { signInWithPopup };
 
@@ -36,6 +51,7 @@ let messaging = null;
  */
 export async function initMessaging() {
   if (messaging) return messaging;
+  if (!app) return null;
   try {
     const supported = await isSupported();
     if (supported) {
@@ -66,10 +82,13 @@ export async function requestFCMToken() {
     }
 
     // Get registration for the Firebase messaging service worker
-    const swRegistration = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-    
+    const swRegistration =
+      (await navigator.serviceWorker.getRegistration('/')) ||
+      (await navigator.serviceWorker.getRegistration()) ||
+      (await navigator.serviceWorker.ready);
+
     const token = await getToken(msg, {
-      vapidKey: VAPID_KEY,
+      vapidKey: VAPID_KEY || undefined,
       serviceWorkerRegistration: swRegistration || undefined,
     });
 

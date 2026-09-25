@@ -9,22 +9,33 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
-// Initialize Firebase in the service worker
-firebase.initializeApp({
-  apiKey: 'AIzaSyBEjFdqBGcVn_fce-bLFjacJBltNQiCRjA',
-  authDomain: 'grievance-system-e72c5.firebaseapp.com',
-  projectId: 'grievance-system-e72c5',
-  storageBucket: 'grievance-system-e72c5.firebasestorage.app',
-  messagingSenderId: '588141633888',
-  appId: '1:588141633888:web:516a05530cbf4322af7e05',
-  measurementId: 'G-H5YDV1YPDS',
-});
+// Parse configuration from registration URL query parameters
+const params = new URLSearchParams(self.location.search);
+const apiKey = params.get('apiKey');
 
-const messaging = firebase.messaging();
+let messaging = null;
+
+if (apiKey) {
+  try {
+    firebase.initializeApp({
+      apiKey: apiKey,
+      authDomain: params.get('authDomain') || '',
+      projectId: params.get('projectId') || '',
+      storageBucket: params.get('storageBucket') || '',
+      messagingSenderId: params.get('messagingSenderId') || '',
+      appId: params.get('appId') || '',
+      measurementId: params.get('measurementId') || '',
+    });
+    messaging = firebase.messaging();
+  } catch (err) {
+    console.error('[firebase-messaging-sw] Init error:', err);
+  }
+}
 
 // ─── Background Message Handler ─────────────────────────────────────────────
 // Handles push notifications when the app is in the background or closed
-messaging.onBackgroundMessage((payload) => {
+if (messaging) {
+  messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw] Background message received:', payload);
 
   const notificationData = payload.data || {};
@@ -71,7 +82,8 @@ messaging.onBackgroundMessage((payload) => {
   };
 
   return self.registration.showNotification(title, options);
-});
+  });
+}
 
 // ─── Notification Click Handler ─────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
