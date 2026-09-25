@@ -7,17 +7,17 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBEjFdqBGcVn_fce-bLFjacJBltNQiCRjA',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'grievance-system-e72c5.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'grievance-system-e72c5',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'grievance-system-e72c5.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '588141633888',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:588141633888:web:516a05530cbf4322af7e05',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-H5YDV1YPDS',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
 };
 
 // VAPID key for Web Push (from Firebase Console → Cloud Messaging → Web Push certificates)
-export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || 'BHxo1RSwKQS5FRIjJdWGsJSO1722Fv92F2XlPHG13ICt3_PwAu3fe8qGsfgQXWyiTl4PFXFnpHJd379NxCZ4rX8';
+export const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 
 // ─── Dynamic SW URL with env params (avoids hardcoding keys in service worker) ──
 export function getFirebaseSWUrl() {
