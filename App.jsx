@@ -5539,6 +5539,9 @@ const LoginModal = ({ onLogin, onClose, notify, t, initialMode }) => {
     setLoading(true);
     setAuthMessage(null);
     try {
+      if (!firebaseAuth) {
+        throw new Error("Google Sign-In is temporarily unavailable: Firebase Auth is not initialized.");
+      }
       const result = await signInWithPopup(firebaseAuth, googleProvider);
       const user = result.user;
       const email = user.email;

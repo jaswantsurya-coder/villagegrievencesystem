@@ -90,6 +90,10 @@ export const SignInPage = ({
                       onGoogleSignIn(e);
                     } else {
                       import('../../firebase').then(({ auth, googleProvider, signInWithPopup }) => {
+                        if (!auth) {
+                          alert('Google Sign-In is unavailable: Firebase Auth is not initialized.');
+                          return;
+                        }
                         signInWithPopup(auth, googleProvider).then((res) => {
                           alert(`Logged in as ${res.user.displayName || res.user.email}!`);
                           window.location.reload();
