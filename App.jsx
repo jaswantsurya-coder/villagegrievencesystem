@@ -1929,9 +1929,10 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       p_village_id: profile?.village_id || null,
     };
 
-    // Reliable offline check — navigator.onLine is unreliable on rural 3G
-    const online = await isActuallyOnline();
-    if (!online) {
+    // Only skip if browser confirms offline — isActuallyOnline() was causing
+    // false negatives in production (CORS on HEAD probe), routing real submissions
+    // to offline queue silently
+    if (!navigator.onLine) {
       if (photos.length > 0) {
         const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
         setUploadError(message);
@@ -1956,11 +1957,11 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       const finalPayload = { ...rpcPayload, p_photo_urls: photoUrls };
       const { data: rpcRes, error } = await withTimeout(
         supabase.rpc("svc_create_complaint", finalPayload),
-        15000
+        30000
       );
-      if (error) throw error;
+      if (error) throw new Error(error.message || error.details || JSON.stringify(error));
       const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
-      if (!parsed?.success) throw new Error(parsed?.error || 'Complaint submission failed');
+      if (!parsed?.success) throw new Error(parsed?.error || 'Complaint submission failed — please try again.');
 
       // Async fire-and-forget AI classification trigger
       if (parsed.complaint_id) {
@@ -1987,14 +1988,15 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     } catch (err) {
       const message = err?.message || "Failed to submit grievance.";
       setUploadError(message);
-      // On timeout/network errors, save text-only complaints to offline queue
+      // Only fall back to offline queue on confirmed network/timeout errors
       if (isNetworkError(err) && photos.length === 0) {
         addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
         notify(`${t('saved_offline')} Ticket: ${ticketId}`);
         navigate("track");
-      } else if (isNetworkError(err)) {
+      } else if (isNetworkError(err) && photos.length > 0) {
         notify("Network unavailable \u2014 photo uploads require a connection. Please retry when online.", "err");
       } else {
+        // Show the real DB/auth error so the user knows what went wrong
         notify(message, "err");
       }
     } finally {
