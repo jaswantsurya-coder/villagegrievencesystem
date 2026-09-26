@@ -1674,9 +1674,8 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
     setUploadError("");
     const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
     
-    // Reliable offline check before attempting network calls
-    const online = await isActuallyOnline();
-    if (!online) {
+    // Check online status before attempting network calls
+    if (!navigator.onLine) {
       if (photos.length > 0) {
         const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
         setUploadError(message);
@@ -1836,7 +1835,7 @@ const AnonymousSubmitView = ({ t, notify, navigate, boundaries, i18n }) => {
 
 // ─── Submit View (with Voice Input + Offline Queue) ──────────────────────────
 
-const SubmitView = ({ t, notify, navigate, session, i18n }) => {
+const SubmitView = ({ t, notify, navigate, session, profile, i18n }) => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ 
@@ -1905,51 +1904,50 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
     
     setLoading(true);
     setUploadError("");
-    const ticketId = generateTicketId();
-    const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
 
-    // Build the RPC payload - svc_create_complaint is the only way to insert
-    // (direct INSERT on complaints is revoked for authenticated users)
-    const isDefaultCoords = (form.latitude === 17.3850 && form.longitude === 78.4867);
-    const resolvedLat = isDefaultCoords ? null : (form.latitude || null);
-    const resolvedLng = isDefaultCoords ? null : (form.longitude || null);
+    let ticketId = generateTicketId();
+    let rpcPayload = null;
 
-    const rpcPayload = {
-      p_title: form.title,
-      p_description: fullDescription,
-      p_category: form.categories.join(", "),
-      p_location: form.location || null,
-      p_latitude: resolvedLat,
-      p_longitude: resolvedLng,
-      p_photos: [],
-      p_photo_urls: [],
-      p_related_scheme: form.relatedScheme || null,
-      p_is_anonymous: false,
-      p_anonymous_phone: null,
-      p_village_id: profile?.village_id || null,
-    };
+    try {
+      const fullDescription = `${form.description}\n\n--- Additional Details ---\nDuration: ${form.duration}\nEmergency: ${form.isEmergency ? 'Yes' : 'No'}\nPeople Affected: ${form.peopleAffected || 'Not specified'}`;
 
-    // Only skip if browser confirms offline — isActuallyOnline() was causing
-    // false negatives in production (CORS on HEAD probe), routing real submissions
-    // to offline queue silently
-    if (!navigator.onLine) {
-      if (photos.length > 0) {
-        const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
-        setUploadError(message);
-        notify(message, "err");
-        setLoading(false);
+      // Build the RPC payload - svc_create_complaint is the only way to insert
+      // (direct INSERT on complaints is revoked for authenticated users)
+      const isDefaultCoords = (form.latitude === 17.3850 && form.longitude === 78.4867);
+      const resolvedLat = isDefaultCoords ? null : (form.latitude || null);
+      const resolvedLng = isDefaultCoords ? null : (form.longitude || null);
+
+      rpcPayload = {
+        p_title: form.title,
+        p_description: fullDescription,
+        p_category: form.categories.join(", "),
+        p_location: form.location || null,
+        p_latitude: resolvedLat,
+        p_longitude: resolvedLng,
+        p_photos: [],
+        p_photo_urls: [],
+        p_related_scheme: form.relatedScheme || null,
+        p_is_anonymous: false,
+        p_anonymous_phone: null,
+        p_village_id: profile?.village_id || null,
+      };
+
+      // Only skip if browser confirms offline
+      if (!navigator.onLine) {
+        if (photos.length > 0) {
+          const message = "Photo evidence needs an internet connection. Submit again when online so images can be uploaded.";
+          setUploadError(message);
+          notify(message, "err");
+          return;
+        }
+
+        // Save offline draft with the RPC payload structure
+        addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
+        notify(`${t('saved_offline')} Ticket: ${ticketId}`);
+        navigate("track");
         return;
       }
 
-      // Save offline draft with the RPC payload structure
-      addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
-      notify(`${t('saved_offline')} Ticket: ${ticketId}`);
-      navigate("track");
-      setLoading(false);
-      return;
-    }
-
-    try {
       // Wrap all network calls in withTimeout to prevent infinite hangs
       const photoUrls = photos.length > 0
         ? await withTimeout(uploadEvidencePhotos(photos, { ticketId, userId: session.user.id }), 30000)
@@ -1986,10 +1984,11 @@ const SubmitView = ({ t, notify, navigate, session, i18n }) => {
       notify(`${t("success_submit")} Ticket: ${parsed.ticket_id || ticketId}`);
       navigate("track");
     } catch (err) {
+      console.error("[handleSubmit error]:", err);
       const message = err?.message || "Failed to submit grievance.";
       setUploadError(message);
       // Only fall back to offline queue on confirmed network/timeout errors
-      if (isNetworkError(err) && photos.length === 0) {
+      if (isNetworkError(err) && photos.length === 0 && rpcPayload) {
         addToOfflineQueue({ _rpcPayload: true, ticketId, ...rpcPayload });
         notify(`${t('saved_offline')} Ticket: ${ticketId}`);
         navigate("track");
