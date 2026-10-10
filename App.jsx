@@ -15,7 +15,7 @@ import {
   Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
   GraduationCap, HeartPulse, Images, Leaf, MapPin, Menu, Moon, Search,
   ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap,
-  User, Mail, Phone, Home, Hash, Clock, Shield, UserCheck, AlertTriangle, Filter
+  User, Mail, Phone, Home, Hash, Clock, Shield, UserCheck, AlertTriangle, Filter, CheckCircle
 } from 'lucide-react';
 
 const EVIDENCE_BUCKET = "complaint-evidence";
@@ -3152,6 +3152,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteRole, setInviteRole] = useState("citizen");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteName, setInviteName] = useState("");
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteDept, setInviteDept] = useState("");
   const [submittingInvite, setSubmittingInvite] = useState(false);
   const [generatedInvite, setGeneratedInvite] = useState(null);
 
@@ -3258,9 +3261,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         return;
       }
 
-      const { data: inviteData, error: inviteError } = await supabase
-        .from("invitations")
-        .insert({
+      const invitePayload = {
           token,
           village_id: targetVillageId,
           role: inviteRole,
@@ -3268,7 +3269,17 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
           created_by: session.user.id,
           expires_at: expiresAt.toISOString(),
           status: "pending",
-        })
+        };
+      // Include officer-specific metadata when inviting an officer
+      if (inviteRole === 'officer') {
+        if (inviteName.trim()) invitePayload.name = inviteName.trim();
+        if (invitePhone.trim()) invitePayload.phone = invitePhone.trim();
+        if (inviteDept.trim()) invitePayload.department = inviteDept.trim();
+      }
+
+      const { data: inviteData, error: inviteError } = await supabase
+        .from("invitations")
+        .insert(invitePayload)
         .select()
         .single();
 
@@ -3285,6 +3296,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         });
         notify("Invitation link generated successfully! 🔗");
         setInviteEmail("");
+        setInviteName("");
+        setInvitePhone("");
+        setInviteDept("");
         fetchInvitations();
       }
     } catch (err) {
@@ -3958,6 +3972,85 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                   </select>
                 </div>
 
+                {/* Officer-specific metadata fields */}
+                {inviteRole === 'officer' && (
+                  <>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>👤 Officer Name</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Ravi Kumar"
+                        value={inviteName}
+                        onChange={e => setInviteName(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          borderRadius: 14,
+                          border: `1.5px solid ${THEME.colors.border}`,
+                          fontSize: 14,
+                          outline: "none",
+                          boxSizing: "border-box",
+                          background: THEME.colors.background,
+                          color: THEME.colors.text
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>📱 Officer Phone</label>
+                      <input
+                        type="tel"
+                        placeholder="e.g. 9876543210"
+                        value={invitePhone}
+                        onChange={e => setInvitePhone(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          borderRadius: 14,
+                          border: `1.5px solid ${THEME.colors.border}`,
+                          fontSize: 14,
+                          outline: "none",
+                          boxSizing: "border-box",
+                          background: THEME.colors.background,
+                          color: THEME.colors.text
+                        }}
+                      />
+                    </div>
+                    <div style={{ marginBottom: 16 }}>
+                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>🏢 Department</label>
+                      <select
+                        value={inviteDept}
+                        onChange={e => setInviteDept(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "12px 16px",
+                          borderRadius: 14,
+                          border: `1.5px solid ${THEME.colors.border}`,
+                          fontSize: 14,
+                          fontWeight: 700,
+                          outline: "none",
+                          background: THEME.colors.background,
+                          color: THEME.colors.text,
+                          cursor: "pointer"
+                        }}
+                      >
+                        <option value="">Select Department (Optional)</option>
+                        <option value="Water Supply">Water Supply</option>
+                        <option value="Roads & Transport">Roads & Transport</option>
+                        <option value="Electricity">Electricity</option>
+                        <option value="Sanitation">Sanitation</option>
+                        <option value="Public Health">Public Health</option>
+                        <option value="Education">Education</option>
+                        <option value="Revenue">Revenue</option>
+                        <option value="Agriculture">Agriculture</option>
+                        <option value="General Administration">General Administration</option>
+                      </select>
+                    </div>
+                    <div style={{ padding: "10px 14px", background: THEME.colors.background, borderRadius: 12, marginBottom: 20, fontSize: 11, color: THEME.colors.textMuted, lineHeight: 1.5, border: `1px solid ${THEME.colors.border}` }}>
+                      💡 Officer details are optional but recommended. They will be pre-filled in the officer's profile upon accepting the invitation.
+                    </div>
+                  </>
+                )}
+
                 <div style={{ marginBottom: 24 }}>
                   <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>{t('invite_restricted_email')}</label>
                   <input
@@ -4258,6 +4351,163 @@ if (typeof document !== 'undefined' && !document.getElementById(pulseStyleId)) {
   document.head.appendChild(style);
 }
 
+// ─── Officer Progress Panel (used inside AdminView detail panel) ──────────────
+const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
+  const [workNotes, setWorkNotes] = useState(selected?.work_notes || "");
+  const [completionReport, setCompletionReport] = useState(selected?.completion_report || "");
+  const [updating, setUpdating] = useState(false);
+
+  // Sync state when selected complaint changes
+  useEffect(() => {
+    setWorkNotes(selected?.work_notes || "");
+    setCompletionReport(selected?.completion_report || "");
+  }, [selected?.id]);
+
+  const handleStatusChange = async (newStatus) => {
+    setUpdating(true);
+    await onUpdate(selected.id, { status: newStatus });
+    setUpdating(false);
+  };
+
+  const handleSaveNotes = async () => {
+    if (!workNotes.trim() && !completionReport.trim()) {
+      notify("Please enter work notes or completion report", "err");
+      return;
+    }
+    setUpdating(true);
+    await onUpdate(selected.id, {
+      work_notes: workNotes.trim() || null,
+      completion_report: completionReport.trim() || null
+    });
+    setUpdating(false);
+  };
+
+  const officerStatusFlow = ['Assigned', 'In Progress', 'Resolved'];
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      {/* Officer Status Controls */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Shield size={13} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Update Status</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {officerStatusFlow.map(s => {
+            const m = STATUS_META[s] || STATUS_META.Open;
+            const isActive = selected.status === s;
+            return (
+              <button key={s}
+                onClick={() => handleStatusChange(s)}
+                disabled={updating}
+                style={{ padding: "7px 16px", borderRadius: THEME.radius.full, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? "#fff" : m.color, fontWeight: 800, fontSize: 11, cursor: updating ? "wait" : "pointer", fontFamily: THEME.font, transition: "all 0.2s", opacity: isActive ? 1 : 0.75 }}
+              >
+                {m.icon} {s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Work Notes */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.warningBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <FileText size={13} color={THEME.colors.warning} strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Work Notes</span>
+        </div>
+        <textarea
+          value={workNotes}
+          onChange={e => setWorkNotes(e.target.value)}
+          placeholder="Describe the work done so far, materials used, people coordinated..."
+          rows={4}
+          style={{
+            width: "100%",
+            padding: "12px 14px",
+            borderRadius: THEME.radius.sm,
+            border: `1.5px solid ${THEME.colors.border}`,
+            fontFamily: THEME.font,
+            fontSize: 12,
+            fontWeight: 600,
+            color: THEME.colors.text,
+            background: THEME.colors.background,
+            outline: "none",
+            resize: "vertical",
+            boxSizing: "border-box",
+            lineHeight: 1.6
+          }}
+        />
+      </div>
+
+      {/* Completion Report — shown when status is In Progress or Resolved */}
+      {(selected.status === 'In Progress' || selected.status === 'Resolved') && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.successBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CheckCircle size={13} color={THEME.colors.success} strokeWidth={2.5} />
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Completion Report</span>
+          </div>
+          <textarea
+            value={completionReport}
+            onChange={e => setCompletionReport(e.target.value)}
+            placeholder="Final report: What was resolved, how it was fixed, any follow-up needed..."
+            rows={4}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              borderRadius: THEME.radius.sm,
+              border: `1.5px solid ${THEME.colors.border}`,
+              fontFamily: THEME.font,
+              fontSize: 12,
+              fontWeight: 600,
+              color: THEME.colors.text,
+              background: THEME.colors.background,
+              outline: "none",
+              resize: "vertical",
+              boxSizing: "border-box",
+              lineHeight: 1.6
+            }}
+          />
+        </div>
+      )}
+
+      {/* Save Notes Button */}
+      <button
+        onClick={handleSaveNotes}
+        disabled={updating}
+        style={{
+          width: "100%",
+          padding: "12px 20px",
+          borderRadius: THEME.radius.sm,
+          background: updating ? THEME.colors.border : "linear-gradient(135deg, #047857, #10B981)",
+          color: "#fff",
+          border: "none",
+          fontSize: 13,
+          fontWeight: 800,
+          cursor: updating ? "wait" : "pointer",
+          fontFamily: THEME.font,
+          transition: "all 0.2s",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8
+        }}
+      >
+        {updating ? "⏳ Saving..." : "💾 Save Progress Notes"}
+      </button>
+
+      {/* Info box for officer */}
+      <div style={{ marginTop: 12, padding: "10px 14px", background: THEME.colors.background, borderRadius: THEME.radius.sm, fontSize: 10.5, color: THEME.colors.textMuted, lineHeight: 1.5, border: `1px solid ${THEME.colors.border}` }}>
+        💡 <strong>Tip:</strong> Update status to "In Progress" when you start working, and "Resolved" when completed. The village admin will verify and close the complaint.
+      </div>
+    </div>
+  );
+};
+
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
 const AdminView = ({ t, notify, session, profile, t_officer }) => {
@@ -4343,8 +4593,68 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
   };
 
   const fetchOfficers = async () => {
-    const { data } = await supabase.from("profiles").select("id, name, phone").eq("role", "officer");
+    let query = supabase.from("profiles").select("id, name, phone, department, village_id").eq("role", "officer");
+    // Village admins should only see officers in their own village
+    if (profile?.village_id && profile?.role === 'village_admin') {
+      query = query.eq("village_id", profile.village_id);
+    }
+    const { data } = await query;
     if (data) setOfficers(data);
+  };
+
+  // Secure officer assignment via RPC
+  const handleAssignOfficer = async (complaintId, officerId) => {
+    try {
+      const { data: rpcRes, error } = await supabase.rpc('assign_complaint_officer', {
+        p_complaint_id: complaintId,
+        p_officer_id: officerId || null
+      });
+      if (error) {
+        notify(error.message, "err");
+        return;
+      }
+      const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+      if (!parsed?.success) {
+        notify(parsed?.error || 'Assignment failed', "err");
+        return;
+      }
+      notify(officerId ? `✅ Complaint assigned to ${parsed.officer_name || 'officer'}` : '✅ Officer unassigned');
+      fetchData();
+      if (selected?.id === complaintId) {
+        setSelected(prev => ({ ...prev, assigned_officer_id: officerId || null, status: parsed.status || prev.status }));
+      }
+    } catch (e) {
+      notify('Assignment error: ' + e.message, "err");
+    }
+  };
+
+  // Officer progress update via RPC
+  const handleOfficerProgressUpdate = async (complaintId, updates) => {
+    try {
+      const { data: rpcRes, error } = await supabase.rpc('officer_update_complaint_progress', {
+        p_complaint_id: complaintId,
+        p_status: updates.status || null,
+        p_work_notes: updates.work_notes || null,
+        p_completion_report: updates.completion_report || null,
+        p_completion_photos: updates.completion_photos || null
+      });
+      if (error) {
+        notify(error.message, "err");
+        return;
+      }
+      const parsed = typeof rpcRes === 'string' ? JSON.parse(rpcRes) : rpcRes;
+      if (!parsed?.success) {
+        notify(parsed?.error || 'Update failed', "err");
+        return;
+      }
+      notify('✅ Progress updated successfully');
+      fetchData();
+      if (selected?.id === complaintId) {
+        setSelected(prev => ({ ...prev, ...updates, status: parsed.status || prev.status }));
+      }
+    } catch (e) {
+      notify('Update error: ' + e.message, "err");
+    }
   };
 
   const fetchUpvotes = async () => {
@@ -4474,6 +4784,44 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
           )}
         </div>
       </div>
+
+      {/* Officer-specific stats cards */}
+      {t_officer && (
+        <div style={{ display: "flex", gap: 14, marginBottom: 22, flexWrap: "wrap" }}>
+          {[
+            { label: "Total Assigned", count: list.length, icon: "📋", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
+            { label: "In Progress", count: list.filter(c => c.status === "In Progress").length, icon: "🔵", color: "#2563eb", bg: "#dbeafe" },
+            { label: "Resolved", count: list.filter(c => c.status === "Resolved").length, icon: "🟢", color: "#059669", bg: "#d1fae5" },
+            { label: "Pending Action", count: list.filter(c => c.status === "Assigned" || c.status === "Open").length, icon: "🟡", color: "#d97706", bg: "#fef3c7" },
+          ].map((stat, idx) => (
+            <div key={idx} style={{
+              flex: "1 1 160px",
+              background: THEME.colors.surface,
+              border: `1.5px solid ${THEME.colors.border}`,
+              borderRadius: 16,
+              padding: "18px 22px",
+              boxShadow: THEME.shadow.sm,
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              transition: "all 0.2s"
+            }}>
+              <div style={{
+                width: 44, height: 44, borderRadius: 12,
+                background: stat.bg,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 20, flexShrink: 0
+              }}>
+                {stat.icon}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{stat.label}</div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: stat.color, lineHeight: 1.1 }}>{stat.count}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {tab === "users" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <StaffManagementTab t={t} notify={notify} session={session} currentProfile={profile} />
@@ -4884,6 +5232,34 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   );
                 })()}
 
+                {/* ─── Section 4.5: Officer Work Notes (Admin Read-Only View) ─── */}
+                {(selected.work_notes || selected.completion_report || selected.assigned_officer_id) && (
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 6, background: "linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.15))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <FileText size={13} color="#6366f1" strokeWidth={2.5} />
+                      </div>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Officer Progress Report</span>
+                    </div>
+                    {selected.work_notes ? (
+                      <div style={{ padding: "12px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}`, marginBottom: 8 }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: THEME.colors.textMuted, textTransform: "uppercase", marginBottom: 4 }}>Work Notes</div>
+                        <p style={{ fontSize: 12, color: THEME.colors.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.work_notes}</p>
+                      </div>
+                    ) : (
+                      <div style={{ padding: "10px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, border: `1px dashed ${THEME.colors.border}`, marginBottom: 8, fontSize: 11, color: THEME.colors.textMuted, fontStyle: "italic" }}>
+                        No work notes submitted yet by the assigned officer.
+                      </div>
+                    )}
+                    {selected.completion_report && (
+                      <div style={{ padding: "12px 16px", background: THEME.colors.successBg, borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.success}30` }}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: THEME.colors.success, textTransform: "uppercase", marginBottom: 4 }}>✅ Completion Report</div>
+                        <p style={{ fontSize: 12, color: THEME.colors.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{selected.completion_report}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* ─── Section 5: Management Controls ─── */}
                 <div style={{ borderTop: `1.5px solid ${THEME.colors.border}`, paddingTop: 18 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
@@ -4926,19 +5302,39 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     </button>
                   </div>
 
-                  {/* Assigned Officer */}
+                  {/* Assigned Officer (Admin view — uses secure RPC) */}
                   {!t_officer && (
                     <div style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 6, display: "block" }}>{t('assign_officer')}</label>
                       <select
                         value={selected.assigned_officer_id || ""}
-                        onChange={e => updateGrievance(selected.id, { assigned_officer_id: e.target.value || null, status: !e.target.value ? selected.status : (selected.status === "Open" ? "Assigned" : selected.status) })}
+                        onChange={e => handleAssignOfficer(selected.id, e.target.value || null)}
                         style={{ width: "100%", padding: "10px 12px", borderRadius: THEME.radius.sm, border: `1.5px solid ${THEME.colors.border}`, fontFamily: THEME.font, fontWeight: 700, fontSize: 13, background: THEME.colors.background }}
                       >
                         <option value="">{t('select_officer')}</option>
-                        {officers.map(o => <option key={o.id} value={o.id}>{o.name} ({o.phone})</option>)}
+                        {officers.map(o => <option key={o.id} value={o.id}>{o.name}{o.department ? ` • ${o.department}` : ''} ({o.phone})</option>)}
                       </select>
+                      {selected.assigned_officer_id && (() => {
+                        const assignedOfficer = officers.find(o => o.id === selected.assigned_officer_id);
+                        return assignedOfficer ? (
+                          <div style={{ marginTop: 8, padding: "8px 12px", background: THEME.colors.successBg, borderRadius: THEME.radius.sm, fontSize: 11, color: THEME.colors.success, fontWeight: 700, border: `1px solid ${THEME.colors.success}20` }}>
+                            ✅ Assigned to <strong>{assignedOfficer.name}</strong>
+                            {assignedOfficer.department && <span style={{ color: THEME.colors.textMuted }}> • {assignedOfficer.department}</span>}
+                            {selected.assigned_at && <span style={{ color: THEME.colors.textMuted }}> • {new Date(selected.assigned_at).toLocaleDateString()}</span>}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
+                  )}
+
+                  {/* Officer Work Notes & Progress (Officer-only view) */}
+                  {t_officer && (
+                    <OfficerProgressPanel
+                      selected={selected}
+                      onUpdate={handleOfficerProgressUpdate}
+                      notify={notify}
+                      t={t}
+                    />
                   )}
                 </div>
               </div>
