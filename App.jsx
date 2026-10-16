@@ -3150,13 +3150,11 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
   
   // Invite Form Modal
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteRole, setInviteRole] = useState("citizen");
+  const [inviteRole, setInviteRole] = useState("officer");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName] = useState("");
-  const [invitePhone, setInvitePhone] = useState("");
-  const [inviteDept, setInviteDept] = useState("");
   const [submittingInvite, setSubmittingInvite] = useState(false);
   const [generatedInvite, setGeneratedInvite] = useState(null);
+  const [officerComplaintCounts, setOfficerComplaintCounts] = useState({});
 
   // Pagination & Filtering
   const [updatingId, setUpdatingId] = useState(null);
@@ -3192,6 +3190,28 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       const filtered = (data || []).filter(u => u.role !== 'super_admin' && u.role !== 'district_admin');
       setUsers(filtered);
     }
+
+    // Fetch live complaint counts per assigned officer in this village
+    try {
+      const { data: compData } = await supabase
+        .from("complaints")
+        .select("assigned_officer_id")
+        .eq("village_id", currentProfile.village_id)
+        .not("assigned_officer_id", "is", null);
+
+      if (compData) {
+        const counts = {};
+        compData.forEach(c => {
+          if (c.assigned_officer_id) {
+            counts[c.assigned_officer_id] = (counts[c.assigned_officer_id] || 0) + 1;
+          }
+        });
+        setOfficerComplaintCounts(counts);
+      }
+    } catch (e) {
+      console.warn("Could not retrieve officer complaint counts:", e);
+    }
+
     setLoadingUsers(false);
   };
 
@@ -3219,7 +3239,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       if (acceptedUserIds.length > 0) {
         const { data: profilesData } = await supabase
           .from("profiles")
-          .select("id, name, email")
+          .select("id, name, email, department")
           .in("id", acceptedUserIds);
           
         const profileMap = {};
@@ -3234,8 +3254,87 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
     setLoadingInvites(false);
   };
 
+  // Immediate Officer Link Generation — Zero details required from Admin!
+  const handleGenerateOfficerLink = async () => {
+    setSubmittingInvite(true);
+    setGeneratedInvite(null);
+
+    if (!session?.user?.id) {
+      notify("No active session. Please log in again.", "err");
+      setSubmittingInvite(false);
+      return;
+    }
+
+    const targetVillageId = currentProfile?.village_id;
+    if (!targetVillageId) {
+      notify("Your admin account is not associated with any village.", "err");
+      setSubmittingInvite(false);
+      return;
+    }
+
+    try {
+      let token = null;
+      let expiresAtStr = null;
+
+      // 1. Attempt secure server-side RPC
+      try {
+        const { data: rpcRes, error: rpcError } = await supabase.rpc("generate_officer_invitation");
+        if (!rpcError && rpcRes && (rpcRes.success || rpcRes.token)) {
+          token = rpcRes.token;
+          expiresAtStr = rpcRes.expires_at;
+        }
+      } catch (rpcErr) {
+        console.warn("generate_officer_invitation RPC note:", rpcErr);
+      }
+
+      // 2. Direct client fallback if RPC not yet created
+      if (!token) {
+        const randomBytes = new Uint8Array(32);
+        crypto.getRandomValues(randomBytes);
+        token = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+        const exp = new Date();
+        exp.setDate(exp.getDate() + 30);
+        expiresAtStr = exp.toISOString();
+
+        const { error: insertError } = await supabase
+          .from("invitations")
+          .insert({
+            token,
+            village_id: targetVillageId,
+            role: "officer",
+            created_by: session.user.id,
+            expires_at: expiresAtStr,
+            status: "pending"
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      const invitationUrl = `${window.location.origin}/invite/${token}`;
+      setGeneratedInvite({
+        success: true,
+        token,
+        url: invitationUrl,
+        expires_at: expiresAtStr,
+        role: "officer"
+      });
+      setShowInviteModal(true);
+      notify("⚡ Officer invitation link generated! Ready to share. 🔗");
+      fetchInvitations();
+    } catch (err) {
+      notify(err?.message || "Failed to generate officer link. Please try again.", "err");
+    } finally {
+      setSubmittingInvite(false);
+    }
+  };
+
   const handleCreateInvitation = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
+    if (inviteRole === 'officer') {
+      return handleGenerateOfficerLink();
+    }
+
     setSubmittingInvite(true);
     setGeneratedInvite(null);
 
@@ -3246,13 +3345,12 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
     }
 
     try {
-      // Generate a secure random token client-side (64 hex chars = 32 bytes)
       const randomBytes = new Uint8Array(32);
       crypto.getRandomValues(randomBytes);
       const token = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
       const expiresAt = new Date();
-      expiresAt.setFullYear(expiresAt.getFullYear() + 100); // Never expires
+      expiresAt.setDate(expiresAt.getDate() + 30);
 
       const targetVillageId = currentProfile?.village_id;
       if (!targetVillageId) {
@@ -3262,20 +3360,14 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
       }
 
       const invitePayload = {
-          token,
-          village_id: targetVillageId,
-          role: inviteRole,
-          email: inviteEmail ? inviteEmail.trim().toLowerCase() : null,
-          created_by: session.user.id,
-          expires_at: expiresAt.toISOString(),
-          status: "pending",
-        };
-      // Include officer-specific metadata when inviting an officer
-      if (inviteRole === 'officer') {
-        if (inviteName.trim()) invitePayload.name = inviteName.trim();
-        if (invitePhone.trim()) invitePayload.phone = invitePhone.trim();
-        if (inviteDept.trim()) invitePayload.department = inviteDept.trim();
-      }
+        token,
+        village_id: targetVillageId,
+        role: inviteRole,
+        email: inviteEmail ? inviteEmail.trim().toLowerCase() : null,
+        created_by: session.user.id,
+        expires_at: expiresAt.toISOString(),
+        status: "pending",
+      };
 
       const { data: inviteData, error: inviteError } = await supabase
         .from("invitations")
@@ -3292,19 +3384,30 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
           token,
           url: invitationUrl,
           expires_at: inviteData.expires_at,
-          invitation: inviteData,
+          role: inviteRole
         });
         notify("Invitation link generated successfully! 🔗");
         setInviteEmail("");
-        setInviteName("");
-        setInvitePhone("");
-        setInviteDept("");
         fetchInvitations();
       }
     } catch (err) {
       notify(err?.message || "Network error. Please try again.", "err");
     }
     setSubmittingInvite(false);
+  };
+
+  const handleReplaceInvitation = async (inviteId) => {
+    try {
+      notify("Generating replacement officer link...", "ok");
+      await supabase
+        .from("invitations")
+        .update({ status: "revoked" })
+        .eq("id", inviteId);
+
+      await handleGenerateOfficerLink();
+    } catch (err) {
+      notify(err?.message || "Failed to replace invitation.", "err");
+    }
   };
 
   const handleRevokeInvitation = async (inviteId) => {
@@ -3526,28 +3629,54 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
           </button>
         </div>
 
-        {/* Action Button */}
-        {activeSubTab === "invitations" && (
+        {/* Action Buttons: Immediate Officer Link Generator */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button
-            onClick={() => { setShowInviteModal(true); setGeneratedInvite(null); }}
+            onClick={handleGenerateOfficerLink}
+            disabled={submittingInvite}
             style={{
-              background: "linear-gradient(135deg, #111827, #1f2937)",
+              background: "linear-gradient(135deg, #059669, #10b981)",
               color: "white",
               border: "none",
-              padding: "10px 18px",
-              borderRadius: 12,
-              fontWeight: 700,
+              padding: "11px 20px",
+              borderRadius: 14,
+              fontWeight: 800,
               fontSize: 13,
-              cursor: "pointer",
-              boxShadow: "0 4px 10px rgba(0,0,0,0.15)",
+              cursor: submittingInvite ? "not-allowed" : "pointer",
+              boxShadow: "0 4px 14px rgba(16, 185, 129, 0.3)",
               display: "flex",
               alignItems: "center",
-              gap: 6
+              gap: 8,
+              transition: "all 0.2s ease"
             }}
+            onMouseOver={e => { if (!submittingInvite) e.currentTarget.style.transform = "translateY(-1px)"; }}
+            onMouseOut={e => { if (!submittingInvite) e.currentTarget.style.transform = "translateY(0)"; }}
+            title="Generate a secure officer invitation link instantly without typing any officer details"
           >
-            ➕ {t('invite_member')}
+            {submittingInvite ? "⏳ Generating..." : "⚡ Generate Officer Link"}
           </button>
-        )}
+
+          {activeSubTab === "invitations" && (
+            <button
+              onClick={() => { setShowInviteModal(true); setGeneratedInvite(null); setInviteRole("citizen"); }}
+              style={{
+                background: THEME.colors.surface,
+                color: THEME.colors.text,
+                border: `1.5px solid ${THEME.colors.border}`,
+                padding: "10px 16px",
+                borderRadius: 12,
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              ➕ Other Invites
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Search / Filter Control Bar */}
@@ -3651,7 +3780,22 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, padding: 48, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🔍</div>
             <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>{t('no_staff_found')}</h3>
-            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 0", fontSize: 13 }}>{t('no_staff_hint')}</p>
+            <p style={{ color: THEME.colors.textMuted, margin: "6px 0 16px", fontSize: 13 }}>Click below to generate an officer invitation link immediately.</p>
+            <button
+              onClick={handleGenerateOfficerLink}
+              style={{
+                background: "linear-gradient(135deg, #059669, #10b981)",
+                color: "white",
+                border: "none",
+                padding: "10px 18px",
+                borderRadius: 12,
+                fontWeight: 800,
+                fontSize: 13,
+                cursor: "pointer"
+              }}
+            >
+              ⚡ Generate Officer Link Now
+            </button>
           </div>
         ) : (
           <div style={{ background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, borderRadius: 20, overflow: "hidden", boxShadow: THEME.shadow.sm }}>
@@ -3659,29 +3803,77 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: THEME.colors.background, borderBottom: `1.5px solid ${THEME.colors.border}` }}>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_full_name')}</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_phone_number')}</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_current_role')}</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted }}>{t('col_registered_date')}</th>
-                    <th style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>{t('col_actions')}</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Officer / Staff Name</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Email</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Phone</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Department</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Role</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Status</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "center" }}>Assigned Grievances</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted }}>Registered</th>
+                    <th style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.textMuted, textAlign: "right" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {getPaginatedItems(staffUsers).map(u => {
                     const isSelf = u.id === session?.user?.id;
                     const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString(undefined, { dateStyle: "medium" }) : "N/A";
+                    const isOfficer = u.role === "officer";
+                    const assignedCount = officerComplaintCounts[u.id] || 0;
                     
                     return (
                       <tr key={u.id} style={{ borderBottom: `1px solid ${THEME.colors.border}`, background: isSelf ? THEME.colors.background : THEME.colors.surface, transition: "background 0.2s" }}>
-                        <td style={{ padding: "18px 24px", fontWeight: 800, color: THEME.colors.text }}>
+                        <td style={{ padding: "16px 20px", fontWeight: 800, color: THEME.colors.text }}>
                           {u.name || t('unnamed_user')} {isSelf && <span style={{ color: THEME.colors.success, fontSize: 11, background: THEME.colors.successBg, padding: "2px 6px", borderRadius: 6, marginLeft: 4 }}>{t('you_label')}</span>}
                         </td>
-                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 700 }}>{u.phone || t('no_phone_linked')}</td>
-                        <td style={{ padding: "18px 24px" }}>{getRoleBadge(u.role)}</td>
-                        <td style={{ padding: "18px 24px", color: THEME.colors.textMuted, fontWeight: 600 }}>{dateStr}</td>
-                        <td style={{ padding: "18px 24px", textAlign: "right" }}>
+                        <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 600, fontSize: 12 }}>
+                          {u.email || "—"}
+                        </td>
+                        <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 700 }}>
+                          {u.phone || "—"}
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <span style={{
+                            display: "inline-flex",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            background: THEME.colors.background,
+                            border: `1px solid ${THEME.colors.border}`,
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: THEME.colors.text
+                          }}>
+                            {u.department || (u.role === 'village_admin' ? 'Administration' : 'General')}
+                          </span>
+                        </td>
+                        <td style={{ padding: "16px 20px" }}>{getRoleBadge(u.role)}</td>
+                        <td style={{ padding: "16px 20px" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 8px", borderRadius: 8, background: "#ecfdf5", color: "#059669", fontSize: 11, fontWeight: 800 }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }} />
+                            Active
+                          </span>
+                        </td>
+                        <td style={{ padding: "16px 20px", textAlign: "center" }}>
+                          {isOfficer ? (
+                            <span style={{
+                              display: "inline-flex",
+                              padding: "4px 10px",
+                              borderRadius: 8,
+                              background: assignedCount > 0 ? THEME.colors.primaryLight : "#f3f4f6",
+                              color: assignedCount > 0 ? THEME.colors.primary : "#6b7280",
+                              fontWeight: 800,
+                              fontSize: 12
+                            }}>
+                              {assignedCount} active
+                            </span>
+                          ) : (
+                            <span style={{ color: THEME.colors.textMuted }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "16px 20px", color: THEME.colors.textMuted, fontWeight: 600, fontSize: 12 }}>{dateStr}</td>
+                        <td style={{ padding: "16px 20px", textAlign: "right" }}>
                           {isSelf ? (
-                            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "8px 12px", background: THEME.colors.background, borderRadius: 10, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "6px 10px", background: THEME.colors.background, borderRadius: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
                               🔒 {t('protected_account')}
                             </span>
                           ) : (
@@ -3694,8 +3886,8 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                   onChange={e => updateUserRole(u.id, e.target.value)}
                                   disabled={updatingId !== null}
                                   style={{
-                                    padding: "8px 12px",
-                                    borderRadius: 10,
+                                    padding: "6px 10px",
+                                    borderRadius: 8,
                                     border: `1.5px solid ${THEME.colors.border}`,
                                     fontSize: 12,
                                     fontWeight: 700,
@@ -3889,6 +4081,15 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                                   🔗 {t('invite_copy_link')}
                                 </button>
                                 <button
+                                  onClick={() => handleReplaceInvitation(i.id)}
+                                  style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 700, fontSize: 12, cursor: "pointer", padding: "6px 10px", borderRadius: 8 }}
+                                  onMouseOver={e => e.currentTarget.style.background = "#eff6ff"}
+                                  onMouseOut={e => e.currentTarget.style.background = "none"}
+                                  title="Revoke this link and generate a fresh replacement link immediately"
+                                >
+                                  🔄 Replace
+                                </button>
+                                <button
                                   onClick={() => handleRevokeInvitation(i.id)}
                                   style={{ background: "none", border: "none", color: THEME.colors.danger, fontWeight: 700, fontSize: 12, cursor: "pointer", padding: "6px 10px", borderRadius: 8 }}
                                   onMouseOver={e => e.currentTarget.style.background = "#fef2f2"}
@@ -3900,6 +4101,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                             ) : statusText === "accepted" && acceptedProfiles[i.accepted_by] ? (
                               <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700 }}>
                                 {t('invite_accepted_by')}: <strong>{acceptedProfiles[i.accepted_by].name || "Unnamed"}</strong>
+                                {acceptedProfiles[i.accepted_by].email && ` (${acceptedProfiles[i.accepted_by].email})`}
                               </span>
                             ) : (
                               <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600 }}>{t('invite_no_actions')}</span>
@@ -3935,7 +4137,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
           <div style={{ background: THEME.colors.surface, borderRadius: 24, padding: 32, maxWidth: 460, width: "100%", border: `1px solid ${THEME.colors.border}`, boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}>
             
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-              <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t('invite_create_title')}</h3>
+              <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>
+                {inviteRole === 'officer' ? "⚡ Officer Invitation Link" : t('invite_create_title')}
+              </h3>
               <button
                 onClick={() => { setShowInviteModal(false); setGeneratedInvite(null); }}
                 style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: THEME.colors.textMuted, display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", transition: "background 0.2s" }}
@@ -3966,114 +4170,44 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                       cursor: "pointer"
                     }}
                   >
-                    <option value="citizen">{t('invite_role_citizen')}</option>
                     <option value="officer">{t('invite_role_officer')}</option>
+                    <option value="citizen">{t('invite_role_citizen')}</option>
                     <option value="village_admin">{t('invite_role_admin')}</option>
                   </select>
                 </div>
 
-                {/* Officer-specific metadata fields */}
-                {inviteRole === 'officer' && (
-                  <>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>👤 Officer Name</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Ravi Kumar"
-                        value={inviteName}
-                        onChange={e => setInviteName(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "12px 16px",
-                          borderRadius: 14,
-                          border: `1.5px solid ${THEME.colors.border}`,
-                          fontSize: 14,
-                          outline: "none",
-                          boxSizing: "border-box",
-                          background: THEME.colors.background,
-                          color: THEME.colors.text
-                        }}
-                      />
+                {inviteRole === 'officer' ? (
+                  <div style={{ padding: "16px 18px", background: "#f0fdf4", borderRadius: 14, marginBottom: 24, fontSize: 13, color: "#166534", lineHeight: 1.6, border: "1.5px solid #bbf7d0" }}>
+                    <div style={{ fontWeight: 800, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                      ⚡ Instant Officer Link
                     </div>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>📱 Officer Phone</label>
-                      <input
-                        type="tel"
-                        placeholder="e.g. 9876543210"
-                        value={invitePhone}
-                        onChange={e => setInvitePhone(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "12px 16px",
-                          borderRadius: 14,
-                          border: `1.5px solid ${THEME.colors.border}`,
-                          fontSize: 14,
-                          outline: "none",
-                          boxSizing: "border-box",
-                          background: THEME.colors.background,
-                          color: THEME.colors.text
-                        }}
-                      />
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>🏢 Department</label>
-                      <select
-                        value={inviteDept}
-                        onChange={e => setInviteDept(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "12px 16px",
-                          borderRadius: 14,
-                          border: `1.5px solid ${THEME.colors.border}`,
-                          fontSize: 14,
-                          fontWeight: 700,
-                          outline: "none",
-                          background: THEME.colors.background,
-                          color: THEME.colors.text,
-                          cursor: "pointer"
-                        }}
-                      >
-                        <option value="">Select Department (Optional)</option>
-                        <option value="Water Supply">Water Supply</option>
-                        <option value="Roads & Transport">Roads & Transport</option>
-                        <option value="Electricity">Electricity</option>
-                        <option value="Sanitation">Sanitation</option>
-                        <option value="Public Health">Public Health</option>
-                        <option value="Education">Education</option>
-                        <option value="Revenue">Revenue</option>
-                        <option value="Agriculture">Agriculture</option>
-                        <option value="General Administration">General Administration</option>
-                      </select>
-                    </div>
-                    <div style={{ padding: "10px 14px", background: THEME.colors.background, borderRadius: 12, marginBottom: 20, fontSize: 11, color: THEME.colors.textMuted, lineHeight: 1.5, border: `1px solid ${THEME.colors.border}` }}>
-                      💡 Officer details are optional but recommended. They will be pre-filled in the officer's profile upon accepting the invitation.
-                    </div>
-                  </>
+                    No officer details needed in advance! When the officer opens this link, they will provide their own Full Name, Phone Number, and Department during registration.
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>{t('invite_restricted_email')}</label>
+                    <input
+                      type="email"
+                      placeholder={t('invite_email_placeholder')}
+                      value={inviteEmail}
+                      onChange={e => setInviteEmail(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "12px 16px",
+                        borderRadius: 14,
+                        border: `1.5px solid ${THEME.colors.border}`,
+                        fontSize: 14,
+                        outline: "none",
+                        boxSizing: "border-box",
+                        background: THEME.colors.background,
+                        color: THEME.colors.text
+                      }}
+                    />
+                    <span style={{ fontSize: 11, color: THEME.colors.textMuted, marginTop: 6, display: "block", lineHeight: 1.4 }}>
+                      {t('invite_email_hint')}
+                    </span>
+                  </div>
                 )}
-
-                <div style={{ marginBottom: 24 }}>
-                  <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>{t('invite_restricted_email')}</label>
-                  <input
-                    type="email"
-                    placeholder={t('invite_email_placeholder')}
-                    value={inviteEmail}
-                    onChange={e => setInviteEmail(e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px 16px",
-                      borderRadius: 14,
-                      border: `1.5px solid ${THEME.colors.border}`,
-                      fontSize: 14,
-                      outline: "none",
-                      boxSizing: "border-box",
-                      background: THEME.colors.background,
-                      color: THEME.colors.text
-                    }}
-                  />
-                  <span style={{ fontSize: 11, color: THEME.colors.textMuted, marginTop: 6, display: "block", lineHeight: 1.4 }}>
-                    {t('invite_email_hint')}
-                  </span>
-                </div>
 
                 <button
                   type="submit"
@@ -4082,7 +4216,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                     width: "100%",
                     padding: "14px 20px",
                     borderRadius: 14,
-                    background: THEME.colors.primary,
+                    background: inviteRole === 'officer' ? "linear-gradient(135deg, #059669, #10b981)" : THEME.colors.primary,
                     color: "white",
                     border: "none",
                     fontSize: 14,
@@ -4095,18 +4229,20 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                     boxShadow: THEME.shadow.sm,
                     transition: "all 0.2s ease"
                   }}
-                  onMouseOver={e => { if (!submittingInvite) e.currentTarget.style.background = THEME.colors.primaryHover; }}
-                  onMouseOut={e => { if (!submittingInvite) e.currentTarget.style.background = THEME.colors.primary; }}
                 >
-                  {submittingInvite ? t('invite_generating') : `🔗 ${t('invite_generate_btn')}`}
+                  {submittingInvite ? t('invite_generating') : inviteRole === 'officer' ? "⚡ Generate Officer Link Immediately" : `🔗 ${t('invite_generate_btn')}`}
                 </button>
               </form>
             ) : (
               <div style={{ textAlign: "center", padding: "10px 0" }}>
                 <div style={{ width: 64, height: 64, borderRadius: "50%", background: THEME.colors.successBg, color: THEME.colors.success, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 28 }}>✓</div>
-                <h4 style={{ fontSize: 18, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>{t('invite_ready_title')}</h4>
+                <h4 style={{ fontSize: 18, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>
+                  {generatedInvite.role === 'officer' ? "⚡ Officer Invitation Link Ready!" : t('invite_ready_title')}
+                </h4>
                 <p style={{ color: THEME.colors.textMuted, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>
-                  {t('invite_share_desc')}
+                  {generatedInvite.role === 'officer' 
+                    ? "Share this link with your officer. When they open it, they will enter their own details and be automatically registered as an officer for your village."
+                    : t('invite_share_desc')}
                 </p>
 
                 <div style={{ display: "flex", background: THEME.colors.background, border: `1.5px solid ${THEME.colors.border}`, borderRadius: 14, padding: 12, alignItems: "center", gap: 10, marginBottom: 24 }}>
@@ -4115,11 +4251,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                   </code>
                   <button
                     onClick={() => copyToClipboard(generatedInvite.url)}
-                    style={{ background: THEME.colors.surface, border: `1.5px solid ${THEME.colors.border}`, color: THEME.colors.text, borderRadius: 10, padding: "8px 14px", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0, transition: "background 0.2s" }}
-                    onMouseOver={e => e.currentTarget.style.background = THEME.colors.background}
-                    onMouseOut={e => e.currentTarget.style.background = THEME.colors.surface}
+                    style={{ background: "linear-gradient(135deg, #059669, #10b981)", color: "white", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 12, fontWeight: 800, cursor: "pointer", flexShrink: 0, transition: "background 0.2s" }}
                   >
-                    {t('invite_copy')}
+                    📋 {t('invite_copy')}
                   </button>
                 </div>
 
@@ -6623,22 +6757,34 @@ const ResetPasswordModal = ({ onComplete, notify, t }) => {
 
 // ─── Invitation Onboarding Accept View ─────────────────────────────────────────
 
-const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, onAccept, setShowLogin, setInitialLoginMode }) => {
+const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, onAccept, setShowLogin, setInitialLoginMode, fetchProfile }) => {
   const [loading, setLoading] = useState(true);
   const [inviteInfo, setInviteInfo] = useState(null);
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Helper to check if user has already accepted or is member of a village
-  useEffect(() => {
-    // If user is logged in and already has a village, redirect directly to account dashboard
-    if (session && profile?.village_id) {
-      console.log("[Invite] User already associated with a village. Redirecting to account...");
-      navigate("home");
-    }
-  }, [session, profile, navigate]);
+  // Officer Profile Input States
+  const [name, setName] = useState(profile?.name || "");
+  const [phone, setPhone] = useState(profile?.phone || "");
+  const [department, setDepartment] = useState(profile?.department || "Water Supply & Sanitation");
+  const [customDepartment, setCustomDepartment] = useState("");
 
+  // Unauthenticated Auth States (when !session)
+  const [authMode, setAuthMode] = useState("signup"); // "signup" | "login"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState(null);
+
+  // Sync profile details if available
+  useEffect(() => {
+    if (profile?.name && !name) setName(profile.name);
+    if (profile?.phone && !phone) setPhone(profile.phone);
+    if (profile?.department && !customDepartment) setDepartment(profile.department);
+  }, [profile]);
+
+  // Initial token verification
   useEffect(() => {
     if (token) {
       lookupInvite();
@@ -6647,22 +6793,6 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
       setLoading(false);
     }
   }, [token]);
-
-  // Auto-login or auto-accept trigger based on lookup results and auth state
-  useEffect(() => {
-    if (loading || !inviteInfo) return;
-
-    if (!session) {
-      // If user not logged in, automatically open login page for them immediately
-      console.log("[Invite] User not logged in. Auto-opening login page...");
-      setInitialLoginMode("login");
-      setShowLogin(true);
-    } else if (profile && !profile.village_id) {
-      // If user is logged in but doesn't have a village assigned, auto-accept invitation
-      console.log("[Invite] User logged in but has no village. Auto-accepting invite...");
-      handleAccept();
-    }
-  }, [loading, inviteInfo, session, profile]);
 
   const lookupInvite = async () => {
     setLoading(true);
@@ -6673,8 +6803,11 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
       
       if (data && data.valid) {
         setInviteInfo(data);
+        if (data.email && !email) setEmail(data.email);
+        if (data.name && !name) setName(data.name);
+        if (data.department) setDepartment(data.department);
       } else {
-        setError(data?.error || "This invitation link is invalid or expired.");
+        setError(data?.error || "This invitation link is invalid, expired, or has been revoked.");
       }
     } catch (err) {
       setError(err?.message || "Error verifying invitation.");
@@ -6682,40 +6815,216 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
     setLoading(false);
   };
 
-  const handleAccept = async () => {
-    if (accepting || success) return;
-    setAccepting(true);
-    setError(null);
-    try {
-      const { data, error: rpcError } = await supabase.rpc("accept_invitation", { p_token: token });
-      if (rpcError) throw rpcError;
-      
-      if (data && data.success) {
-        setSuccess(true);
-        notify(`Welcome to ${data.village_name}! ✓`);
-        // Clean URL to root
-        window.history.replaceState({}, document.title, "/");
-        // Trigger profile update and navigation
-        setTimeout(() => {
-          onAccept();
-        }, 2000);
-      } else {
-        setError(data?.error || "Failed to accept invitation.");
-        notify(data?.error || "Failed to accept invitation.", "err");
-      }
-    } catch (err) {
-      setError(err?.message || "Error accepting invitation.");
-      notify(err?.message || "Error accepting invitation.", "err");
+  const executeAcceptRPC = async (userId, effectiveName) => {
+    const finalName = (effectiveName || name).trim();
+    const finalPhone = phone.trim();
+    const finalDept = department === "Other / Custom Designation"
+      ? (customDepartment.trim() || "General Administration")
+      : department;
+
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc("accept_invitation", {
+      p_token: token,
+      p_name: finalName || null,
+      p_phone: finalPhone || null,
+      p_department: finalDept || null,
+    });
+
+    if (rpcErr) throw rpcErr;
+    if (!rpcRes?.success) {
+      throw new Error(rpcRes?.error || "Failed to accept invitation");
     }
-    setAccepting(false);
+
+    setSuccess(true);
+    notify(`Welcome to ${rpcRes.village_name || inviteInfo?.village_name || "GramSeva"}! Officer account activated. ✓`);
+
+    // Clean address bar URL
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, document.title, window.location.pathname.replace(/\/invite\/.*$/, ""));
+    }
+
+    // Refresh user profile and navigate to officer dashboard
+    const targetUserId = userId || session?.user?.id;
+    if (targetUserId && fetchProfile) {
+      try {
+        await fetchProfile(targetUserId);
+      } catch (e) {
+        console.warn("fetchProfile post-accept warning:", e);
+      }
+    } else if (onAccept) {
+      onAccept();
+    }
+
+    setTimeout(() => {
+      navigate("admin");
+    }, 1500);
+  };
+
+  const handleGoogleAuth = async () => {
+    if (!name.trim()) {
+      notify("Please enter your full name first", "err");
+      return;
+    }
+    if (phone.trim() && phone.replace(/\D/g, '').length < 10) {
+      notify("Please enter a valid 10-digit mobile number", "err");
+      return;
+    }
+
+    setAccepting(true);
+    setAuthMessage(null);
+    try {
+      if (!firebaseAuth) {
+        throw new Error("Google Sign-In is unavailable: Firebase is not configured in environment variables.");
+      }
+      const result = await signInWithPopup(firebaseAuth, googleProvider);
+      const user = result.user;
+      const gEmail = user.email;
+      const displayName = name.trim() || user.displayName || (gEmail ? gEmail.split('@')[0] : "Officer");
+
+      let sessionData = null;
+      let lastAuthError = null;
+
+      try {
+        const res = await supabase.auth.signInWithPassword({
+          email: gEmail,
+          password: `GAuth_${user.uid.slice(0, 12)}`,
+        });
+        if (res.data?.session) {
+          sessionData = res.data.session;
+        } else if (res.error) {
+          lastAuthError = res.error;
+        }
+      } catch (e) {
+        lastAuthError = e;
+      }
+
+      if (!sessionData) {
+        try {
+          const signUpRes = await supabase.auth.signUp({
+            email: gEmail,
+            password: `GAuth_${user.uid.slice(0, 12)}`,
+            options: { data: { full_name: displayName } }
+          });
+          if (signUpRes.data?.session) {
+            sessionData = signUpRes.data.session;
+          } else if (signUpRes.error) {
+            lastAuthError = signUpRes.error;
+          }
+        } catch (e) {
+          lastAuthError = e;
+        }
+      }
+
+      if (!sessionData) {
+        throw new Error(`Authentication failed: ${lastAuthError?.message || "Could not complete session setup."}`);
+      }
+
+      await executeAcceptRPC(sessionData.user.id, displayName);
+    } catch (err) {
+      console.error("Google Auth error during officer onboarding:", err);
+      const msg = err?.message || "Google authentication failed";
+      setAuthMessage({ type: "error", text: msg });
+      notify(msg, "err");
+      setAccepting(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (accepting || success) return;
+
+    // Validate Officer Inputs
+    if (!name.trim()) {
+      notify("Please enter your full name", "err");
+      return;
+    }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone || cleanPhone.length < 10) {
+      notify("Please enter a valid 10-digit mobile number", "err");
+      return;
+    }
+    if (department === "Other / Custom Designation" && !customDepartment.trim()) {
+      notify("Please enter your custom department or designation", "err");
+      return;
+    }
+
+    setAccepting(true);
+    setAuthMessage(null);
+
+    try {
+      let activeUserId = session?.user?.id;
+
+      // Handle unauthenticated user registration or login
+      if (!session) {
+        const cleanEmail = email.trim().toLowerCase();
+        if (!cleanEmail) {
+          throw new Error("Please enter an email address");
+        }
+        if (!password) {
+          throw new Error("Please enter a password");
+        }
+
+        if (authMode === "signup") {
+          if (password.length < 6) {
+            throw new Error("Password must be at least 6 characters");
+          }
+          if (confirmPassword && password !== confirmPassword) {
+            throw new Error("Passwords do not match");
+          }
+
+          const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+            email: cleanEmail,
+            password: password,
+            options: {
+              data: {
+                full_name: name.trim(),
+                phone: phone.trim(),
+              }
+            }
+          });
+
+          if (signUpErr) throw signUpErr;
+
+          if (signUpData?.session) {
+            activeUserId = signUpData.session.user.id;
+          } else {
+            // Email confirmation required by Supabase project
+            setAuthMessage({
+              type: "success",
+              text: "Account registered! A confirmation link was sent to your email. Please verify your email, then return here to log in and complete your officer onboarding."
+            });
+            setAccepting(false);
+            return;
+          }
+        } else {
+          // Login existing user
+          const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password,
+          });
+
+          if (signInErr) throw signInErr;
+          if (signInData?.session) {
+            activeUserId = signInData.session.user.id;
+          }
+        }
+      }
+
+      await executeAcceptRPC(activeUserId, name);
+    } catch (err) {
+      console.error("Invitation acceptance error:", err);
+      const msg = err?.message || "Failed to complete officer registration";
+      setAuthMessage({ type: "error", text: msg });
+      notify(msg, "err");
+      setAccepting(false);
+    }
   };
 
   const containerStyle = {
-    minHeight: "70vh",
+    minHeight: "75vh",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "40px 20px",
+    padding: "40px 16px",
     background: THEME.colors.background,
     fontFamily: THEME.font,
   };
@@ -6723,27 +7032,56 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
   const cardStyle = {
     background: THEME.colors.surface,
     borderRadius: 24,
-    padding: "40px 32px",
-    maxWidth: 480,
+    padding: "36px 32px",
+    maxWidth: 540,
     width: "100%",
     boxShadow: THEME.shadow.md,
     border: `1px solid ${THEME.colors.border}`,
-    textAlign: "center",
   };
 
-  const roleText = inviteInfo?.role === "village_admin" 
-    ? "Village Admin (Sarpanch/Clerk)" 
-    : inviteInfo?.role === "officer" 
-    ? "Officer (Grievance Resolver)" 
-    : "Citizen Member";
+  const inputStyle = {
+    width: "100%",
+    boxSizing: "border-box",
+    padding: "12px 14px",
+    borderRadius: 12,
+    border: `1.5px solid ${THEME.colors.border}`,
+    background: THEME.colors.surface,
+    color: THEME.colors.text,
+    fontSize: 14,
+    fontFamily: THEME.font,
+    outline: "none",
+    transition: "border-color 0.2s ease",
+  };
+
+  const labelStyle = {
+    display: "block",
+    fontSize: 12,
+    fontWeight: 800,
+    color: THEME.colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    marginBottom: 6,
+  };
+
+  const standardDepartments = [
+    "Water Supply & Sanitation",
+    "Electricity & Power Distribution",
+    "Roads, Drainage & Public Works",
+    "Public Health & Waste Management",
+    "Revenue, Land Records & Welfare",
+    "Education, Anganwadi & Youth",
+    "Agriculture & Irrigation",
+    "Panchayat Administration",
+    "Other / Custom Designation",
+  ];
 
   if (loading) {
     return (
       <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={{ display: "inline-block", width: 40, height: 40, border: `3.5px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 16 }} />
-          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>Verifying Onboarding Link</h3>
-          <p style={{ color: THEME.colors.textMuted, fontSize: 13, marginTop: 6 }}>Checking security token validity...</p>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
+          <div style={{ display: "inline-block", width: 44, height: 44, border: `3.5px solid ${THEME.colors.border}`, borderTopColor: THEME.colors.primary, borderRadius: "50%", animation: "spin 1s linear infinite", marginBottom: 16 }} />
+          <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: THEME.colors.text }}>Verifying Officer Invitation</h3>
+          <p style={{ color: THEME.colors.textMuted, fontSize: 13, marginTop: 6 }}>Validating secure cryptographic token...</p>
         </div>
       </div>
     );
@@ -6752,13 +7090,16 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
   if (error || !inviteInfo) {
     return (
       <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#fef2f2", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>⚠️</div>
-          <h3 style={{ fontSize: 20, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Link Expired or Invalid</h3>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
+          <div style={{ width: 68, height: 68, borderRadius: "50%", background: "#fef2f2", color: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 28 }}>⚠️</div>
+          <h3 style={{ fontSize: 20, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Invitation Link Expired or Invalid</h3>
           <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
-            {error || "This invitation has expired, been revoked, or is incorrect."}
+            {error || "This officer invitation link is expired, revoked by the village administrator, or already consumed."}
           </p>
-          <Btn onClick={() => navigate("home")} style={{ width: "100%", padding: "12px 20px" }}>Go to Homepage</Btn>
+          <div style={{ background: "#f8fafc", border: `1px solid ${THEME.colors.border}`, borderRadius: 12, padding: "14px 16px", fontSize: 13, color: THEME.colors.textMuted, marginBottom: 24, textAlign: "left", lineHeight: 1.5 }}>
+            💡 <strong>Need a new link?</strong> Contact your Village Administrator (Sarpanch or Panchayat Secretary) to generate a fresh invitation link from their Officer Management tab.
+          </div>
+          <Btn onClick={() => navigate("home")} style={{ width: "100%", padding: "12px 20px" }}>Go to GramSeva Homepage</Btn>
         </div>
       </div>
     );
@@ -6767,93 +7108,312 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
   if (success) {
     return (
       <div style={containerStyle}>
-        <div style={cardStyle}>
-          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>🎉</div>
-          <h3 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Welcome Onboard!</h3>
+        <div style={{ ...cardStyle, textAlign: "center" }}>
+          <div style={{ width: 68, height: 68, borderRadius: "50%", background: "#ecfdf5", color: "#10b981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 32 }}>🎉</div>
+          <h3 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Welcome Onboard, Officer {name}!</h3>
           <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 16px", lineHeight: 1.6 }}>
-            You have successfully joined <strong>{inviteInfo.village_name}</strong> as a <strong>{roleText}</strong>.
+            You have successfully registered and activated your Officer credentials for <strong>{inviteInfo.village_name}</strong> ({inviteInfo.district}).
           </p>
-          <p style={{ color: THEME.colors.primary, fontSize: 13, fontWeight: 700 }}>Redirecting to your dashboard...</p>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 20, background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#047857", fontSize: 13, fontWeight: 700, marginBottom: 20 }}>
+            <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#10b981", animation: "pulse 1.5s infinite" }} />
+            Department: {department === "Other / Custom Designation" ? (customDepartment || "General") : department}
+          </div>
+          <p style={{ color: THEME.colors.primary, fontSize: 13, fontWeight: 700 }}>Redirecting to your Officer Portal...</p>
         </div>
       </div>
     );
   }
 
+  const isOfficerInvite = inviteInfo.role === "officer";
+
   return (
     <div style={containerStyle}>
       <div style={cardStyle}>
-        <div style={{ width: 64, height: 64, borderRadius: 20, background: "linear-gradient(135deg, #3b82f6, #60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", boxShadow: "0 8px 20px rgba(59, 130, 246, 0.2)" }}>
-          <span style={{ fontSize: 30 }}>✉️</span>
+        {/* Header Badge */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #059669, #10b981)", display: "flex", alignItems: "center", justifyContent: "center", color: "white", fontSize: 24, boxShadow: "0 8px 16px rgba(16,185,129,0.25)", flexShrink: 0 }}>
+            🛡️
+          </div>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>
+              {isOfficerInvite ? "Officer Onboarding & Registration" : "Village Member Invitation"}
+            </h2>
+            <div style={{ fontSize: 12, color: THEME.colors.textMuted, fontWeight: 600, marginTop: 2 }}>
+              GramSeva Village Grievance Redressal System
+            </div>
+          </div>
         </div>
-        <h2 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>Village Invitation</h2>
-        <p style={{ color: THEME.colors.textMuted, fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
-          You have been invited to join <strong>{inviteInfo.village_name}</strong> ({inviteInfo.district}) as a <strong style={{ color: THEME.colors.primary }}>{roleText}</strong>.
-        </p>
 
-        {session ? (
+        {/* Automatic Village Association Banner (Server-side locked) */}
+        <div style={{ background: "linear-gradient(135deg, #f0fdf4, #ecfdf5)", border: "1px solid #a7f3d0", borderRadius: 14, padding: "14px 16px", marginBottom: 22 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#047857", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              📍 Assigned Jurisdiction
+            </span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: 10 }}>
+              🔒 Verified Token
+            </span>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 900, color: "#065f46" }}>
+            {inviteInfo.village_name} <span style={{ fontSize: 13, fontWeight: 600, color: "#047857" }}>({inviteInfo.district})</span>
+          </div>
+          <div style={{ fontSize: 12, color: "#047857", marginTop: 4, lineHeight: 1.4 }}>
+            Role: <strong>{isOfficerInvite ? "Grievance Redressal Officer" : inviteInfo.role}</strong>. Your jurisdiction is cryptographically bound to this village.
+          </div>
+        </div>
+
+        {/* Registration Form */}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Officer Details Section */}
+          <div style={{ background: "#f8fafc", border: `1px solid ${THEME.colors.border}`, borderRadius: 14, padding: "16px" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: THEME.colors.text, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>👤</span> Officer Profile Information
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={labelStyle}>Full Name *</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Ramesh Kumar"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Mobile / Phone Number *</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210 (10 digits)"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value)}
+                  style={inputStyle}
+                  required
+                />
+              </div>
+
+              {isOfficerInvite && (
+                <div>
+                  <label style={labelStyle}>Department / Designation *</label>
+                  <select
+                    value={department}
+                    onChange={e => setDepartment(e.target.value)}
+                    style={{ ...inputStyle, cursor: "pointer" }}
+                  >
+                    {standardDepartments.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+
+                  {department === "Other / Custom Designation" && (
+                    <div style={{ marginTop: 8 }}>
+                      <input
+                        type="text"
+                        placeholder="Enter custom department or title..."
+                        value={customDepartment}
+                        onChange={e => setCustomDepartment(e.target.value)}
+                        style={inputStyle}
+                        required
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Account Authentication Section */}
+          <div style={{ background: "#f8fafc", border: `1px solid ${THEME.colors.border}`, borderRadius: 14, padding: "16px" }}>
+            {session ? (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: THEME.colors.text, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>🔑</span> Authenticated Account
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: THEME.colors.surface, padding: "10px 14px", borderRadius: 10, border: `1px solid ${THEME.colors.border}` }}>
+                  <div style={{ fontSize: 13, color: THEME.colors.text, fontWeight: 700 }}>
+                    {session.user.email}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await supabase.auth.signOut();
+                      notify("Signed out of current account");
+                    }}
+                    style={{ background: "none", border: "none", color: THEME.colors.primary, fontSize: 12, fontWeight: 700, cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    Switch account
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: THEME.colors.text }}>
+                    {authMode === "signup" ? "📝 Create Officer Login" : "🔑 Sign In to Existing Account"}
+                  </div>
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode("signup"); setAuthMessage(null); }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        background: authMode === "signup" ? THEME.colors.primary : "transparent",
+                        color: authMode === "signup" ? "white" : THEME.colors.textMuted,
+                      }}
+                    >
+                      New Account
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthMode("login"); setAuthMessage(null); }}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 8,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        background: authMode === "login" ? THEME.colors.primary : "transparent",
+                        color: authMode === "login" ? "white" : THEME.colors.textMuted,
+                      }}
+                    >
+                      Log In
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div>
+                    <label style={labelStyle}>Email Address *</label>
+                    <input
+                      type="email"
+                      placeholder="officer@domain.gov.in"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Password *</label>
+                    <input
+                      type="password"
+                      placeholder="At least 6 characters"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+
+                  {authMode === "signup" && (
+                    <div>
+                      <label style={labelStyle}>Confirm Password *</label>
+                      <input
+                        type="password"
+                        placeholder="Re-enter password"
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        style={inputStyle}
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Google OAuth Option */}
+                  {firebaseAuth && (
+                    <div style={{ marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={handleGoogleAuth}
+                        disabled={accepting}
+                        style={{
+                          width: "100%",
+                          padding: "10px 14px",
+                          borderRadius: 10,
+                          border: `1.5px solid ${THEME.colors.border}`,
+                          background: THEME.colors.surface,
+                          color: THEME.colors.text,
+                          fontSize: 13,
+                          fontWeight: 700,
+                          cursor: accepting ? "not-allowed" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 8,
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        Sign in with Google
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {authMessage && (
+            <div style={{
+              background: authMessage.type === "error" ? "#fef2f2" : "#f0fdf4",
+              border: `1px solid ${authMessage.type === "error" ? "#fecaca" : "#bbf7d0"}`,
+              borderRadius: 10,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: authMessage.type === "error" ? "#b91c1c" : "#15803d",
+              fontWeight: 600,
+              lineHeight: 1.4,
+            }}>
+              {authMessage.text}
+            </div>
+          )}
+
+          {/* Submit Action */}
           <button
-            onClick={handleAccept}
+            type="submit"
             disabled={accepting}
             style={{
               width: "100%",
               padding: "14px 20px",
               borderRadius: 14,
-              background: "linear-gradient(135deg, #111827, #1f2937)",
+              background: "linear-gradient(135deg, #059669, #10b981)",
               color: "white",
               border: "none",
               fontSize: 15,
-              fontWeight: 700,
+              fontWeight: 800,
               cursor: accepting ? "not-allowed" : "pointer",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              boxShadow: "0 6px 16px rgba(16,185,129,0.3)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 8,
+              transition: "transform 0.15s ease",
             }}
           >
-            {accepting ? "Joining Village..." : `Accept & Join ${inviteInfo.village_name}`}
+            {accepting ? (
+              <>
+                <span style={{ display: "inline-block", width: 18, height: 18, border: "2.5px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                Activating Officer Credentials...
+              </>
+            ) : (
+              <>⚡ Complete Registration & Enter Officer Portal</>
+            )}
           </button>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 12, padding: 12, fontSize: 12, color: "#1e3a8a", lineHeight: 1.5, fontWeight: 600, textAlign: "left", marginBottom: 8 }}>
-              💡 An account is required to join. Please sign up or log in first. The invitation will be applied automatically after authenticating.
-            </div>
-            <button
-              onClick={() => {
-                setInitialLoginMode("signup");
-                setShowLogin(true);
-              }}
-              style={{
-                padding: "12px 20px",
-                borderRadius: 12,
-                background: THEME.colors.primary,
-                color: "white",
-                border: "none",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              📝 Register & Join
-            </button>
-            <button
-              onClick={() => {
-                setInitialLoginMode("login");
-                setShowLogin(true);
-              }}
-              style={{
-                padding: "12px 20px",
-                borderRadius: 12,
-                background: "transparent",
-                color: THEME.colors.text,
-                border: `1.5px solid ${THEME.colors.border}`,
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              🔑 Log In to Account
-            </button>
-          </div>
-        )}
+        </form>
       </div>
     </div>
   );
