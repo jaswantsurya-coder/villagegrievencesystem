@@ -3256,6 +3256,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
 
   // Immediate Officer Link Generation — Zero details required from Admin!
   const handleGenerateOfficerLink = async () => {
+    setInviteRole("officer");
     setSubmittingInvite(true);
     setGeneratedInvite(null);
 
@@ -3320,7 +3321,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         role: "officer"
       });
       setShowInviteModal(true);
-      notify("⚡ Officer invitation link generated! Ready to share. 🔗");
+      notify(t('officer_link_generated_msg') || "⚡ Officer invitation link generated! Ready to share. 🔗");
       fetchInvitations();
     } catch (err) {
       notify(err?.message || "Failed to generate officer link. Please try again.", "err");
@@ -3331,6 +3332,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
 
   // Immediate Citizen Link Generation — Instant 1-click citizen onboarding link
   const handleGenerateCitizenLink = async () => {
+    setInviteRole("citizen");
     setSubmittingInvite(true);
     setGeneratedInvite(null);
 
@@ -3395,7 +3397,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
         role: "citizen"
       });
       setShowInviteModal(true);
-      notify("👥 Citizen invitation link generated! Ready to share. 🔗");
+      notify(t('citizen_link_generated_msg') || "👥 Citizen invitation link generated! Ready to share. 🔗");
       fetchInvitations();
     } catch (err) {
       notify(err?.message || "Failed to generate citizen link. Please try again.", "err");
@@ -3739,7 +3741,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             onMouseOut={e => { if (!submittingInvite) e.currentTarget.style.transform = "translateY(0)"; }}
             title="Generate a secure officer invitation link instantly without typing any details"
           >
-            {submittingInvite ? "⏳ Generating..." : "⚡ Generate Officer Link"}
+            {submittingInvite ? t('invite_generating') : t('generate_officer_link_btn')}
           </button>
 
           {/* 2. Generate Citizen Link */}
@@ -3765,7 +3767,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             onMouseOut={e => { if (!submittingInvite) e.currentTarget.style.transform = "translateY(0)"; }}
             title="Generate a secure citizen onboarding link instantly"
           >
-            {submittingInvite ? "⏳ Generating..." : "👥 Generate Citizen Link"}
+            {submittingInvite ? t('invite_generating') : t('generate_citizen_link_btn')}
           </button>
 
           {/* 3. Custom / Role-based Invite Modal */}
@@ -3786,7 +3788,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             }}
             title="Invite with custom role or restrict to a specific email"
           >
-            ➕ Custom Invite
+            {t('custom_invite_btn')}
           </button>
         </div>
       </div>
@@ -3906,7 +3908,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                 cursor: "pointer"
               }}
             >
-              ⚡ Generate Officer Link Now
+              {t('generate_officer_link_btn')}
             </button>
           </div>
         ) : (
@@ -4059,7 +4061,7 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                 boxShadow: "0 4px 12px rgba(37, 99, 235, 0.25)"
               }}
             >
-              👥 Generate Citizen Link
+              {t('generate_citizen_link_btn')}
             </button>
           </div>
         ) : (
@@ -4266,10 +4268,10 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
             
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
               <h3 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>
-                {inviteRole === 'officer' 
-                  ? "⚡ Officer Invitation Link" 
-                  : inviteRole === 'citizen' 
-                  ? "👥 Citizen Invitation Link" 
+                {(generatedInvite?.role || inviteRole) === 'officer' 
+                  ? t('officer_invite_title') 
+                  : (generatedInvite?.role || inviteRole) === 'citizen' 
+                  ? t('citizen_invite_title') 
                   : t('invite_create_title')}
               </h3>
               <button
@@ -4311,14 +4313,14 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                 {inviteRole === 'officer' ? (
                   <div style={{ padding: "16px 18px", background: "#f0fdf4", borderRadius: 14, marginBottom: 24, fontSize: 13, color: "#166534", lineHeight: 1.6, border: "1.5px solid #bbf7d0" }}>
                     <div style={{ fontWeight: 800, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                      ⚡ Instant Officer Link
+                      {t('officer_instant_box_title')}
                     </div>
-                    No officer details needed in advance! When the officer opens this link, they will provide their own Full Name, Phone Number, and Department during registration.
+                    {t('officer_instant_box_desc')}
                   </div>
                 ) : (
                   <div style={{ marginBottom: 24 }}>
                     <div style={{ padding: "12px 14px", background: "#eff6ff", borderRadius: 12, marginBottom: 14, fontSize: 12, color: "#1e40af", lineHeight: 1.5, border: "1px solid #bfdbfe" }}>
-                      💡 <strong>Open Citizen Link:</strong> Leave email blank to generate a link that any village resident can use, or enter an email to restrict it.
+                      💡 <strong>{t('open_citizen_link_label')}:</strong> {t('citizen_instant_box_desc')}
                     </div>
                     <label style={{ display: "block", fontSize: 13, fontWeight: 800, color: THEME.colors.textMuted, marginBottom: 8 }}>
                       {t('invite_restricted_email')} <span style={{ fontWeight: 500, fontSize: 12 }}>(Optional)</span>
@@ -4374,9 +4376,9 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
                   {submittingInvite 
                     ? t('invite_generating') 
                     : inviteRole === 'officer' 
-                    ? "⚡ Generate Officer Link Immediately" 
+                    ? t('generate_officer_link_btn') 
                     : inviteRole === 'citizen'
-                    ? "👥 Generate Citizen Link Immediately"
+                    ? t('generate_citizen_link_btn')
                     : `🔗 ${t('invite_generate_btn')}`}
                 </button>
               </form>
@@ -4384,17 +4386,17 @@ const StaffManagementTab = ({ t, notify, session, currentProfile }) => {
               <div style={{ textAlign: "center", padding: "10px 0" }}>
                 <div style={{ width: 64, height: 64, borderRadius: "50%", background: THEME.colors.successBg, color: THEME.colors.success, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 28 }}>✓</div>
                 <h4 style={{ fontSize: 18, fontWeight: 900, margin: "0 0 8px", color: THEME.colors.text }}>
-                  {generatedInvite.role === 'officer' 
-                    ? "⚡ Officer Invitation Link Ready!" 
-                    : generatedInvite.role === 'citizen'
-                    ? "👥 Citizen Invitation Link Ready!"
+                  {(generatedInvite?.role || inviteRole) === 'officer' 
+                    ? t('officer_invite_ready_title') 
+                    : (generatedInvite?.role || inviteRole) === 'citizen'
+                    ? t('citizen_invite_ready_title')
                     : t('invite_ready_title')}
                 </h4>
                 <p style={{ color: THEME.colors.textMuted, fontSize: 13, margin: "0 0 20px", lineHeight: 1.6 }}>
-                  {generatedInvite.role === 'officer' 
-                    ? "Share this link with your officer. When they open it, they will enter their own details and be automatically registered as an officer for your village."
-                    : generatedInvite.role === 'citizen'
-                    ? "Share this link with your village residents. When they open it, they will join your village as a citizen member."
+                  {(generatedInvite?.role || inviteRole) === 'officer' 
+                    ? t('officer_invite_ready_desc')
+                    : (generatedInvite?.role || inviteRole) === 'citizen'
+                    ? t('citizen_invite_ready_desc')
                     : t('invite_share_desc')}
                 </p>
 
@@ -7322,8 +7324,8 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 900, margin: 0, color: THEME.colors.text }}>
               {isOfficerInvite 
-                ? "Officer Onboarding & Registration" 
-                : "Citizen Village Registration & Onboarding"}
+                ? (t('officer_onboarding_title') || "Officer Onboarding & Registration") 
+                : (t('citizen_onboarding_title') || "Citizen Village Registration & Onboarding")}
             </h2>
             <div style={{ fontSize: 12, color: THEME.colors.textMuted, fontWeight: 600, marginTop: 2 }}>
               GramSeva Village Grievance Redressal System
@@ -7351,7 +7353,7 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
             {inviteInfo.village_name} <span style={{ fontSize: 13, fontWeight: 600, color: isOfficerInvite ? "#047857" : "#2563eb" }}>({inviteInfo.district})</span>
           </div>
           <div style={{ fontSize: 12, color: isOfficerInvite ? "#047857" : "#1e40af", marginTop: 4, lineHeight: 1.4 }}>
-            Role: <strong>{isOfficerInvite ? "Grievance Redressal Officer" : "Village Resident (Citizen Member)"}</strong>. Your jurisdiction is cryptographically bound to this village.
+            Role: <strong>{isOfficerInvite ? (t('officer_role_label') || "Grievance Redressal Officer") : (t('citizen_role_label') || "Village Resident (Citizen Member)")}</strong>. Your jurisdiction is cryptographically bound to this village.
           </div>
         </div>
 
@@ -7360,7 +7362,7 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
           {/* Profile Details Section */}
           <div style={{ background: "#f8fafc", border: `1px solid ${THEME.colors.border}`, borderRadius: 14, padding: "16px" }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: THEME.colors.text, marginBottom: 12, display: "flex", alignItems: "center", gap: 6 }}>
-              <span>👤</span> {isOfficerInvite ? "Officer Profile Information" : "Citizen Profile Information"}
+              <span>👤</span> {isOfficerInvite ? (t('officer_profile_info') || "Officer Profile Information") : (t('citizen_profile_info') || "Citizen Profile Information")}
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -7446,7 +7448,7 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: THEME.colors.text }}>
                     {authMode === "signup" 
-                      ? (isOfficerInvite ? "📝 Create Officer Login" : "📝 Create Citizen Login")
+                      ? (isOfficerInvite ? (t('officer_signup_title') || "📝 Create Officer Login") : (t('citizen_signup_title') || "📝 Create Citizen Login"))
                       : "🔑 Sign In to Existing Account"}
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
@@ -7604,12 +7606,12 @@ const InvitationAcceptView = ({ t, notify, navigate, session, profile, token, on
             {accepting ? (
               <>
                 <span style={{ display: "inline-block", width: 18, height: 18, border: "2.5px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-                {isOfficerInvite ? "Activating Officer Credentials..." : "Joining Village as Citizen..."}
+                {isOfficerInvite ? (t('officer_activating_btn') || "Activating Officer Credentials...") : (t('citizen_joining_btn') || "Joining Village as Citizen...")}
               </>
             ) : (
               isOfficerInvite 
-                ? <>⚡ Complete Registration & Enter Officer Portal</>
-                : <>🏠 Complete Registration & Join as Citizen</>
+                ? <>{t('officer_complete_reg_btn') || "⚡ Complete Registration & Enter Officer Portal"}</>
+                : <>{t('citizen_complete_reg_btn') || "🏠 Complete Registration & Join as Citizen"}</>
             )}
           </button>
         </form>

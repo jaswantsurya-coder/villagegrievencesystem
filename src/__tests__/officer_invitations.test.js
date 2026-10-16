@@ -324,4 +324,48 @@ describe("GramSeva Dual Officer & Citizen Invitation System", () => {
       expect(determineReplacementRole("inv-2")).toBe("officer");
     });
   });
+
+  describe("Modal Title Role Resolution & Multilingual Support (Telugu, Hindi, English)", () => {
+    it("resolves the correct title key based on generatedInvite.role or inviteRole", () => {
+      const getModalTitleKey = (generatedInvite, inviteRole) => {
+        const activeRole = (generatedInvite && generatedInvite.role) ? generatedInvite.role : inviteRole;
+        if (activeRole === 'officer') return 'officer_invite_title';
+        if (activeRole === 'citizen') return 'citizen_invite_title';
+        return 'invite_create_title';
+      };
+
+      // When citizen link was generated
+      expect(getModalTitleKey({ role: 'citizen' }, 'officer')).toBe('citizen_invite_title');
+
+      // When officer link was generated
+      expect(getModalTitleKey({ role: 'officer' }, 'citizen')).toBe('officer_invite_title');
+
+      // Default before generation
+      expect(getModalTitleKey(null, 'citizen')).toBe('citizen_invite_title');
+      expect(getModalTitleKey(null, 'officer')).toBe('officer_invite_title');
+    });
+
+    it("verifies accurate translations in English, Hindi, and Telugu", async () => {
+      const i18nModule = await import("../../i18n.js");
+      const i18n = i18nModule.default;
+
+      // English
+      expect(i18n.t('officer_invite_title', { lng: 'en' })).toBe('⚡ Officer Invitation Link');
+      expect(i18n.t('citizen_invite_title', { lng: 'en' })).toBe('👥 Citizen Invitation Link');
+      expect(i18n.t('citizen_invite_ready_title', { lng: 'en' })).toBe('👥 Citizen Invitation Link Ready!');
+
+      // Hindi
+      expect(i18n.t('officer_invite_title', { lng: 'hi' })).toBe('⚡ अधिकारी आमंत्रण लिंक');
+      expect(i18n.t('citizen_invite_title', { lng: 'hi' })).toBe('👥 नागरिक आमंत्रण लिंक');
+      expect(i18n.t('citizen_invite_ready_title', { lng: 'hi' })).toBe('👥 नागरिक आमंत्रण लिंक तैयार है!');
+      expect(i18n.t('generate_citizen_link_btn', { lng: 'hi' })).toBe('👥 नागरिक लिंक बनाएं');
+
+      // Telugu
+      expect(i18n.t('officer_invite_title', { lng: 'te' })).toBe('⚡ అధికారి ఆహ్వాన లింక్');
+      expect(i18n.t('citizen_invite_title', { lng: 'te' })).toBe('👥 పౌరుల ఆహ్వాన లింక్');
+      expect(i18n.t('citizen_invite_ready_title', { lng: 'te' })).toBe('👥 పౌరుల ఆహ్వాన లింక్ సిద్ధంగా ఉంది!');
+      expect(i18n.t('generate_citizen_link_btn', { lng: 'te' })).toBe('👥 పౌరుల లింక్ సృష్టించండి');
+    });
+  });
 });
+
