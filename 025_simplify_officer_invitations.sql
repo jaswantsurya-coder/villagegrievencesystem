@@ -1,13 +1,13 @@
 -- ============================================================================
 -- 025_simplify_officer_invitations.sql
--- GramSeva — Simplified Officer Link Generation & Officer Self-Registration
+-- GramSeva — Simplified Officer & Citizen Link Generation & Self-Registration
 -- ============================================================================
 
 BEGIN;
 
 SET LOCAL lock_timeout = '5s';
 
--- ─── 1. SECURE RPC: GENERATE OFFICER INVITATION LINK IMMEDIATELY ────────────
+-- ─── 1A. SECURE RPC: GENERATE OFFICER INVITATION LINK IMMEDIATELY ───────────
 -- Generates a cryptographically random officer invitation token bound to the
 -- authenticated admin's village WITHOUT requiring any officer details upfront.
 
@@ -80,9 +80,82 @@ $$;
 ALTER FUNCTION public.generate_officer_invitation() OWNER TO postgres;
 GRANT EXECUTE ON FUNCTION public.generate_officer_invitation() TO authenticated;
 
--- ─── 2. SECURE RPC: ACCEPT INVITATION WITH OFFICER SELF-ENTERED DETAILS ──────
--- Allows the officer to provide their own Name, Phone, and Department when accepting.
--- Village ID and Officer Role are strictly retrieved from the server-side invitation record.
+-- ─── 1B. SECURE RPC: GENERATE CITIZEN INVITATION LINK IMMEDIATELY ───────────
+-- Generates a cryptographically random citizen invitation token bound to the
+-- authenticated admin's village for easy citizen onboarding.
+
+CREATE OR REPLACE FUNCTION public.generate_citizen_invitation()
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_caller_id UUID := auth.uid();
+  v_caller_role TEXT;
+  v_caller_village BIGINT;
+  v_token TEXT;
+  v_expires_at TIMESTAMPTZ := NOW() + INTERVAL '30 days';
+  v_invitation_id UUID;
+  v_village_name TEXT;
+  v_district TEXT;
+BEGIN
+  IF v_caller_id IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Not authenticated');
+  END IF;
+
+  v_caller_role := public.sec_get_role();
+  v_caller_village := public.sec_get_village();
+
+  IF v_caller_role NOT IN ('village_admin', 'district_admin', 'super_admin') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Only village administrators can generate citizen links');
+  END IF;
+
+  IF v_caller_village IS NULL AND v_caller_role = 'village_admin' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Admin account is not assigned to any village');
+  END IF;
+
+  -- Generate 64-character hex token (32 random bytes)
+  v_token := encode(gen_random_bytes(32), 'hex');
+
+  INSERT INTO public.invitations (
+    token,
+    village_id,
+    role,
+    created_by,
+    expires_at,
+    status
+  ) VALUES (
+    v_token,
+    v_caller_village,
+    'citizen',
+    v_caller_id,
+    v_expires_at,
+    'pending'
+  ) RETURNING id INTO v_invitation_id;
+
+  SELECT village_name, district INTO v_village_name, v_district 
+  FROM public.villages 
+  WHERE id = v_caller_village;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'id', v_invitation_id,
+    'token', v_token,
+    'village_id', v_caller_village,
+    'village_name', v_village_name,
+    'district', v_district,
+    'expires_at', v_expires_at,
+    'role', 'citizen'
+  );
+END;
+$$;
+ALTER FUNCTION public.generate_citizen_invitation() OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION public.generate_citizen_invitation() TO authenticated;
+
+-- ─── 2. SECURE RPC: ACCEPT INVITATION (OFFICER & CITIZEN SELF-REGISTRATION) ──
+-- Allows the invitee to provide their own Name, Phone, and (for officers) Department.
+-- Village ID and Role are strictly enforced from the server-side invitation record.
 
 DROP FUNCTION IF EXISTS public.accept_invitation(TEXT);
 DROP FUNCTION IF EXISTS public.accept_invitation(TEXT, TEXT, TEXT, TEXT);
@@ -139,10 +212,20 @@ BEGIN
 
   SELECT village_name INTO v_village_name FROM public.villages WHERE id = v_invitation.village_id;
 
-  -- Determine final profile fields (officer-provided values take priority over defaults)
-  v_final_name := COALESCE(NULLIF(TRIM(p_name), ''), v_invitation.name, 'Officer');
+  -- Determine final profile fields
+  v_final_name := COALESCE(
+    NULLIF(TRIM(p_name), ''), 
+    v_invitation.name, 
+    CASE WHEN v_invitation.role = 'officer' THEN 'Officer' ELSE 'Citizen Member' END
+  );
   v_final_phone := COALESCE(NULLIF(TRIM(p_phone), ''), v_invitation.phone);
-  v_final_dept := COALESCE(NULLIF(TRIM(p_department), ''), v_invitation.department, 'General Administration');
+  
+  -- Departments only apply to officers
+  IF v_invitation.role = 'officer' THEN
+    v_final_dept := COALESCE(NULLIF(TRIM(p_department), ''), v_invitation.department, 'General Administration');
+  ELSE
+    v_final_dept := NULL;
+  END IF;
 
   -- Bypass trigger role check
   PERFORM set_config('app.bypass_profile_role_check', 'true', true);
@@ -161,8 +244,11 @@ BEGIN
   ON CONFLICT (id) DO UPDATE
   SET village_id = EXCLUDED.village_id,
       role = EXCLUDED.role,
-      department = COALESCE(NULLIF(EXCLUDED.department, ''), public.profiles.department),
-      name = COALESCE(NULLIF(EXCLUDED.name, 'Officer'), public.profiles.name, EXCLUDED.name),
+      department = CASE 
+        WHEN EXCLUDED.role = 'officer' THEN COALESCE(NULLIF(EXCLUDED.department, ''), public.profiles.department) 
+        ELSE NULL 
+      END,
+      name = COALESCE(NULLIF(EXCLUDED.name, 'Officer'), NULLIF(EXCLUDED.name, 'Citizen Member'), public.profiles.name, EXCLUDED.name),
       phone = COALESCE(EXCLUDED.phone, public.profiles.phone),
       email = COALESCE(EXCLUDED.email, public.profiles.email);
 

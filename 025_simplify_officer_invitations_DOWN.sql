@@ -6,6 +6,7 @@
 BEGIN;
 
 DROP FUNCTION IF EXISTS public.generate_officer_invitation();
+DROP FUNCTION IF EXISTS public.generate_citizen_invitation();
 DROP FUNCTION IF EXISTS public.revoke_invitation(UUID);
 DROP FUNCTION IF EXISTS public.accept_invitation(TEXT, TEXT, TEXT, TEXT);
 
@@ -53,15 +54,15 @@ BEGIN
     v_invitation.village_id, 
     v_invitation.role, 
     v_invitation.department, 
-    COALESCE(v_invitation.name, 'Officer'), 
+    COALESCE(v_invitation.name, 'Staff Member'), 
     v_invitation.phone
   )
   ON CONFLICT (id) DO UPDATE
   SET village_id = EXCLUDED.village_id,
       role = EXCLUDED.role,
       department = COALESCE(EXCLUDED.department, public.profiles.department),
-      name = COALESCE(public.profiles.name, EXCLUDED.name),
-      phone = COALESCE(public.profiles.phone, EXCLUDED.phone);
+      name = COALESCE(EXCLUDED.name, public.profiles.name),
+      phone = COALESCE(EXCLUDED.phone, public.profiles.phone);
 
   PERFORM set_config('app.bypass_profile_role_check', 'false', true);
 
@@ -75,8 +76,7 @@ BEGIN
     'success', true,
     'village_name', v_village_name,
     'village_id', v_invitation.village_id,
-    'role', v_invitation.role,
-    'department', v_invitation.department
+    'role', v_invitation.role
   );
 END;
 $$;

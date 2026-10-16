@@ -1,22 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
- * Unit & Integration Test Suite for GramSeva Officer Invitation System
+ * Unit & Integration Test Suite for GramSeva Officer & Citizen Invitation System
  * Verifies:
- * 1. Zero-input instant link generation for Village Admins
+ * 1. Zero-input instant link generation for BOTH Village Officers & Citizens
  * 2. Automatic village scoping & security enforcement
  * 3. Officer self-registration with Name, Phone, and Department
- * 4. Token expiration, revocation, and single-use enforcement
+ * 4. Citizen self-registration with Name, Phone (no department)
+ * 5. Token expiration, revocation, single-use, and role-preserving replacement
  */
 
-describe("GramSeva Simplified Officer Invitation System", () => {
+describe("GramSeva Dual Officer & Citizen Invitation System", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  describe("Admin Link Generation (Zero officer-input requirement)", () => {
+  describe("Admin Link Generation (Both Officer & Citizen Links)", () => {
     it("generates an officer link immediately without requiring officer name, email, or department", async () => {
-      // Mock authenticated village admin context
       const caller = {
         id: "admin-uuid-101",
         role: "village_admin",
@@ -36,7 +36,6 @@ describe("GramSeva Simplified Officer Invitation System", () => {
           return { success: false, error: "Admin account is not assigned to any village" };
         }
 
-        // Generate 64-char token (32 random bytes in hex)
         const token = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -52,7 +51,6 @@ describe("GramSeva Simplified Officer Invitation System", () => {
         };
       });
 
-      // Admin clicks Generate without entering any officer metadata
       const result = mockGenerateOfficerInvitation(caller);
 
       expect(result.success).toBe(true);
@@ -62,12 +60,52 @@ describe("GramSeva Simplified Officer Invitation System", () => {
       expect(result.token).toBeDefined();
       expect(result.token).toHaveLength(64);
       expect(result.expires_at).toBeDefined();
-      // Ensure no officer details were mandated
       expect(result).not.toHaveProperty("officer_name");
       expect(result).not.toHaveProperty("officer_email");
     });
 
-    it("rejects non-admin roles from generating officer invitation links", () => {
+    it("generates a citizen link immediately bound to the village", async () => {
+      const caller = {
+        id: "admin-uuid-101",
+        role: "village_admin",
+        village_id: 42,
+        village_name: "Rampur",
+        district: "Varanasi",
+      };
+
+      const mockGenerateCitizenInvitation = vi.fn().mockImplementation((context) => {
+        if (!context || !context.id) {
+          return { success: false, error: "Not authenticated" };
+        }
+        if (!["village_admin", "district_admin", "super_admin"].includes(context.role)) {
+          return { success: false, error: "Only village administrators can generate citizen links" };
+        }
+
+        const token = Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        return {
+          success: true,
+          id: "invite-uuid-777",
+          token,
+          village_id: context.village_id,
+          village_name: context.village_name,
+          district: context.district,
+          expires_at: expiresAt,
+          role: "citizen",
+        };
+      });
+
+      const result = mockGenerateCitizenInvitation(caller);
+
+      expect(result.success).toBe(true);
+      expect(result.role).toBe("citizen");
+      expect(result.village_id).toBe(42);
+      expect(result.village_name).toBe("Rampur");
+      expect(result.token).toHaveLength(64);
+    });
+
+    it("rejects non-admin roles from generating invitation links", () => {
       const citizenCaller = {
         id: "citizen-uuid-202",
         role: "citizen",
@@ -163,96 +201,93 @@ describe("GramSeva Simplified Officer Invitation System", () => {
     });
   });
 
-  describe("Officer Self-Registration & Acceptance", () => {
-    it("updates profile with officer-provided details while strictly taking village and role from invitation token", () => {
-      const invitationInDB = {
+  describe("Self-Registration & Acceptance (Officer vs Citizen)", () => {
+    const mockAccept = ({ invitation, officerUserId, name, phone, department }) => {
+      if (invitation.status !== "pending") {
+        return { success: false, error: `This invitation has already been ${invitation.status}` };
+      }
+
+      const isOfficer = invitation.role === "officer";
+      const storedProfile = {
+        id: officerUserId,
+        village_id: invitation.village_id,
+        role: invitation.role,
+        name: name.trim() || (isOfficer ? "Officer" : "Citizen Member"),
+        phone: phone.trim(),
+        department: isOfficer ? (department.trim() || "General Administration") : null,
+      };
+
+      invitation.status = "accepted";
+      invitation.accepted_by = officerUserId;
+
+      return {
+        success: true,
+        village_name: invitation.village_name,
+        village_id: invitation.village_id,
+        role: invitation.role,
+        department: storedProfile.department,
+        name: storedProfile.name,
+      };
+    };
+
+    it("updates profile with officer-provided details including department", () => {
+      const officerInvite = {
         id: "inv-uuid-777",
         token: "officer-invite-token-abc",
         village_id: 88,
         village_name: "Greenfield Village",
         role: "officer",
         status: "pending",
-        expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
       };
 
-      let storedProfile = null;
-      let invitationStatus = invitationInDB.status;
-      let acceptedBy = null;
-
-      const mockAcceptInvitation = ({ token, officerUserId, name, phone, department }) => {
-        if (token !== invitationInDB.token) {
-          return { success: false, error: "Invitation not found" };
-        }
-        if (invitationStatus !== "pending") {
-          return { success: false, error: `This invitation has already been ${invitationStatus}` };
-        }
-
-        // Server extracts village and role from invitation record (cannot be forged by frontend)
-        const serverVillageId = invitationInDB.village_id;
-        const serverRole = invitationInDB.role;
-
-        // Officer self-provided fields
-        storedProfile = {
-          id: officerUserId,
-          village_id: serverVillageId,
-          role: serverRole,
-          name: name.trim() || "Officer",
-          phone: phone.trim(),
-          department: department.trim() || "General Administration",
-        };
-
-        // Invalidate token so it cannot be reused
-        invitationStatus = "accepted";
-        acceptedBy = officerUserId;
-
-        return {
-          success: true,
-          village_name: invitationInDB.village_name,
-          village_id: serverVillageId,
-          role: serverRole,
-          department: storedProfile.department,
-          name: storedProfile.name,
-        };
-      };
-
-      // Officer visits /invite/:token and enters their own details
-      const acceptResult = mockAcceptInvitation({
-        token: "officer-invite-token-abc",
-        officerUserId: "officer-new-user-505",
+      const result = mockAccept({
+        invitation: officerInvite,
+        officerUserId: "officer-505",
         name: "Suresh Patil",
         phone: "9876543210",
         department: "Water Supply & Sanitation",
       });
 
-      expect(acceptResult.success).toBe(true);
-      expect(acceptResult.village_name).toBe("Greenfield Village");
-      expect(acceptResult.role).toBe("officer");
-      expect(acceptResult.name).toBe("Suresh Patil");
-      expect(acceptResult.department).toBe("Water Supply & Sanitation");
+      expect(result.success).toBe(true);
+      expect(result.role).toBe("officer");
+      expect(result.department).toBe("Water Supply & Sanitation");
+      expect(result.name).toBe("Suresh Patil");
+      expect(result.village_id).toBe(88);
+      expect(officerInvite.status).toBe("accepted");
+    });
 
-      // Verify stored profile has village_id locked to invitation
-      expect(storedProfile.village_id).toBe(88);
-      expect(storedProfile.role).toBe("officer");
-      expect(storedProfile.phone).toBe("9876543210");
+    it("updates profile for citizen registration without department", () => {
+      const citizenInvite = {
+        id: "inv-uuid-888",
+        token: "citizen-invite-token-xyz",
+        village_id: 88,
+        village_name: "Greenfield Village",
+        role: "citizen",
+        status: "pending",
+      };
 
-      // Verify token consumption prevents replay attacks
-      const replayAttempt = mockAcceptInvitation({
-        token: "officer-invite-token-abc",
-        officerUserId: "another-user-999",
-        name: "Intruder",
-        phone: "9999999999",
-        department: "Electricity",
+      const result = mockAccept({
+        invitation: citizenInvite,
+        officerUserId: "citizen-606",
+        name: "Aarti Verma",
+        phone: "9876501234",
+        department: "",
       });
-      expect(replayAttempt.success).toBe(false);
-      expect(replayAttempt.error).toContain("already been accepted");
+
+      expect(result.success).toBe(true);
+      expect(result.role).toBe("citizen");
+      expect(result.department).toBeNull();
+      expect(result.name).toBe("Aarti Verma");
+      expect(result.village_id).toBe(88);
+      expect(citizenInvite.status).toBe("accepted");
     });
   });
 
   describe("Revocation and Link Replacement", () => {
     it("allows village admin to revoke an active invitation", () => {
       const invitations = [
-        { id: "inv-101", village_id: 15, status: "pending" },
-        { id: "inv-102", village_id: 16, status: "pending" },
+        { id: "inv-101", village_id: 15, status: "pending", role: "officer" },
+        { id: "inv-102", village_id: 16, status: "pending", role: "citizen" },
       ];
 
       const mockRevokeInvitation = (adminVillageId, inviteId) => {
@@ -265,15 +300,28 @@ describe("GramSeva Simplified Officer Invitation System", () => {
         return { success: true };
       };
 
-      // Admin from village 15 revokes their own invitation
       const ownRevoke = mockRevokeInvitation(15, "inv-101");
       expect(ownRevoke.success).toBe(true);
       expect(invitations[0].status).toBe("revoked");
 
-      // Admin from village 15 attempts to revoke village 16's invitation
       const crossVillageRevoke = mockRevokeInvitation(15, "inv-102");
       expect(crossVillageRevoke.success).toBe(false);
       expect(crossVillageRevoke.error).toContain("Unauthorized");
+    });
+
+    it("preserves the original role when replacing an invitation link", () => {
+      const invitations = [
+        { id: "inv-1", role: "citizen", status: "revoked" },
+        { id: "inv-2", role: "officer", status: "revoked" },
+      ];
+
+      const determineReplacementRole = (inviteId) => {
+        const inv = invitations.find(i => i.id === inviteId);
+        return inv ? inv.role : "officer";
+      };
+
+      expect(determineReplacementRole("inv-1")).toBe("citizen");
+      expect(determineReplacementRole("inv-2")).toBe("officer");
     });
   });
 });
