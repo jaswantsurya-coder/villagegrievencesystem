@@ -4923,6 +4923,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     setLoading(true);
     let query = supabase.from("complaints").select(`
       *,
+      village:villages!village_id ( id, village_name, district, state ),
       citizen:profiles!citizen_id (
         id, name, phone, avatar_url, village_id,
         village:villages!village_id ( village_name )
@@ -5410,7 +5411,10 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                         </div>
                         <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: THEME.colors.text, lineHeight: 1.3 }}>{it.title}</h3>
                         <div style={{ fontSize: 12, color: THEME.colors.textMuted, display: "flex", alignItems: "center", gap: 5 }}>
-                          <MapPin size={12} strokeWidth={2.2} color={THEME.colors.textMuted} /> {it.location}
+                          <MapPin size={12} strokeWidth={2.2} color={THEME.colors.textMuted} style={{ flexShrink: 0 }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {it.location || (it.village ? `${it.village.village_name}${it.village.district ? ', ' + it.village.district : ''}` : null) || (it.citizen?.village?.village_name ? it.citizen.village.village_name : null) || (it.latitude && it.longitude ? `${Number(it.latitude).toFixed(4)}, ${Number(it.longitude).toFixed(4)}` : "Location not specified")}
+                          </span>
                         </div>
                         {it.citizen?.name && !it.is_anonymous && (
                           <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 600, marginTop: 5, display: "flex", alignItems: "center", gap: 5 }}>
@@ -5649,13 +5653,131 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     {(upvoteCounts[selected.id] || 0) > 0 && (
                       <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: THEME.colors.danger }}>🔥 {upvoteCounts[selected.id]} {t('community_upvotes')}</div>
                     )}
-                    {selected.location && (
-                      <div style={{ marginTop: 8, fontSize: 12, color: THEME.colors.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
-                        <MapPin size={13} strokeWidth={2.2} /> {selected.location}
-                      </div>
-                    )}
                   </div>
                 </div>
+
+                {/* ─── Section 2.1: Location & Site Geolocation Details ─── */}
+                {(() => {
+                  const hasCoords = selected.latitude != null && selected.longitude != null && !isNaN(Number(selected.latitude)) && !isNaN(Number(selected.longitude));
+                  const isDefaultCoords = hasCoords && Number(selected.latitude) === 17.3850 && Number(selected.longitude) === 78.4867;
+                  const latNum = hasCoords ? Number(selected.latitude) : null;
+                  const lngNum = hasCoords ? Number(selected.longitude) : null;
+                  const villageName = selected.village?.village_name || selected.citizen?.village?.village_name || "";
+                  const districtName = selected.village?.district || "";
+                  const stateName = selected.village?.state || "";
+                  const landmarkText = selected.location || "";
+                  
+                  const mapsUrl = hasCoords && !isDefaultCoords
+                    ? `https://www.google.com/maps/search/?api=1&query=${latNum},${lngNum}`
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([landmarkText, villageName, districtName].filter(Boolean).join(", "))}`;
+
+                  return (
+                    <div style={{ marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(2, 132, 199, 0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <MapPin size={13} color={THEME.colors.primary} strokeWidth={2.5} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          Location & Site Details
+                        </span>
+                        {hasCoords && !isDefaultCoords && (
+                          <span style={{ marginLeft: "auto", fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: THEME.radius.full, background: "rgba(5, 150, 105, 0.1)", color: "#059669", border: "1px solid rgba(5, 150, 105, 0.2)" }}>
+                            GPS Logged
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ padding: "14px 16px", background: THEME.colors.background, borderRadius: THEME.radius.sm, border: `1px solid ${THEME.colors.border}` }}>
+                        {/* Landmark / Address row */}
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>
+                            Landmark / Address
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: THEME.colors.text, display: "flex", alignItems: "center", gap: 6 }}>
+                            <MapPin size={14} color={THEME.colors.primary} strokeWidth={2.2} style={{ flexShrink: 0 }} />
+                            <span>{landmarkText || (villageName ? `Within ${villageName}` : "No specific landmark entered")}</span>
+                          </div>
+                        </div>
+
+                        {/* Village & District pills */}
+                        {(villageName || districtName) && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                            {villageName && (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: THEME.radius.sm, background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.text, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <Home size={11} color={THEME.colors.primary} /> Village: {villageName}
+                              </span>
+                            )}
+                            {districtName && (
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: THEME.radius.sm, background: THEME.colors.surface, border: `1px solid ${THEME.colors.border}`, color: THEME.colors.textMuted }}>
+                                District: {districtName}{stateName ? ` (${stateName})` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* GPS Coordinates & Direct Navigation Button */}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, paddingTop: 10, borderTop: `1px solid ${THEME.colors.border}` }}>
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                              GPS Coordinates
+                            </div>
+                            <div style={{ fontSize: 11.5, fontWeight: 600, color: THEME.colors.text, fontFamily: "monospace", marginTop: 2 }}>
+                              {hasCoords && !isDefaultCoords
+                                ? `${latNum.toFixed(6)}, ${lngNum.toFixed(6)}`
+                                : hasCoords && isDefaultCoords
+                                  ? "Default District Center"
+                                  : "No GPS coordinates logged"}
+                            </div>
+                          </div>
+
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              padding: "6px 12px",
+                              borderRadius: THEME.radius.sm,
+                              background: THEME.colors.primary,
+                              color: "#fff",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              boxShadow: "0 2px 4px rgba(2,132,199,0.2)",
+                              transition: "background 0.18s ease"
+                            }}
+                          >
+                            <MapPin size={12} strokeWidth={2.4} />
+                            {hasCoords && !isDefaultCoords ? "Open in Google Maps" : "Search in Maps"}
+                          </a>
+                        </div>
+
+                        {/* Interactive Mini Map Preview if coords exist and not default */}
+                        {hasCoords && !isDefaultCoords && (
+                          <div style={{ marginTop: 12, height: 160, borderRadius: THEME.radius.sm, overflow: "hidden", border: `1px solid ${THEME.colors.border}` }}>
+                            <MapContainer
+                              center={[latNum, lngNum]}
+                              zoom={15}
+                              style={{ height: "100%", width: "100%" }}
+                              scrollWheelZoom={false}
+                              attributionControl={false}
+                            >
+                              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                              <Marker position={[latNum, lngNum]}>
+                                <Popup>
+                                  <strong>{selected.title}</strong><br />
+                                  {landmarkText || villageName || "Grievance Site"}
+                                </Popup>
+                              </Marker>
+                            </MapContainer>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ─── Section 2.5: AI Intelligence Analysis (Phase 3) ─── */}
                 {selected.ai_status && selected.ai_status !== 'Pending' && (

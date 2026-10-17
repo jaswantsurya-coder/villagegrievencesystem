@@ -1,10 +1,15 @@
-﻿import React from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
 import * as Sentry from "@sentry/react";
 import App from './App.jsx'
 import './index.css'
 import './i18n'
 import 'regenerator-runtime/runtime'
+import { supabase } from './supabaseClient'
+import { initAppLifecycleRecovery } from './src/services/appLifecycleRecovery'
+
+// ─── App Lifecycle, Sync & Zombie-Connection Recovery ──────────────────────
+initAppLifecycleRecovery({ supabase });
 
 // ─── Sentry Error Tracking ─────────────────────────────────────────────────
 Sentry.init({
