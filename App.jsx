@@ -2217,25 +2217,47 @@ const TrackView = ({ t, notify, session }) => {
       fetchGrievances();
       fetchRatings();
       fetchUpvotes();
+    } else {
+      setLoading(false);
     }
   }, [session]);
 
+  // Safety watchdog: never leave citizen stuck on Loading...
+  useEffect(() => {
+    if (loading) {
+      const watchdog = setTimeout(() => {
+        setLoading(false);
+      }, 5000);
+      return () => clearTimeout(watchdog);
+    }
+  }, [loading]);
+
   // Auto-revalidate complaints when app resumes from background, tab switches, or refocuses
   useEffect(() => {
+    let lastRevalidate = 0;
     const handleRevalidate = () => {
-      if (session) {
-        fetchGrievances();
+      const now = Date.now();
+      if (now - lastRevalidate < 2000) return; // throttle rapid duplicate revalidations
+      lastRevalidate = now;
+      if (session?.user?.id) {
+        fetchGrievances({ isSilent: true });
         fetchRatings();
         fetchUpvotes();
       }
     };
+    const handleResetSpinners = () => {
+      setLoading(false);
+    };
+
     window.addEventListener("app-data-revalidate", handleRevalidate);
     window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("app-reset-stuck-spinners", handleResetSpinners);
     window.addEventListener("focus", handleRevalidate);
     window.addEventListener("online", handleRevalidate);
     return () => {
       window.removeEventListener("app-data-revalidate", handleRevalidate);
       window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("app-reset-stuck-spinners", handleResetSpinners);
       window.removeEventListener("focus", handleRevalidate);
       window.removeEventListener("online", handleRevalidate);
     };
@@ -2247,18 +2269,32 @@ const TrackView = ({ t, notify, session }) => {
     const channel = supabase
       .channel('citizen-complaints-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
-        fetchGrievances();
+        fetchGrievances({ isSilent: true });
         fetchUpvotes();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session]);
 
-  const fetchGrievances = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from("complaints").select("*").eq("citizen_id", session.user.id).order("created_at", { ascending: false });
-    if (!error) setItems(data);
-    setLoading(false);
+  const fetchGrievances = async ({ isSilent = false } = {}) => {
+    if (!isSilent) setLoading(true);
+    try {
+      if (!session?.user?.id) {
+        return;
+      }
+      const { data, error } = await supabase
+        .from("complaints")
+        .select("*")
+        .eq("citizen_id", session.user.id)
+        .order("created_at", { ascending: false });
+      if (!error && Array.isArray(data)) {
+        setItems(data);
+      }
+    } catch (err) {
+      console.warn("[TrackView] fetchGrievances error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchRatings = async () => {
@@ -2536,12 +2572,22 @@ const GalleryView = ({ t, session }) => {
     fetchRatings();
   }, []);
 
+  // Safety watchdog: never leave user stuck on Loading...
+  useEffect(() => {
+    if (loading) {
+      const watchdog = setTimeout(() => {
+        setLoading(false);
+      }, 5000);
+      return () => clearTimeout(watchdog);
+    }
+  }, [loading]);
+
   // Supabase Realtime subscription for public gallery (auto-updates when grievances are resolved/closed)
   useEffect(() => {
     const channel = supabase
       .channel('public-gallery-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
-        fetchResolved();
+        fetchResolved({ isSilent: true });
         fetchRatings();
       })
       .subscribe();
@@ -2550,33 +2596,50 @@ const GalleryView = ({ t, session }) => {
 
   // Auto-revalidate gallery on app resume, tab switch, focus, or online reconnect
   useEffect(() => {
+    let lastRevalidate = 0;
     const handleRevalidate = () => {
-      fetchResolved();
+      const now = Date.now();
+      if (now - lastRevalidate < 2000) return; // throttle rapid duplicate revalidations
+      lastRevalidate = now;
+      fetchResolved({ isSilent: true });
       fetchRatings();
     };
+    const handleResetSpinners = () => {
+      setLoading(false);
+    };
+
     window.addEventListener("app-data-revalidate", handleRevalidate);
     window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("app-reset-stuck-spinners", handleResetSpinners);
     window.addEventListener("focus", handleRevalidate);
     window.addEventListener("online", handleRevalidate);
     window.addEventListener("offline-queue-synced", handleRevalidate);
     return () => {
       window.removeEventListener("app-data-revalidate", handleRevalidate);
       window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("app-reset-stuck-spinners", handleResetSpinners);
       window.removeEventListener("focus", handleRevalidate);
       window.removeEventListener("online", handleRevalidate);
       window.removeEventListener("offline-queue-synced", handleRevalidate);
     };
   }, []);
 
-  const fetchResolved = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from("complaints")
-      .select("*")
-      .in("status", ["Resolved", "Closed"])
-      .order("updated_at", { ascending: false });
-    if (data) setItems(data);
-    setLoading(false);
+  const fetchResolved = async ({ isSilent = false } = {}) => {
+    if (!isSilent) setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("complaints")
+        .select("*")
+        .in("status", ["Resolved", "Closed"])
+        .order("updated_at", { ascending: false });
+      if (!error && Array.isArray(data)) {
+        setItems(data);
+      }
+    } catch (err) {
+      console.warn("[GalleryView] fetchResolved error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchRatings = async () => {
@@ -5037,59 +5100,88 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // Safety watchdog: never leave user stuck on Loading...
+  useEffect(() => {
+    if (loading) {
+      const watchdog = setTimeout(() => {
+        setLoading(false);
+      }, 5000);
+      return () => clearTimeout(watchdog);
+    }
+  }, [loading]);
+
   // Auto-revalidate on app resume, tab switch, focus, or online reconnect
   useEffect(() => {
+    let lastRevalidate = 0;
     const handleRevalidate = () => {
-      fetchData();
+      const now = Date.now();
+      if (now - lastRevalidate < 2000) return; // throttle rapid duplicate revalidations
+      lastRevalidate = now;
+      fetchData({ isSilent: true });
       fetchUpvotes();
     };
+    const handleResetSpinners = () => {
+      setLoading(false);
+    };
+
     window.addEventListener("app-data-revalidate", handleRevalidate);
     window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("app-reset-stuck-spinners", handleResetSpinners);
     window.addEventListener("focus", handleRevalidate);
     window.addEventListener("online", handleRevalidate);
     return () => {
       window.removeEventListener("app-data-revalidate", handleRevalidate);
       window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("app-reset-stuck-spinners", handleResetSpinners);
       window.removeEventListener("focus", handleRevalidate);
       window.removeEventListener("online", handleRevalidate);
     };
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    let query = supabase.from("complaints").select(`
-      *,
-      village:villages!village_id ( id, village_name, district, state ),
-      citizen:profiles!citizen_id (
-        id, name, phone, avatar_url, village_id,
-        village:villages!village_id ( village_name )
-      ),
-      anonymous_user:anonymous_users!anonymous_user_id (
-        id, anonymous_id, phone
-      )
-    `).order("created_at", { ascending: false });
-    if (t_officer) query = query.eq("assigned_officer_id", session.user.id);
-    const { data } = await query;
-    if (data) {
-      setList(data);
-      // Batch-fetch citizen emails via secure RPC
-      const uniqueCitizenIds = [...new Set(data.map(c => c.citizen_id).filter(Boolean))];
-      if (uniqueCitizenIds.length > 0) {
-        try {
-          const { data: emailData } = await supabase.rpc("get_citizen_emails", {
-            p_citizen_ids: uniqueCitizenIds
-          });
-          if (emailData) {
-            const emailMap = {};
-            emailData.forEach(e => { emailMap[e.citizen_id] = e.email; });
-            setCitizenEmails(emailMap);
+  const fetchData = async ({ isSilent = false } = {}) => {
+    if (!isSilent) setLoading(true);
+    try {
+      let query = supabase.from("complaints").select(`
+        *,
+        village:villages!village_id ( id, village_name, district, state ),
+        citizen:profiles!citizen_id (
+          id, name, phone, avatar_url, village_id,
+          village:villages!village_id ( village_name )
+        ),
+        anonymous_user:anonymous_users!anonymous_user_id (
+          id, anonymous_id, phone
+        )
+      `).order("created_at", { ascending: false });
+
+      if (t_officer && session?.user?.id) {
+        query = query.eq("assigned_officer_id", session.user.id);
+      }
+
+      const { data, error } = await query;
+      if (!error && Array.isArray(data)) {
+        setList(data);
+        // Batch-fetch citizen emails via secure RPC
+        const uniqueCitizenIds = [...new Set(data.map(c => c.citizen_id).filter(Boolean))];
+        if (uniqueCitizenIds.length > 0) {
+          try {
+            const { data: emailData } = await supabase.rpc("get_citizen_emails", {
+              p_citizen_ids: uniqueCitizenIds
+            });
+            if (emailData && Array.isArray(emailData)) {
+              const emailMap = {};
+              emailData.forEach(e => { emailMap[e.citizen_id] = e.email; });
+              setCitizenEmails(emailMap);
+            }
+          } catch (e) {
+            console.warn("Could not fetch citizen emails:", e);
           }
-        } catch (e) {
-          console.warn("Could not fetch citizen emails:", e);
         }
       }
+    } catch (err) {
+      console.warn("[AdminView] fetchData error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchOfficers = async () => {

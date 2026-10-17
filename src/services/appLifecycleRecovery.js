@@ -101,10 +101,11 @@ export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeou
     const isLong = isLongRunningEndpoint(input);
     const timeoutMs = isLong ? uploadTimeoutMs : defaultTimeoutMs;
 
-    // Clone headers or create new Headers object to inject cache-busting for auth & dynamic queries
+    // Clone headers cleanly to preserve all original headers (auth, apikey, etc.)
     let headers = init.headers;
     if (bustCache) {
-      if (headers instanceof Headers) {
+      if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+        headers = new Headers(headers);
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
       } else if (Array.isArray(headers)) {
@@ -115,7 +116,7 @@ export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeou
         ];
       } else {
         headers = {
-          ...headers,
+          ...(headers || {}),
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Pragma': 'no-cache',
         };
@@ -141,11 +142,12 @@ export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeou
       controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms (zombie connection prevented)`, 'AbortError'));
     }, timeoutMs);
 
+    const isCrossOrigin = typeof input === 'string' && input.startsWith('http') && typeof window !== 'undefined' && window.location && !input.startsWith(window.location.origin);
     const mergedInit = {
       ...init,
-      headers: headers !== undefined ? headers : init.headers,
+      headers,
       signal: controller.signal,
-      ...(bustCache ? { cache: 'no-store' } : {}),
+      ...(bustCache && !isCrossOrigin ? { cache: 'no-store' } : {}),
     };
 
     try {
@@ -204,27 +206,28 @@ export async function handleAppResume({ supabase } = {}) {
     }
   }
 
-  // 4. Silently re-verify auth/session state without disturbing active form inputs
-  if (supabase?.auth?.getSession) {
-    try {
-      // Use short 6-second timeout for session refresh probe
-      const sessionPromise = supabase.auth.getSession();
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Session probe timed out')), 6000)
-      );
-      const { data, error } = await Promise.race([sessionPromise, timeoutPromise]);
-      if (error) {
-        console.warn('[LifecycleRecovery] Silent session revalidation error:', error.message);
-      } else if (data?.session) {
-        window.dispatchEvent(new CustomEvent('app-session-verified', { detail: { session: data.session } }));
-      }
-    } catch (err) {
-      console.warn('[LifecycleRecovery] Session check failed or timed out:', err.message);
-    }
-  }
-
-  // 5. Silently trigger stale data revalidation
+  // 4. Silently trigger stale data revalidation immediately (do not wait for session probe)
   window.dispatchEvent(new CustomEvent('app-data-revalidate', { detail: { timestamp: now } }));
+
+  // 5. Silently re-verify auth/session state in the background without disturbing active queries
+  if (supabase?.auth?.getSession) {
+    (async () => {
+      try {
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session probe timed out')), 6000)
+        );
+        const { data, error } = await Promise.race([sessionPromise, timeoutPromise]);
+        if (error) {
+          console.warn('[LifecycleRecovery] Silent session revalidation error:', error.message);
+        } else if (data?.session) {
+          window.dispatchEvent(new CustomEvent('app-session-verified', { detail: { session: data.session } }));
+        }
+      } catch (err) {
+        console.warn('[LifecycleRecovery] Session check failed or timed out:', err.message);
+      }
+    })();
+  }
 }
 
 /**
