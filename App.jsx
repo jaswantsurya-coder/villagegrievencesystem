@@ -2220,6 +2220,27 @@ const TrackView = ({ t, notify, session }) => {
     }
   }, [session]);
 
+  // Auto-revalidate complaints when app resumes from background, tab switches, or refocuses
+  useEffect(() => {
+    const handleRevalidate = () => {
+      if (session) {
+        fetchGrievances();
+        fetchRatings();
+        fetchUpvotes();
+      }
+    };
+    window.addEventListener("app-data-revalidate", handleRevalidate);
+    window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("focus", handleRevalidate);
+    window.addEventListener("online", handleRevalidate);
+    return () => {
+      window.removeEventListener("app-data-revalidate", handleRevalidate);
+      window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("focus", handleRevalidate);
+      window.removeEventListener("online", handleRevalidate);
+    };
+  }, [session]);
+
   // Supabase Realtime subscription for citizen's complaints
   useEffect(() => {
     if (!session) return;
@@ -2319,7 +2340,37 @@ const TrackView = ({ t, notify, session }) => {
 
   return (
     <div>
-      <h2 style={{ fontSize: 28, fontWeight: 800, marginBottom: 32, letterSpacing: "-0.01em" }}>{t("your_grievances")}</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
+        <h2 style={{ fontSize: 28, fontWeight: 800, margin: 0, letterSpacing: "-0.01em" }}>{t("your_grievances")}</h2>
+        <button
+          onClick={() => {
+            fetchGrievances();
+            fetchRatings();
+            fetchUpvotes();
+          }}
+          disabled={loading}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "8px 16px",
+            borderRadius: THEME.radius.sm,
+            border: `1.5px solid ${THEME.colors.border}`,
+            background: THEME.colors.surface,
+            color: THEME.colors.text,
+            fontSize: 12.5,
+            fontWeight: 700,
+            cursor: loading ? "wait" : "pointer",
+            fontFamily: THEME.font,
+            transition: "all 0.2s ease",
+            boxShadow: THEME.shadow.sm
+          }}
+          title="Refresh grievances list"
+        >
+          <RefreshCw size={13} strokeWidth={2.4} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+          <span>{loading ? t("loading") : (t("refresh") || "Refresh")}</span>
+        </button>
+      </div>
 
       {/* Offline Drafts */}
       {offlineDrafts.length > 0 && (
@@ -2485,6 +2536,38 @@ const GalleryView = ({ t, session }) => {
     fetchRatings();
   }, []);
 
+  // Supabase Realtime subscription for public gallery (auto-updates when grievances are resolved/closed)
+  useEffect(() => {
+    const channel = supabase
+      .channel('public-gallery-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
+        fetchResolved();
+        fetchRatings();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Auto-revalidate gallery on app resume, tab switch, focus, or online reconnect
+  useEffect(() => {
+    const handleRevalidate = () => {
+      fetchResolved();
+      fetchRatings();
+    };
+    window.addEventListener("app-data-revalidate", handleRevalidate);
+    window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("focus", handleRevalidate);
+    window.addEventListener("online", handleRevalidate);
+    window.addEventListener("offline-queue-synced", handleRevalidate);
+    return () => {
+      window.removeEventListener("app-data-revalidate", handleRevalidate);
+      window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("focus", handleRevalidate);
+      window.removeEventListener("online", handleRevalidate);
+      window.removeEventListener("offline-queue-synced", handleRevalidate);
+    };
+  }, []);
+
   const fetchResolved = async () => {
     setLoading(true);
     const { data } = await supabase
@@ -2518,9 +2601,44 @@ const GalleryView = ({ t, session }) => {
 
   return (
     <div>
-      <div style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}><span style={{ width: 42, height: 42, borderRadius: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", color: THEME.colors.primary, background: THEME.colors.primaryLight }}><AppIcon name="gallery" size={22} /></span>{t('public_gallery')}</h2>
-        <p style={{ color: THEME.colors.textMuted, fontSize: 15, margin: 0 }}>{t('gallery_subtitle')}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 }}>
+        <div>
+          <h2 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.01em", marginBottom: 8, display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ width: 42, height: 42, borderRadius: 14, display: "inline-flex", alignItems: "center", justifyContent: "center", color: THEME.colors.primary, background: THEME.colors.primaryLight }}>
+              <AppIcon name="gallery" size={22} />
+            </span>
+            {t('public_gallery')}
+          </h2>
+          <p style={{ color: THEME.colors.textMuted, fontSize: 15, margin: 0 }}>{t('gallery_subtitle')}</p>
+        </div>
+        <button
+          onClick={() => {
+            fetchResolved();
+            fetchRatings();
+          }}
+          disabled={loading}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "8px 16px",
+            borderRadius: THEME.radius.sm,
+            border: `1.5px solid ${THEME.colors.border}`,
+            background: THEME.colors.surface,
+            color: THEME.colors.text,
+            fontSize: 12.5,
+            fontWeight: 700,
+            cursor: loading ? "wait" : "pointer",
+            fontFamily: THEME.font,
+            transition: "all 0.2s ease",
+            boxShadow: THEME.shadow.sm,
+            flexShrink: 0
+          }}
+          title="Refresh public gallery"
+        >
+          <RefreshCw size={13} strokeWidth={2.4} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+          <span>{loading ? t("loading") : (t("refresh") || "Refresh")}</span>
+        </button>
       </div>
 
       {/* Filters */}
@@ -4917,6 +5035,24 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Auto-revalidate on app resume, tab switch, focus, or online reconnect
+  useEffect(() => {
+    const handleRevalidate = () => {
+      fetchData();
+      fetchUpvotes();
+    };
+    window.addEventListener("app-data-revalidate", handleRevalidate);
+    window.addEventListener("app-lifecycle-resume", handleRevalidate);
+    window.addEventListener("focus", handleRevalidate);
+    window.addEventListener("online", handleRevalidate);
+    return () => {
+      window.removeEventListener("app-data-revalidate", handleRevalidate);
+      window.removeEventListener("app-lifecycle-resume", handleRevalidate);
+      window.removeEventListener("focus", handleRevalidate);
+      window.removeEventListener("online", handleRevalidate);
+    };
   }, []);
 
   const fetchData = async () => {

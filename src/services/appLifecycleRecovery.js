@@ -35,6 +35,31 @@ export function isAuthEndpoint(url) {
 }
 
 /**
+ * Checks if a URL and method require cache-busting to prevent stale data.
+ * Applies strictly to:
+ * 1. Auth/session verification routes
+ * 2. Dynamic Supabase REST database queries (`GET /rest/v1/*`)
+ * 3. Dynamic backend API queries (`GET /api/*`)
+ * Does NOT apply to static assets, photo URLs, or offline submission POST/RPC endpoints.
+ */
+export function shouldBustCache(url, method = 'GET') {
+  if (!url) return false;
+  const urlStr = typeof url === 'string' ? url : url.url || url.toString();
+  const m = String(method || 'GET').toUpperCase();
+
+  // Auth/session endpoints always bust cache
+  if (isAuthEndpoint(urlStr)) return true;
+
+  // Supabase dynamic REST queries must never be served from stale browser cache
+  if (m === 'GET' && urlStr.includes('/rest/v1/')) return true;
+
+  // Dynamic backend API queries must never be served from stale browser cache
+  if (m === 'GET' && urlStr.includes('/api/')) return true;
+
+  return false;
+}
+
+/**
  * Checks if a URL is an evidence photo upload or long-running endpoint.
  */
 export function isLongRunningEndpoint(url) {
@@ -61,7 +86,7 @@ export function verifyStorageHealth() {
 }
 
 /**
- * Installs the non-invasive fetch timeout & targeted auth cache-control wrapper.
+ * Installs the non-invasive fetch timeout & targeted auth/query cache-control wrapper.
  * Preserves all original fetch behaviors, headers, and offline submission handling.
  */
 export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeoutMs = 45000 } = {}) {
@@ -71,13 +96,14 @@ export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeou
   originalFetch = window.fetch;
 
   window.fetch = async function interceptedFetch(input, init = {}) {
-    const isAuth = isAuthEndpoint(input);
+    const method = init.method || 'GET';
+    const bustCache = shouldBustCache(input, method);
     const isLong = isLongRunningEndpoint(input);
     const timeoutMs = isLong ? uploadTimeoutMs : defaultTimeoutMs;
 
-    // Clone headers or create new Headers object to inject cache-busting for auth
+    // Clone headers or create new Headers object to inject cache-busting for auth & dynamic queries
     let headers = init.headers;
-    if (isAuth) {
+    if (bustCache) {
       if (headers instanceof Headers) {
         headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
         headers.set('Pragma', 'no-cache');
@@ -119,6 +145,7 @@ export function installFetchInterceptor({ defaultTimeoutMs = 12000, uploadTimeou
       ...init,
       headers: headers !== undefined ? headers : init.headers,
       signal: controller.signal,
+      ...(bustCache ? { cache: 'no-store' } : {}),
     };
 
     try {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   isAuthEndpoint,
+  shouldBustCache,
   isLongRunningEndpoint,
   verifyStorageHealth,
   installFetchInterceptor,
@@ -102,6 +103,15 @@ describe("App Lifecycle, Sync & Zombie-Connection Recovery Layer", () => {
       expect(isAuthEndpoint("/api/anonymous/submit-complaint")).toBe(false);
       expect(isAuthEndpoint("https://xyz.supabase.co/rest/v1/complaints")).toBe(false);
       expect(isAuthEndpoint(null)).toBe(false);
+    });
+
+    it("identifies dynamic database queries vs static routes for cache busting", () => {
+      expect(shouldBustCache("https://xyz.supabase.co/rest/v1/complaints?select=*", "GET")).toBe(true);
+      expect(shouldBustCache("https://xyz.supabase.co/auth/v1/token", "POST")).toBe(true);
+      expect(shouldBustCache("/api/anonymous/verify-otp", "POST")).toBe(true);
+      expect(shouldBustCache("https://xyz.supabase.co/rest/v1/rpc/svc_create_complaint", "POST")).toBe(false);
+      expect(shouldBustCache("https://xyz.supabase.co/storage/v1/object/evidence/123.jpg", "GET")).toBe(false);
+      expect(shouldBustCache("/assets/index.js", "GET")).toBe(false);
     });
 
     it("identifies file upload endpoints correctly", () => {
