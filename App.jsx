@@ -15,7 +15,8 @@ import {
   Clock3, Construction, Download, Droplets, Ellipsis, FileText, FolderOpen,
   GraduationCap, HeartPulse, Images, Leaf, MapPin, Menu, Moon, Search,
   ShieldCheck, Sparkles, Star, Sun, TrendingUp, X, Zap,
-  User, Mail, Phone, Home, Hash, Clock, Shield, UserCheck, AlertTriangle, Filter, CheckCircle
+  User, Mail, Phone, Home, Hash, Clock, Shield, UserCheck, AlertTriangle, Filter, CheckCircle,
+  Briefcase, CheckCircle2, ClipboardList, Flame, Layers, RefreshCw, ShieldAlert, SlidersHorizontal, Users
 } from 'lucide-react';
 
 const EVIDENCE_BUCKET = "complaint-evidence";
@@ -134,13 +135,13 @@ const CATEGORIES = [
 
 const STATUS_FLOW = ["Open", "Assigned", "In Progress", "Resolved", "Closed", "Escalated"];
 const STATUS_META = {
-  Open:          { color: THEME.colors.danger, bg: THEME.colors.dangerBg, border: "#fca5a5", icon: "🔴", iconName: "dot" },
-  Assigned:      { color: THEME.colors.warning, bg: THEME.colors.warningBg, border: "#fcd34d", icon: "🟡", iconName: "dot" },
-  "In Progress": { color: THEME.colors.primary, bg: THEME.colors.primaryLight, border: "#7dd3fc", icon: "🔵", iconName: "dot" },
-  Resolved:      { color: THEME.colors.success, bg: THEME.colors.successBg, border: "#86efac", icon: "🟢", iconName: "dot" },
-  Closed:        { color: THEME.colors.textMuted, bg: "#f1f5f9", border: "#cbd5e1", icon: "⚫", iconName: "dot" },
-  Escalated:     { color: "#ea580c", bg: "#ffedd5", border: "#fdba74", icon: "🔥", iconName: "alert" },
-  Urgent:        { color: THEME.colors.surface, bg: THEME.colors.danger, border: THEME.colors.danger, icon: "🔥", iconName: "alert" },
+  Open:          { color: "#e11d48", bg: "rgba(225,29,72,0.06)", border: "rgba(225,29,72,0.2)", dotColor: "#e11d48", ringColor: "rgba(225,29,72,0.22)", icon: "●", iconName: "dot" },
+  Assigned:      { color: "#d97706", bg: "rgba(217,119,6,0.06)", border: "rgba(217,119,6,0.22)", dotColor: "#d97706", ringColor: "rgba(217,119,6,0.22)", icon: "●", iconName: "dot" },
+  "In Progress": { color: "#0284c7", bg: "rgba(2,132,199,0.06)", border: "rgba(2,132,199,0.22)", dotColor: "#0284c7", ringColor: "rgba(2,132,199,0.22)", icon: "●", iconName: "dot" },
+  Resolved:      { color: "#059669", bg: "rgba(5,150,105,0.06)", border: "rgba(5,150,105,0.22)", dotColor: "#059669", ringColor: "rgba(5,150,105,0.22)", icon: "●", iconName: "dot" },
+  Closed:        { color: "#475569", bg: "rgba(71,85,105,0.06)", border: "rgba(71,85,105,0.18)", dotColor: "#64748b", ringColor: "rgba(71,85,105,0.2)", icon: "●", iconName: "dot" },
+  Escalated:     { color: "#ea580c", bg: "rgba(234,88,12,0.07)", border: "rgba(234,88,12,0.24)", dotColor: "#ea580c", ringColor: "rgba(234,88,12,0.22)", icon: "●", iconName: "alert" },
+  Urgent:        { color: "#b91c1c", bg: "rgba(185,28,28,0.07)", border: "rgba(185,28,28,0.24)", dotColor: "#dc2626", ringColor: "rgba(185,28,28,0.22)", icon: "●", iconName: "alert" },
 };
 
 const ICONS = {
@@ -150,8 +151,23 @@ const ICONS = {
   folder: FolderOpen, gallery: Images, health: HeartPulse, location: MapPin,
   moon: Moon, other: Ellipsis, road: Construction, sanitation: Sparkles,
   search: Search, shield: ShieldCheck, star: Star, sun: Sun, trend: TrendingUp,
-  water: Droplets,
+  water: Droplets, briefcase: Briefcase, checkCircle2: CheckCircle2,
+  clipboard: ClipboardList, flame: Flame, layers: Layers, refresh: RefreshCw,
+  shieldAlert: ShieldAlert, sliders: SlidersHorizontal, users: Users,
 };
+
+const StatusDot = ({ color = "#0284c7", ringColor, size = 6, style }) => (
+  <span style={{
+    display: "inline-block",
+    width: size,
+    height: size,
+    borderRadius: "50%",
+    backgroundColor: color,
+    boxShadow: `0 0 0 2px ${ringColor || 'rgba(0,0,0,0.06)'}`,
+    flexShrink: 0,
+    ...style
+  }} />
+);
 
 const AppIcon = ({ name, size = 18, color = "currentColor", strokeWidth = 2, style }) => {
   const Icon = ICONS[name] || Ellipsis;
@@ -442,17 +458,47 @@ const Badge = ({ status, priority }) => {
   const { t } = useTranslation();
   const m = STATUS_META[status] || STATUS_META.Open;
   const p = STATUS_META.Urgent;
-  const statusKey = `status_${status.toLowerCase().replace(" ", "_")}`;
+  const statusKey = `status_${status ? status.toLowerCase().replace(" ", "_") : "open"}`;
   
   return (
-    <div style={{ display: "flex", gap: 6 }}>
+    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
       {priority === "Urgent" && (
-        <span style={{ background: p.bg, color: p.color, border: `1px solid ${p.border}`, padding: "4px 12px", borderRadius: THEME.radius.full, fontSize: 11, fontWeight: 700, fontFamily: THEME.font, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
-          {p.icon} {t('priority_urgent').toUpperCase()}
+        <span style={{
+          background: p.bg,
+          color: p.color,
+          border: `1px solid ${p.border}`,
+          padding: "3px 10px",
+          borderRadius: THEME.radius.full,
+          fontSize: 10.5,
+          fontWeight: 700,
+          fontFamily: THEME.font,
+          letterSpacing: 0.4,
+          whiteSpace: "nowrap",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4
+        }}>
+          <Flame size={11} strokeWidth={2.4} />
+          {t('priority_urgent').toUpperCase()}
         </span>
       )}
-      <span style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}`, padding: "4px 12px", borderRadius: THEME.radius.full, fontSize: 11, fontWeight: 600, fontFamily: THEME.font, letterSpacing: 0.4, whiteSpace: "nowrap" }}>
-        {m.icon} {t(statusKey)}
+      <span style={{
+        background: m.bg,
+        color: m.color,
+        border: `1px solid ${m.border}`,
+        padding: "3px 10px",
+        borderRadius: THEME.radius.full,
+        fontSize: 10.5,
+        fontWeight: 600,
+        fontFamily: THEME.font,
+        letterSpacing: 0.3,
+        whiteSpace: "nowrap",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6
+      }}>
+        <StatusDot color={m.dotColor || m.color} ringColor={m.ringColor} size={6} />
+        {t(statusKey)}
       </span>
     </div>
   );
@@ -1330,7 +1376,9 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
         </div>
 
         {session && ['village_admin', 'district_admin', 'super_admin', 'officer'].includes(role) && (
-          <button onClick={() => goTo("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}><AppIcon name="shield" size={16} /> {t('admin_nav')}</button>
+          <button onClick={() => goTo("admin")} style={{ background: view === "admin" ? THEME.colors.primary : THEME.colors.surface, color: view === "admin" ? "#fff" : THEME.colors.text, border: `1px solid ${view === "admin" ? THEME.colors.primary : THEME.colors.border}`, padding: "8px 14px", minHeight: 44, borderRadius: THEME.radius.sm, cursor: "pointer", fontWeight: 700, fontSize: 13, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 7 }}>
+            <AppIcon name={role === 'officer' ? "briefcase" : "shield"} size={16} /> {role === 'officer' ? (t('officer_nav') || "Officer Dashboard") : t('admin_nav')}
+          </button>
         )}
         {session && (
           <button onClick={() => goTo("profile")} style={navButtonStyle(view === "profile")}>{t('my_account')}</button>
@@ -1395,7 +1443,11 @@ const ShellLayout = ({ children, view, role, navigate, toast, session, handleLog
             </div>
           )}
 
-          {session && ['village_admin', 'district_admin', 'super_admin', 'officer'].includes(role) && <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('admin_nav')}</button>}
+          {session && ['village_admin', 'district_admin', 'super_admin', 'officer'].includes(role) && (
+            <button onClick={() => goTo("admin")} className={view === "admin" ? "mobile-nav-item active" : "mobile-nav-item"}>
+              {role === 'officer' ? (t('officer_nav') || "Officer Dashboard") : t('admin_nav')}
+            </button>
+          )}
           {session && <button onClick={() => goTo("profile")} className={view === "profile" ? "mobile-nav-item active" : "mobile-nav-item"}>{t('my_account')}</button>}
           {session ? <button onClick={handleLogout} className="mobile-nav-item danger">{t('logout')}</button> : <button onClick={() => { setMobileMenuOpen(false); setShowLogin(true); }} className="mobile-nav-item primary">{t('login')}</button>}
         </div>
@@ -4678,12 +4730,12 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
       {/* Officer Status Controls */}
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ width: 24, height: 24, borderRadius: 6, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Shield size={13} color="#fff" strokeWidth={2.5} />
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(2, 132, 199, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Shield size={13} color="#0284c7" strokeWidth={2.4} />
           </div>
-          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Update Status</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.6 }}>Update Status</span>
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {officerStatusFlow.map(s => {
             const m = STATUS_META[s] || STATUS_META.Open;
             const isActive = selected.status === s;
@@ -4691,9 +4743,25 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
               <button key={s}
                 onClick={() => handleStatusChange(s)}
                 disabled={updating}
-                style={{ padding: "7px 16px", borderRadius: THEME.radius.full, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? "#fff" : m.color, fontWeight: 800, fontSize: 11, cursor: updating ? "wait" : "pointer", fontFamily: THEME.font, transition: "all 0.2s", opacity: isActive ? 1 : 0.75 }}
+                style={{
+                  padding: "7px 15px",
+                  borderRadius: THEME.radius.full,
+                  border: `1px solid ${isActive ? (m.dotColor || m.color) : THEME.colors.border}`,
+                  background: isActive ? (m.dotColor || m.color) : THEME.colors.surface,
+                  color: isActive ? "#fff" : THEME.colors.text,
+                  fontWeight: 700,
+                  fontSize: 11,
+                  cursor: updating ? "wait" : "pointer",
+                  fontFamily: THEME.font,
+                  transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  boxShadow: isActive ? "0 2px 8px rgba(0,0,0,0.12)" : "none"
+                }}
               >
-                {m.icon} {s}
+                <StatusDot color={isActive ? "#fff" : (m.dotColor || m.color)} ringColor={isActive ? "rgba(255,255,255,0.4)" : m.ringColor} size={6} />
+                {s}
               </button>
             );
           })}
@@ -4703,10 +4771,10 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
       {/* Work Notes */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.warningBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <FileText size={13} color={THEME.colors.warning} strokeWidth={2.5} />
+          <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(217, 119, 6, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <FileText size={13} color="#d97706" strokeWidth={2.4} />
           </div>
-          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Work Notes</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.6 }}>Work Notes</span>
         </div>
         <textarea
           value={workNotes}
@@ -4717,10 +4785,10 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
             width: "100%",
             padding: "12px 14px",
             borderRadius: THEME.radius.sm,
-            border: `1.5px solid ${THEME.colors.border}`,
+            border: `1px solid ${THEME.colors.border}`,
             fontFamily: THEME.font,
-            fontSize: 12,
-            fontWeight: 600,
+            fontSize: 12.5,
+            fontWeight: 500,
             color: THEME.colors.text,
             background: THEME.colors.background,
             outline: "none",
@@ -4735,10 +4803,10 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
       {(selected.status === 'In Progress' || selected.status === 'Resolved') && (
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-            <div style={{ width: 24, height: 24, borderRadius: 6, background: THEME.colors.successBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <CheckCircle size={13} color={THEME.colors.success} strokeWidth={2.5} />
+            <div style={{ width: 24, height: 24, borderRadius: 6, background: "rgba(5, 150, 105, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CheckCircle2 size={13} color="#059669" strokeWidth={2.4} />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.5 }}>Completion Report</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.6 }}>Completion Report</span>
           </div>
           <textarea
             value={completionReport}
@@ -4749,10 +4817,10 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
               width: "100%",
               padding: "12px 14px",
               borderRadius: THEME.radius.sm,
-              border: `1.5px solid ${THEME.colors.border}`,
+              border: `1px solid ${THEME.colors.border}`,
               fontFamily: THEME.font,
-              fontSize: 12,
-              fontWeight: 600,
+              fontSize: 12.5,
+              fontWeight: 500,
               color: THEME.colors.text,
               background: THEME.colors.background,
               outline: "none",
@@ -4772,26 +4840,32 @@ const OfficerProgressPanel = ({ selected, onUpdate, notify, t }) => {
           width: "100%",
           padding: "12px 20px",
           borderRadius: THEME.radius.sm,
-          background: updating ? THEME.colors.border : "linear-gradient(135deg, #047857, #10B981)",
+          background: updating ? THEME.colors.border : THEME.colors.primary,
           color: "#fff",
           border: "none",
           fontSize: 13,
-          fontWeight: 800,
+          fontWeight: 700,
           cursor: updating ? "wait" : "pointer",
           fontFamily: THEME.font,
-          transition: "all 0.2s",
+          transition: "all 0.18s",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 8
+          gap: 8,
+          boxShadow: updating ? "none" : "0 2px 8px rgba(2, 132, 199, 0.2)"
         }}
       >
-        {updating ? "⏳ Saving..." : "💾 Save Progress Notes"}
+        {updating ? (
+          <><RefreshCw size={14} className="spin-icon" /> Saving Progress...</>
+        ) : (
+          <><Check size={15} strokeWidth={2.5} /> Save Progress Notes</>
+        )}
       </button>
 
       {/* Info box for officer */}
-      <div style={{ marginTop: 12, padding: "10px 14px", background: THEME.colors.background, borderRadius: THEME.radius.sm, fontSize: 10.5, color: THEME.colors.textMuted, lineHeight: 1.5, border: `1px solid ${THEME.colors.border}` }}>
-        💡 <strong>Tip:</strong> Update status to "In Progress" when you start working, and "Resolved" when completed. The village admin will verify and close the complaint.
+      <div style={{ marginTop: 12, padding: "10px 14px", background: THEME.colors.background, borderRadius: THEME.radius.sm, fontSize: 11, color: THEME.colors.textMuted, lineHeight: 1.5, border: `1px solid ${THEME.colors.border}`, display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <CircleAlert size={14} color={THEME.colors.textMuted} style={{ flexShrink: 0, marginTop: 2 }} />
+        <span>Update status to <strong>In Progress</strong> when fieldwork begins, and <strong>Resolved</strong> once redressed. Village admin performs the final verification.</span>
       </div>
     </div>
   );
@@ -4997,49 +5071,118 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
   // ── Tab buttons ──
   const tabStyle = (active) => ({
-    background: active ? THEME.colors.primary : THEME.colors.background,
-    color: active ? THEME.colors.surface : THEME.colors.textMuted,
-    border: "none",
-    padding: "10px 24px",
-    borderRadius: THEME.radius.md,
+    background: active ? THEME.colors.primary : THEME.colors.surface,
+    color: active ? "#fff" : THEME.colors.textMuted,
+    border: `1px solid ${active ? THEME.colors.primary : THEME.colors.border}`,
+    padding: "8px 16px",
+    borderRadius: THEME.radius.sm,
     fontFamily: THEME.font,
-    fontWeight: 800,
+    fontWeight: 700,
     fontSize: 13,
     cursor: "pointer",
-    transition: "all 0.2s",
+    transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 7,
+    boxShadow: active ? "0 2px 8px rgba(2, 132, 199, 0.18)" : "none",
   });
 
   // ── Select helper for filter dropdowns ──
   const selectStyle = {
     padding: "8px 12px",
     borderRadius: THEME.radius.sm,
-    border: `1.5px solid ${THEME.colors.border}`,
+    border: `1px solid ${THEME.colors.border}`,
     fontFamily: THEME.font,
-    fontWeight: 700,
-    fontSize: 12,
+    fontWeight: 600,
+    fontSize: 12.5,
     background: THEME.colors.surface,
     color: THEME.colors.text,
     outline: "none",
     minWidth: 130,
+    transition: "border-color 0.15s",
   };
 
   return (
     <div>
       {/* Header */}
-      <div className="admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ fontSize: 28, fontWeight: 900, margin: 0, color: THEME.colors.text }}>{t_officer ? t("officer_dashboard") : t("admin_dashboard")}</h2>
-        <div className="admin-tabs" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>📋 {t('tab_complaints')}</button>
-          <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>📊 {t('tab_analytics')}</button>
+      <div className="admin-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h2 style={{ fontSize: 26, fontWeight: 800, margin: 0, color: THEME.colors.text, letterSpacing: -0.5 }}>
+              {t_officer ? t("officer_dashboard") : t("admin_dashboard")}
+            </h2>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "3px 10px",
+              borderRadius: THEME.radius.full,
+              background: t_officer ? "rgba(2,132,199,0.08)" : "rgba(99,102,241,0.08)",
+              color: t_officer ? "#0284c7" : "#4f46e5",
+              border: `1px solid ${t_officer ? "rgba(2,132,199,0.2)" : "rgba(99,102,241,0.2)"}`,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: 0.3
+            }}>
+              {t_officer ? <Briefcase size={12} strokeWidth={2.4} /> : <Shield size={12} strokeWidth={2.4} />}
+              {t_officer 
+                ? (profile?.department ? `${profile.department} Officer` : "Grievance Officer Portal")
+                : (profile?.role === 'super_admin' ? "Super Administrator" : profile?.role === 'district_admin' ? "District Administration" : "Panchayat Administration")
+              }
+            </span>
+          </div>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: THEME.colors.textMuted }}>
+            {t_officer 
+              ? "Review, update, and resolve village grievances assigned to your jurisdiction."
+              : "Manage village grievances, monitor resolution SLAs, and coordinate field officers."}
+          </p>
+        </div>
+        <div className="admin-tabs" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button style={tabStyle(tab === "complaints")} onClick={() => setTab("complaints")}>
+            <FileText size={14} strokeWidth={2.2} /> {t('tab_complaints')}
+          </button>
+          <button style={tabStyle(tab === "analytics")} onClick={() => setTab("analytics")}>
+            <BarChart3 size={14} strokeWidth={2.2} /> {t('tab_analytics')}
+          </button>
           {!t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) && (
             <>
-              <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>👥 {t('tab_users')}</button>
-              <button style={tabStyle(tab === "bulk_import")} onClick={() => setTab("bulk_import")}>📁 {t('tab_bulk_import')}</button>
-              <button style={tabStyle(tab === "boundaries")} onClick={() => setTab("boundaries")}>🗺️ {t('tab_boundaries')}</button>
-              <button style={tabStyle(tab === "admin_reset")} onClick={() => setTab("admin_reset")}>🔑 Reset Password</button>
+              <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>
+                <Users size={14} strokeWidth={2.2} /> {t('tab_users')}
+              </button>
+              <button style={tabStyle(tab === "bulk_import")} onClick={() => setTab("bulk_import")}>
+                <FolderOpen size={14} strokeWidth={2.2} /> {t('tab_bulk_import')}
+              </button>
+              <button style={tabStyle(tab === "boundaries")} onClick={() => setTab("boundaries")}>
+                <MapPin size={14} strokeWidth={2.2} /> {t('tab_boundaries')}
+              </button>
+              <button style={tabStyle(tab === "admin_reset")} onClick={() => setTab("admin_reset")}>
+                <ShieldCheck size={14} strokeWidth={2.2} /> Reset Password
+              </button>
             </>
           )}
-          <Btn variant="ghost" onClick={fetchData} style={{ padding: "10px 14px", fontSize: 13 }}>🔄 {t("refresh")}</Btn>
+          <button
+            onClick={fetchData}
+            style={{
+              padding: "8px 14px",
+              borderRadius: THEME.radius.sm,
+              border: `1px solid ${THEME.colors.border}`,
+              background: THEME.colors.surface,
+              color: THEME.colors.textMuted,
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+              fontFamily: THEME.font,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              transition: "all 0.18s"
+            }}
+            onMouseOver={e => e.currentTarget.style.color = THEME.colors.text}
+            onMouseOut={e => e.currentTarget.style.color = THEME.colors.textMuted}
+            title={t("refresh")}
+          >
+            <RefreshCw size={13} strokeWidth={2.2} className={loading ? "spin-icon" : ""} /> {t("refresh")}
+          </button>
           {!t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) && (
             <button
               onClick={async () => {
@@ -5065,52 +5208,100 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   notify("Escalation check error: " + e.message, "err");
                 }
               }}
-              style={{ background: "#fef2f2", border: "1.5px solid #ef4444", color: "#b91c1c", padding: "10px 14px", borderRadius: THEME.radius.md, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, display: "flex", alignItems: "center", gap: 6 }}
+              style={{
+                background: "rgba(225, 29, 72, 0.05)",
+                border: "1px solid rgba(225, 29, 72, 0.25)",
+                color: "#be123c",
+                padding: "8px 14px",
+                borderRadius: THEME.radius.sm,
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: THEME.font,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "all 0.18s"
+              }}
               title="Scan complaints unresolved for 7+ days and dispatch negligence alerts to administration"
             >
-              🚨 Scan SLA Breaches
+              <ShieldAlert size={14} strokeWidth={2.2} /> Scan SLA Breaches
             </button>
           )}
         </div>
       </div>
 
-      {/* Officer-specific stats cards */}
-      {t_officer && (
-        <div style={{ display: "flex", gap: 14, marginBottom: 22, flexWrap: "wrap" }}>
-          {[
-            { label: "Total Assigned", count: list.length, icon: "📋", color: THEME.colors.primary, bg: THEME.colors.primaryLight },
-            { label: "In Progress", count: list.filter(c => c.status === "In Progress").length, icon: "🔵", color: "#2563eb", bg: "#dbeafe" },
-            { label: "Resolved", count: list.filter(c => c.status === "Resolved").length, icon: "🟢", color: "#059669", bg: "#d1fae5" },
-            { label: "Pending Action", count: list.filter(c => c.status === "Assigned" || c.status === "Open").length, icon: "🟡", color: "#d97706", bg: "#fef3c7" },
-          ].map((stat, idx) => (
-            <div key={idx} style={{
-              flex: "1 1 160px",
-              background: THEME.colors.surface,
-              border: `1.5px solid ${THEME.colors.border}`,
-              borderRadius: 16,
-              padding: "18px 22px",
-              boxShadow: THEME.shadow.sm,
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              transition: "all 0.2s"
-            }}>
-              <div style={{
-                width: 44, height: 44, borderRadius: 12,
-                background: stat.bg,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 20, flexShrink: 0
-              }}>
-                {stat.icon}
-              </div>
+      {/* Overview Stat Cards (Antigravity Spatial Design) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 22 }}>
+        {(t_officer ? [
+          { label: "Total Assigned", count: list.length, icon: Layers, color: THEME.colors.primary, bg: "rgba(2,132,199,0.08)", border: "rgba(2,132,199,0.2)" },
+          { label: "In Progress", count: list.filter(c => c.status === "In Progress").length, icon: Clock3, color: "#2563eb", bg: "rgba(37,99,235,0.08)", border: "rgba(37,99,235,0.2)" },
+          { label: "Resolved", count: list.filter(c => c.status === "Resolved").length, icon: CheckCircle2, color: "#059669", bg: "rgba(5,150,105,0.08)", border: "rgba(5,150,105,0.2)" },
+          { label: "Pending Action", count: list.filter(c => c.status === "Assigned" || c.status === "Open").length, icon: CircleAlert, color: "#d97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.2)" },
+        ] : [
+          { label: "Total Grievances", count: list.length, icon: Layers, color: THEME.colors.primary, bg: "rgba(2,132,199,0.08)", border: "rgba(2,132,199,0.2)" },
+          { label: "In Progress", count: list.filter(c => c.status === "In Progress").length, icon: Clock3, color: "#2563eb", bg: "rgba(37,99,235,0.08)", border: "rgba(37,99,235,0.2)" },
+          { label: "Resolved", count: list.filter(c => c.status === "Resolved").length, icon: CheckCircle2, color: "#059669", bg: "rgba(5,150,105,0.08)", border: "rgba(5,150,105,0.2)" },
+          { label: "Open / Pending", count: list.filter(c => c.status === "Open" || c.status === "Assigned").length, icon: CircleAlert, color: "#d97706", bg: "rgba(217,119,6,0.08)", border: "rgba(217,119,6,0.2)" },
+        ]).map((stat, idx) => {
+          const IconComponent = stat.icon;
+          const pct = list.length > 0 ? Math.round((stat.count / list.length) * 100) : 0;
+          return (
+            <div
+              key={idx}
+              style={{
+                background: THEME.colors.surface,
+                border: `1px solid ${THEME.colors.border}`,
+                borderRadius: 14,
+                padding: "16px 20px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03), 0 6px 18px -4px rgba(0,0,0,0.04)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                transition: "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease",
+                cursor: "default"
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+                e.currentTarget.style.boxShadow = "0 8px 24px -4px rgba(0,0,0,0.07)";
+                e.currentTarget.style.borderColor = stat.color;
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.03), 0 6px 18px -4px rgba(0,0,0,0.04)";
+                e.currentTarget.style.borderColor = THEME.colors.border;
+              }}
+            >
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>{stat.label}</div>
-                <div style={{ fontSize: 26, fontWeight: 900, color: stat.color, lineHeight: 1.1 }}>{stat.count}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  {stat.label}
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 800, color: THEME.colors.text, lineHeight: 1.15, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
+                  {stat.count}
+                </div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: THEME.colors.textMuted, marginTop: 4 }}>
+                  <span style={{ color: stat.color, fontWeight: 700 }}>{pct}%</span> of total
+                </div>
+              </div>
+              <div style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: stat.bg,
+                border: `1px solid ${stat.border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: stat.color,
+                flexShrink: 0
+              }}>
+                <IconComponent size={20} strokeWidth={2.3} />
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
 
       {tab === "users" && !t_officer && ['village_admin', 'district_admin', 'super_admin'].includes(profile?.role) ? (
         <StaffManagementTab t={t} notify={notify} session={session} currentProfile={profile} />
@@ -5125,7 +5316,7 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
       ) : (
         <>
           {/* Filter Bar */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, padding: "14px 18px", background: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, alignItems: "center" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, padding: "12px 16px", background: THEME.colors.surface, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, alignItems: "center", boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
             <select value={fStatus} onChange={e => setFStatus(e.target.value)} style={selectStyle}>
               <option value="">{t('all_statuses')}</option>
               {STATUS_FLOW.map(s => {
@@ -5137,20 +5328,40 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
               <option value="">{t('all_categories')}</option>
               {CATEGORIES.map(c => <option key={c.id} value={c.id}>{t(c.key)}</option>)}
             </select>
-            <input
-              type="text"
-              placeholder={t('filter_search')}
-              value={fSearch}
-              onChange={e => setFSearch(e.target.value)}
-              style={{ ...selectStyle, flex: 1, minWidth: 180 }}
-            />
+            <div style={{ position: "relative", flex: 1, minWidth: 200, display: "flex", alignItems: "center" }}>
+              <Search size={14} color={THEME.colors.textMuted} style={{ position: "absolute", left: 12, pointerEvents: "none" }} />
+              <input
+                type="text"
+                placeholder={t('filter_search')}
+                value={fSearch}
+                onChange={e => setFSearch(e.target.value)}
+                style={{ ...selectStyle, width: "100%", paddingLeft: 34 }}
+              />
+            </div>
             <button
               onClick={() => setFUrgent(!fUrgent)}
-              style={{ padding: "8px 16px", borderRadius: THEME.radius.full, border: fUrgent ? `2px solid ${THEME.colors.danger}` : `1.5px solid ${THEME.colors.border}`, background: fUrgent ? THEME.colors.dangerBg : THEME.colors.surface, color: fUrgent ? THEME.colors.danger : THEME.colors.textMuted, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", animation: fUrgent ? "urgentPulse 2s infinite" : "none" }}
+              style={{
+                padding: "8px 14px",
+                borderRadius: THEME.radius.sm,
+                border: fUrgent ? `1px solid rgba(220, 38, 38, 0.4)` : `1px solid ${THEME.colors.border}`,
+                background: fUrgent ? "rgba(220, 38, 38, 0.08)" : THEME.colors.surface,
+                color: fUrgent ? "#b91c1c" : THEME.colors.textMuted,
+                fontWeight: 700,
+                fontSize: 12,
+                cursor: "pointer",
+                fontFamily: THEME.font,
+                transition: "all 0.18s",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5
+              }}
             >
-              🔥 {t('filter_priority')}
+              <Flame size={13} strokeWidth={2.4} color={fUrgent ? "#b91c1c" : THEME.colors.textMuted} />
+              {t('filter_priority')}
             </button>
-            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, marginLeft: 4 }}>{filtered.length} / {list.length}</span>
+            <span style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 700, padding: "5px 10px", background: THEME.colors.background, borderRadius: 6, fontVariantNumeric: "tabular-nums" }}>
+              {filtered.length} / {list.length}
+            </span>
           </div>
 
           {/* Content Grid */}
@@ -5171,48 +5382,91 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     const votes = upvoteCounts[it.id] || 0;
                     return (
                       <div key={it.id} onClick={() => setSelected(it)}
-                           style={{ background: THEME.colors.surface, padding: "16px 18px", borderRadius: THEME.radius.md, borderLeft: `5px solid ${sm.color}`, border: isActive ? `2px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`, borderLeftWidth: 5, borderLeftStyle: "solid", borderLeftColor: sm.color, cursor: "pointer", transition: "all 0.15s", boxShadow: isActive ? THEME.shadow.md : THEME.shadow.sm, position: "relative" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.textMuted, letterSpacing: 0.5, textTransform: "uppercase" }}>#{(it.ticket_id || it.id.slice(0, 8))} • {it.category}</div>
+                           style={{
+                             background: THEME.colors.surface,
+                             padding: "16px 18px",
+                             borderRadius: THEME.radius.md,
+                             border: isActive ? `1px solid ${THEME.colors.primary}` : `1px solid ${THEME.colors.border}`,
+                             borderLeft: `4px solid ${sm.dotColor || sm.color}`,
+                             cursor: "pointer",
+                             transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                             boxShadow: isActive ? "0 0 0 1px var(--color-primary), 0 4px 16px rgba(2,132,199,0.08)" : "0 1px 3px rgba(0,0,0,0.02)",
+                             position: "relative"
+                           }}
+                           onMouseEnter={e => {
+                             if (!isActive) e.currentTarget.style.borderColor = "var(--color-primary)";
+                             e.currentTarget.style.transform = "translateY(-1px)";
+                           }}
+                           onMouseLeave={e => {
+                             if (!isActive) e.currentTarget.style.borderColor = THEME.colors.border;
+                             e.currentTarget.style.transform = "translateY(0)";
+                           }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, gap: 8 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: THEME.colors.textMuted, letterSpacing: 0.5, textTransform: "uppercase", fontVariantNumeric: "tabular-nums" }}>
+                            #{(it.ticket_id || it.id.slice(0, 8))} • {it.category}
+                          </div>
                           <Badge status={it.status} priority={it.priority} />
                         </div>
-                        <h3 style={{ fontSize: 15, fontWeight: 800, margin: "0 0 4px", color: THEME.colors.text }}>{it.title}</h3>
-                        <div style={{ fontSize: 12, color: THEME.colors.textMuted }}>📍 {it.location}</div>
+                        <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 6px", color: THEME.colors.text, lineHeight: 1.3 }}>{it.title}</h3>
+                        <div style={{ fontSize: 12, color: THEME.colors.textMuted, display: "flex", alignItems: "center", gap: 5 }}>
+                          <MapPin size={12} strokeWidth={2.2} color={THEME.colors.textMuted} /> {it.location}
+                        </div>
                         {it.citizen?.name && !it.is_anonymous && (
-                          <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 700, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 600, marginTop: 5, display: "flex", alignItems: "center", gap: 5 }}>
                             <User size={12} strokeWidth={2.5} /> {it.citizen.name}
-                            {it.citizen?.village?.village_name && <span style={{ color: THEME.colors.textMuted, fontWeight: 600 }}> • {it.citizen.village.village_name}</span>}
+                            {it.citizen?.village?.village_name && <span style={{ color: THEME.colors.textMuted, fontWeight: 500 }}> • {it.citizen.village.village_name}</span>}
                           </div>
                         )}
                         {it.is_anonymous && it.anonymous_user && (
-                          <div style={{ fontSize: 11, color: THEME.colors.primary, fontWeight: 700, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ fontSize: 11, color: THEME.colors.textMuted, fontWeight: 600, marginTop: 5, display: "flex", alignItems: "center", gap: 5 }}>
                             <User size={12} strokeWidth={2.5} /> Anon: {it.anonymous_user.anonymous_id}
                           </div>
                         )}
-                        {/* ─── AI Status Badges (Phase 3) ─── */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
+                        {/* ─── AI Status Badges (Minimal Tint) ─── */}
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
                           {it.ai_status === 'Processing' && (
-                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#7c3aed", background: "#ede9fe", padding: "2px 8px", borderRadius: THEME.radius.full, animation: "pulse 1.5s infinite" }}>🤖 AI Analyzing...</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#6366f1", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", padding: "2px 8px", borderRadius: THEME.radius.full, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <Sparkles size={10} /> AI Analyzing...
+                            </span>
                           )}
                           {it.ai_status === 'Completed' && it.ai_category && (
-                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#059669", background: "#d1fae5", padding: "2px 8px", borderRadius: THEME.radius.full }}>✅ AI: {it.ai_category}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#059669", background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.2)", padding: "2px 8px", borderRadius: THEME.radius.full, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                              <CheckCircle2 size={10} /> AI: {it.ai_category}
+                            </span>
                           )}
                           {it.ai_status === 'Failed' && (
-                            <span style={{ fontSize: 9.5, fontWeight: 800, color: "#b91c1c", background: "#fee2e2", padding: "2px 8px", borderRadius: THEME.radius.full }}>⚠️ AI Unavailable</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#b91c1c", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", padding: "2px 8px", borderRadius: THEME.radius.full }}>
+                              AI Unavailable
+                            </span>
                           )}
                           {it.ai_status === 'Completed' && it.ai_category && it.ai_category !== it.category && (
-                            <span style={{ fontSize: 9.5, fontWeight: 700, color: "#d97706", background: "#fef3c7", padding: "2px 8px", borderRadius: THEME.radius.full }}>🤖 suggests: {it.ai_category}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: "#b45309", background: "rgba(217,119,6,0.08)", border: "1px solid rgba(217,119,6,0.2)", padding: "2px 8px", borderRadius: THEME.radius.full }}>
+                              suggests: {it.ai_category}
+                            </span>
                           )}
                           {it.ai_confidence_category > 0 && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: "#6366f1", background: "#eef2ff", padding: "2px 6px", borderRadius: THEME.radius.full }}>{Math.round(it.ai_confidence_category * 100)}% conf</span>
+                            <span style={{ fontSize: 9.5, fontWeight: 600, color: THEME.colors.textMuted, background: THEME.colors.background, padding: "2px 6px", borderRadius: THEME.radius.full, border: `1px solid ${THEME.colors.border}` }}>
+                              {Math.round(it.ai_confidence_category * 100)}% conf
+                            </span>
                           )}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
-                          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                            <span style={{ fontSize: 11, color: THEME.colors.textMuted }}>{t('created_on')} {new Date(it.created_at).toLocaleDateString()}</span>
-                            {votes > 0 && <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.danger, background: THEME.colors.dangerBg, padding: "2px 8px", borderRadius: THEME.radius.full }}>🔥 {votes}</span>}
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: `1px solid ${THEME.colors.border}` }}>
+                          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: THEME.colors.textMuted, display: "flex", alignItems: "center", gap: 4 }}>
+                              <CalendarDays size={11} /> {t('created_on')} {new Date(it.created_at).toLocaleDateString()}
+                            </span>
+                            {votes > 0 && (
+                              <span style={{ fontSize: 10.5, fontWeight: 700, color: "#b91c1c", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)", padding: "2px 7px", borderRadius: THEME.radius.full, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                                <Flame size={10} strokeWidth={2.4} /> {votes}
+                              </span>
+                            )}
                           </div>
-                          {photos.length > 0 && <span style={{ fontSize: 10, fontWeight: 800, color: THEME.colors.success, background: THEME.colors.successBg, padding: "2px 8px", borderRadius: THEME.radius.full }}>📷 {photos.length}</span>}
+                          {photos.length > 0 && (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#047857", background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.2)", padding: "2px 7px", borderRadius: THEME.radius.full, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                              <Camera size={10} strokeWidth={2.2} /> {photos.length}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -5223,10 +5477,10 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
 
             {/* Detail Panel */}
             {selected && (
-              <div className="admin-detail-panel" style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto" }}>
+              <div className="admin-detail-panel" style={{ background: THEME.colors.surface, padding: 24, borderRadius: THEME.radius.lg, boxShadow: THEME.shadow.md, position: "sticky", top: 80, maxHeight: "calc(100vh - 100px)", overflowY: "auto", border: `1px solid ${THEME.colors.border}` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>{t("complaint_details")}</h3>
-                  <button onClick={() => setSelected(null)} style={{ background: THEME.colors.background, border: "none", width: 30, height: 30, borderRadius: THEME.radius.sm, fontSize: 14, cursor: "pointer", fontWeight: 700, color: THEME.colors.textMuted }}>✕</button>
+                  <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>{t("complaint_details")}</h3>
+                  <button onClick={() => setSelected(null)} style={{ background: THEME.colors.background, border: `1px solid ${THEME.colors.border}`, width: 30, height: 30, borderRadius: THEME.radius.sm, fontSize: 14, cursor: "pointer", fontWeight: 700, color: THEME.colors.textMuted }}>✕</button>
                 </div>
 
                 {/* ─── Section 1: Citizen Information ─── */}
@@ -5239,81 +5493,81 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   const dateStr = submittedDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
                   const timeStr = submittedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
                   return (
-                    <div className="citizen-info-card" style={{ marginBottom: 18, padding: 0, borderRadius: THEME.radius.md, border: `1.5px solid transparent`, backgroundClip: "padding-box", position: "relative", overflow: "hidden" }}>
-                      {/* Gradient border effect */}
-                      <div style={{ position: "absolute", inset: -1.5, borderRadius: THEME.radius.md, background: "linear-gradient(135deg, #6366f1, #06b6d4, #10b981)", zIndex: 0 }} />
-                      <div style={{ position: "relative", zIndex: 1, background: THEME.colors.surface, borderRadius: `calc(${THEME.radius.md} - 1px)`, padding: "18px 18px 16px" }}>
-                        {/* Section Header */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #6366f1, #06b6d4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <UserCheck size={15} color="#fff" strokeWidth={2.5} />
-                          </div>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.8 }}>Citizen Information</span>
-                          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "linear-gradient(135deg, rgba(16,185,129,0.12), rgba(6,182,212,0.12))", fontSize: 9, fontWeight: 800, color: "#059669" }}>✓ Verified</div>
+                    <div className="citizen-info-card" style={{ marginBottom: 18, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.background, padding: "16px 18px", position: "relative" }}>
+                      {/* Section Header */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(5, 150, 105, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <UserCheck size={14} color="#059669" strokeWidth={2.4} />
                         </div>
-                        {/* Avatar + Name row */}
-                        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${THEME.colors.border}` }}>
-                          {citizen.avatar_url ? (
-                            <img src={citizen.avatar_url} alt={citizen.name} style={{ width: 52, height: 52, borderRadius: 14, objectFit: "cover", border: `2.5px solid ${THEME.colors.border}` }} />
-                          ) : (
-                            <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 18, fontWeight: 900, letterSpacing: 1, flexShrink: 0 }}>{initials}</div>
-                          )}
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: THEME.colors.text, lineHeight: 1.2 }}>{citizen.name || "Unknown"}</div>
-                            {email && <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                        <span style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.6 }}>Citizen Information</span>
+                        <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "rgba(5, 150, 105, 0.08)", border: "1px solid rgba(5, 150, 105, 0.2)", fontSize: 10, fontWeight: 700, color: "#059669", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Check size={11} strokeWidth={3} /> Verified
+                        </div>
+                      </div>
+                      {/* Avatar + Name row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${THEME.colors.border}` }}>
+                        {citizen.avatar_url ? (
+                          <img src={citizen.avatar_url} alt={citizen.name} style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover", border: `1px solid ${THEME.colors.border}` }} />
+                        ) : (
+                          <div style={{ width: 44, height: 44, borderRadius: 10, background: "rgba(2, 132, 199, 0.08)", border: `1px solid rgba(2, 132, 199, 0.2)`, display: "flex", alignItems: "center", justifyContent: "center", color: THEME.colors.primary, fontSize: 15, fontWeight: 800, flexShrink: 0 }}>
+                            {initials}
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: THEME.colors.text, lineHeight: 1.2 }}>{citizen.name || "Unknown"}</div>
+                          {email && <div style={{ fontSize: 12, color: THEME.colors.textMuted, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>}
+                        </div>
+                      </div>
+                      {/* Info Fields Grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
+                        {citizen.name && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <User size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Name</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text }}>{citizen.name}</div>
+                            </div>
+                          </div>
+                        )}
+                        {email && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Mail size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
+                            </div>
+                          </div>
+                        )}
+                        {citizen.phone && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Phone size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text }}>{citizen.phone}</div>
+                            </div>
+                          </div>
+                        )}
+                        {villageName && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Home size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Village</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text }}>{villageName}</div>
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Hash size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary, fontVariantNumeric: "tabular-nums" }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
                           </div>
                         </div>
-                        {/* Info Fields Grid */}
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
-                          {citizen.name && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <User size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                              <div>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Name</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{citizen.name}</div>
-                              </div>
-                            </div>
-                          )}
-                          {email && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <Mail size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                              <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Email</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{email}</div>
-                              </div>
-                            </div>
-                          )}
-                          {citizen.phone && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <Phone size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                              <div>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{citizen.phone}</div>
-                              </div>
-                            </div>
-                          )}
-                          {villageName && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <Home size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                              <div>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Village</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{villageName}</div>
-                              </div>
-                            </div>
-                          )}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Hash size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                            <div>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
-                            </div>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Clock size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                            <div>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
-                            </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Clock size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
                           </div>
                         </div>
                       </div>
@@ -5328,47 +5582,44 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                   const dateStr = submittedDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
                   const timeStr = submittedDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
                   return (
-                    <div className="citizen-info-card" style={{ marginBottom: 18, padding: 0, borderRadius: THEME.radius.md, border: `1.5px solid transparent`, backgroundClip: "padding-box", position: "relative", overflow: "hidden" }}>
-                      <div style={{ position: "absolute", inset: -1.5, borderRadius: THEME.radius.md, background: "linear-gradient(135deg, #6b7280, #374151)", zIndex: 0 }} />
-                      <div style={{ position: "relative", zIndex: 1, background: THEME.colors.surface, borderRadius: `calc(${THEME.radius.md} - 1px)`, padding: "18px 18px 16px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg, #6b7280, #374151)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <UserCheck size={15} color="#fff" strokeWidth={2.5} />
-                          </div>
-                          <span style={{ fontSize: 11, fontWeight: 800, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.8 }}>Anonymous Citizen</span>
-                          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "linear-gradient(135deg, rgba(107,114,128,0.12), rgba(55,65,81,0.12))", fontSize: 9, fontWeight: 800, color: "#4b5563" }}>🕵️ Anonymous</div>
+                    <div className="citizen-info-card" style={{ marginBottom: 18, borderRadius: THEME.radius.md, border: `1px solid ${THEME.colors.border}`, background: THEME.colors.background, padding: "16px 18px", position: "relative" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: "rgba(100, 116, 139, 0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <UserCheck size={14} color={THEME.colors.textMuted} strokeWidth={2.4} />
                         </div>
-                        
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text, textTransform: "uppercase", letterSpacing: 0.6 }}>Anonymous Citizen</span>
+                        <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: THEME.radius.full, background: "rgba(100, 116, 139, 0.08)", border: `1px solid ${THEME.colors.border}`, fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted }}>Anonymous Member</div>
+                      </div>
+                      
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <User size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Anonymous ID</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text }}>{anonUser.anonymous_id}</div>
+                          </div>
+                        </div>
+                        {anonUser.phone && (
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <User size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                            <Phone size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
                             <div>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Anonymous ID</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{anonUser.anonymous_id}</div>
+                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: THEME.colors.text }}>{anonUser.phone}</div>
                             </div>
                           </div>
-                          {anonUser.phone && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <Phone size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                              <div>
-                                <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Phone</div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.text }}>{anonUser.phone}</div>
-                              </div>
-                            </div>
-                          )}
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Hash size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                            <div>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
-                            </div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Hash size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Complaint ID</div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: THEME.colors.primary, fontVariantNumeric: "tabular-nums" }}>{selected.ticket_id || selected.id.slice(0, 8)}</div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <Clock size={14} color={THEME.colors.textMuted} strokeWidth={2.2} />
-                            <div>
-                              <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
-                            </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <Clock size={13} color={THEME.colors.textMuted} strokeWidth={2.2} />
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 700, color: THEME.colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 }}>Submitted</div>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: THEME.colors.text }}>{dateStr} • {timeStr}</div>
                           </div>
                         </div>
                       </div>
@@ -5563,17 +5814,32 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 8, display: "block" }}>{t('change_status')}</label>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                       {STATUS_FLOW.map(s => {
-                        const m = STATUS_META[s];
+                        const m = STATUS_META[s] || STATUS_META.Open;
                         const isActive = selected.status === s;
                         const sKey = `status_${s.toLowerCase().replace(" ", "_")}`;
                         return (
                           <button key={s}
                             onClick={() => updateGrievance(selected.id, { status: s })}
-                            style={{ padding: "6px 14px", borderRadius: THEME.radius.full, border: `2px solid ${m.color}`, background: isActive ? m.color : "transparent", color: isActive ? (s === "Closed" ? "#fff" : (m.bg === m.color ? m.color : "#fff")) : m.color, fontWeight: 800, fontSize: 10, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", letterSpacing: 0.3, opacity: isActive ? 1 : 0.75 }}
-                            onMouseOver={e => { if (!isActive) { e.currentTarget.style.background = m.bg; e.currentTarget.style.opacity = '1'; } }}
-                            onMouseOut={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = '0.75'; } }}
+                            style={{
+                              padding: "6px 13px",
+                              borderRadius: THEME.radius.full,
+                              border: `1px solid ${isActive ? (m.dotColor || m.color) : THEME.colors.border}`,
+                              background: isActive ? (m.dotColor || m.color) : THEME.colors.surface,
+                              color: isActive ? "#fff" : THEME.colors.text,
+                              fontWeight: 700,
+                              fontSize: 10.5,
+                              cursor: "pointer",
+                              fontFamily: THEME.font,
+                              transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                              letterSpacing: 0.3,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              boxShadow: isActive ? "0 2px 6px rgba(0,0,0,0.12)" : "none"
+                            }}
                           >
-                            {m.icon} {t(sKey)}
+                            <StatusDot color={isActive ? "#fff" : (m.dotColor || m.color)} ringColor={isActive ? "rgba(255,255,255,0.4)" : m.ringColor} size={5} />
+                            {t(sKey)}
                           </button>
                         );
                       })}
@@ -5585,9 +5851,24 @@ const AdminView = ({ t, notify, session, profile, t_officer }) => {
                     <label style={{ fontSize: 10, fontWeight: 700, color: THEME.colors.textMuted, marginBottom: 8, display: "block" }}>{t('priority_label')}</label>
                     <button
                       onClick={() => updateGrievance(selected.id, { priority: selected.priority === "Urgent" ? null : "Urgent" })}
-                      style={{ padding: "8px 20px", borderRadius: THEME.radius.full, border: selected.priority === "Urgent" ? `2px solid ${THEME.colors.danger}` : `1.5px solid ${THEME.colors.border}`, background: selected.priority === "Urgent" ? THEME.colors.danger : THEME.colors.surface, color: selected.priority === "Urgent" ? "#fff" : THEME.colors.textMuted, fontWeight: 800, fontSize: 12, cursor: "pointer", fontFamily: THEME.font, transition: "all 0.2s", animation: selected.priority === "Urgent" ? "urgentPulse 2s infinite" : "none" }}
+                      style={{
+                        padding: "7px 16px",
+                        borderRadius: THEME.radius.full,
+                        border: selected.priority === "Urgent" ? `1px solid rgba(220, 38, 38, 0.4)` : `1px solid ${THEME.colors.border}`,
+                        background: selected.priority === "Urgent" ? "rgba(220, 38, 38, 0.08)" : THEME.colors.surface,
+                        color: selected.priority === "Urgent" ? "#b91c1c" : THEME.colors.textMuted,
+                        fontWeight: 700,
+                        fontSize: 11.5,
+                        cursor: "pointer",
+                        fontFamily: THEME.font,
+                        transition: "all 0.18s",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5
+                      }}
                     >
-                      🔥 {selected.priority === "Urgent" ? t('unmark_urgent') : t('mark_urgent')}
+                      <Flame size={12} strokeWidth={2.4} color={selected.priority === "Urgent" ? "#b91c1c" : THEME.colors.textMuted} />
+                      {selected.priority === "Urgent" ? t('unmark_urgent') : t('mark_urgent')}
                     </button>
                   </div>
 
